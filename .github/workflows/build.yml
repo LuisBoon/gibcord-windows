@@ -62,8 +62,8 @@ jobs:
           foreach ($v in 'chat','dm','friends','login','switcher','profile') {
             $out = Join-Path $pwd "zrzuty\$v.png"
             $p = Start-Process -FilePath publish\GibCord.exe -ArgumentList '--demo','--view',$v,'--screenshot',"`"$out`"" -PassThru
-            if (-not $p.WaitForExit(45000)) { $p.Kill(); Write-Host "::warning::Zrzut $v: przekroczony czas" }
-            if (Test-Path $out) { Write-Host "OK $v" } else { Write-Host "::warning::Brak zrzutu $v (kod $($p.ExitCode))" }
+            if (-not $p.WaitForExit(45000)) { $p.Kill(); Write-Host "::warning::Zrzut ${v} - przekroczony czas" }
+            if (Test-Path $out) { Write-Host "OK $v" } else { Write-Host "::warning::Brak zrzutu ${v} (kod $($p.ExitCode))" }
           }
           Get-ChildItem zrzuty | Format-Table Name, Length
           $log = Join-Path $env:LOCALAPPDATA 'GibCord6-dane\dziennik.txt'

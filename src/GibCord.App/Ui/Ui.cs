@@ -16,7 +16,8 @@ namespace GibCord.App.Ui;
 /// <summary>Kolory i czcionki GibCorda (styl „Szkło”, jak na stronie i w makiecie 1).</summary>
 public static class Theme
 {
-    public static FontFamily Font = new("ms-appx:///Assets/Fonts/Sora.ttf#Sora, Segoe UI Variable Text, Segoe UI, Segoe UI Emoji");
+    public static FontFamily Font = new("ms-appx:///Assets/Fonts/Sora.ttf#Sora, "
+        + new Uri(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts", "Sora.ttf")).AbsoluteUri + "#Sora, Segoe UI Variable Text, Segoe UI, Segoe UI Emoji");
     public static readonly FontFamily Mono = new("Cascadia Mono, Consolas");
     public static FontFamily Icons => (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"];
 

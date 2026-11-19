@@ -358,7 +358,12 @@ public sealed class Shell : Grid
 
     public void ShowProfile(long uid, FrameworkElement anchor) => ProfileCard.Show(this, uid, anchor);
 
-    public void ShowProfileDemo() => ProfileCard.Show(this, Demo.OlaId, _members);
+    /// <summary>Zrzut w CI: karta profilu na środku (dymki nie trafiają na zrzut okna).</summary>
+    public void ShowProfileDemo()
+    {
+        if (ProfileCard.Build(this, Demo.OlaId, CloseOverlay) is { } card)
+            ShowOverlay(new Border { Child = card, Background = U.B("#FA2a2147"), CornerRadius = new CornerRadius(14) });
+    }
 
     public void VoiceSoon() => Info("Rozmowy głosowe wejdą w następnej wersji bety (etap 2). Na razie wejdź na kanał głosowy przez stronę albo obecną aplikację.");
 }

@@ -158,9 +158,28 @@ public static class ProfileCard
 {
     public static void Show(Shell sh, long uid, FrameworkElement anchor)
     {
+        Flyout? fly = null;
+        var card = Build(sh, uid, () => fly?.Hide());
+        if (card is null) return;
+        fly = new Flyout { Content = card, Placement = FlyoutPlacementMode.RightEdgeAlignedTop };
+        fly.FlyoutPresenterStyle = new Style(typeof(FlyoutPresenter))
+        {
+            Setters =
+            {
+                new Setter(Control.PaddingProperty, new Thickness(0)),
+                new Setter(Control.BackgroundProperty, U.B("#FA2a2147")),
+                new Setter(Control.CornerRadiusProperty, new CornerRadius(14)),
+                new Setter(FrameworkElement.MaxWidthProperty, 340.0),
+            },
+        };
+        fly.ShowAt(anchor);
+    }
+
+    public static FrameworkElement? Build(Shell sh, long uid, Action close)
+    {
         var s = sh.S;
         var u = s.U(uid);
-        if (u is null) return;
+        if (u is null) return null;
         var srv = sh.ServerId > 0 ? s.ServerById(sh.ServerId) : null;
         var bannerBrush = u.BannerImage is { } bi && sh.C.Api.Abs(bi) is { } bu
             ? (Brush)new ImageBrush { ImageSource = Images.Get(bu, 680), Stretch = Stretch.UniformToFill }
@@ -195,34 +214,21 @@ public static class ProfileCard
             body.Add(Card("Role", wrap));
         }
         body.Add(Card("Na GibCordzie od", U.T(Format.Local(u.CreatedAt).ToString("d MMMM yyyy", Format.Pl), 13)));
-        Flyout? fly = null;
         if (uid != s.Me.Id)
         {
             var btns = new Grid { ColumnSpacing = 8 }.Cols("*", "*");
-            btns.Add(U.Primary("Wiadomość", () => { fly?.Hide(); sh.OpenDmWith(uid); }, 36).At(0, 0));
+            btns.Add(U.Primary("Wiadomość", () => { close(); sh.OpenDmWith(uid); }, 36).At(0, 0));
             var f = s.Friends.GetValueOrDefault(uid);
             Button? fb = f?.Status switch
             {
-                null => U.Ghost("Dodaj do znajomych", async () => { var e = await sh.C.AddFriend(u.Username); sh.Info(e ?? "Wysłano zaproszenie do znajomych", e is not null); fly?.Hide(); }),
-                "incoming" => U.Ghost("Przyjmij zaproszenie", async () => { var e = await sh.C.AcceptFriend(uid); if (e is not null) sh.Info(e, true); fly?.Hide(); }),
+                null => U.Ghost("Dodaj do znajomych", async () => { var e = await sh.C.AddFriend(u.Username); sh.Info(e ?? "Wysłano zaproszenie do znajomych", e is not null); close(); }),
+                "incoming" => U.Ghost("Przyjmij zaproszenie", async () => { var e = await sh.C.AcceptFriend(uid); if (e is not null) sh.Info(e, true); close(); }),
                 "outgoing" => U.Ghost("Zaproszenie wysłane", () => { }).With(b => b.IsEnabled = false),
                 _ => null,
             };
             if (fb is not null) btns.Add(fb.With(b => { b.HorizontalAlignment = HorizontalAlignment.Stretch; b.Height = 36; }).At(0, 1));
             body.Add(btns);
         }
-        var card = new Grid { Width = 320 }.Rows("auto", "auto", "auto").Add(banner.At(0), av.At(1), body.At(2));
-        fly = new Flyout { Content = card, Placement = FlyoutPlacementMode.RightEdgeAlignedTop };
-        fly.FlyoutPresenterStyle = new Style(typeof(FlyoutPresenter))
-        {
-            Setters =
-            {
-                new Setter(Control.PaddingProperty, new Thickness(0)),
-                new Setter(Control.BackgroundProperty, U.B("#FA2a2147")),
-                new Setter(Control.CornerRadiusProperty, new CornerRadius(14)),
-                new Setter(FrameworkElement.MaxWidthProperty, 340.0),
-            },
-        };
-        fly.ShowAt(anchor);
+        return new Grid { Width = 320 }.Rows("auto", "auto", "auto").Add(banner.At(0), av.At(1), body.At(2));
     }
 }
