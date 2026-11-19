@@ -67,7 +67,13 @@ jobs:
           }
           Get-ChildItem zrzuty | Format-Table Name, Length
           $log = Join-Path $env:LOCALAPPDATA 'GibCord6-dane\dziennik.txt'
-          if (Test-Path $log) { Copy-Item $log zrzuty\dziennik.txt; Get-Content $log -Tail 40 }
+          if (Test-Path $log) { Copy-Item $log zrzuty\dziennik.txt; Get-Content $log -Tail 60 }
+          Write-Host '--- pliki .pri i .exe ---'
+          Get-ChildItem publish -File | Where-Object { $_.Extension -in '.pri','.exe','.winmd' } | Format-Table Name, Length
+          Write-Host '--- dziennik zdarzeń Windows (błędy aplikacji) ---'
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = (Get-Date).AddMinutes(-10) } -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -in 'Application Error','.NET Runtime','Windows Error Reporting' } | Select-Object -First 6 |
+            ForEach-Object { Write-Host "[$($_.ProviderName)] $($_.Message)"; Write-Host '' }
 
       - uses: actions/upload-artifact@v4
         if: always()

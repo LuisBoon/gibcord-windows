@@ -15,18 +15,29 @@ public static class Program
     static int Main(string[] args)
     {
         Args = args;
-        // Velopack: obsługa instalacji / aktualizacji (musi być na samym początku)
-        VelopackApp.Build().SetArgs(args).Run();
-
-        WinRT.ComWrappersSupport.InitializeComWrappers();
-        if (!Options.Demo && RedirectToRunningInstance()) return 0;
-
-        Application.Start(p =>
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => App.Log("Błąd (AppDomain): " + e.ExceptionObject);
+        try
         {
-            var ctx = new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread());
-            SynchronizationContext.SetSynchronizationContext(ctx);
-            _ = new App();
-        });
+            App.Log($"Start {string.Join(' ', args)}");
+            // Velopack: obsługa instalacji / aktualizacji (musi być na samym początku)
+            VelopackApp.Build().SetArgs(args).Run();
+
+            WinRT.ComWrappersSupport.InitializeComWrappers();
+            if (!Options.Demo && RedirectToRunningInstance()) return 0;
+            App.Log("Application.Start");
+            Application.Start(p =>
+            {
+                try
+                {
+                    var ctx = new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread());
+                    SynchronizationContext.SetSynchronizationContext(ctx);
+                    _ = new App();
+                }
+                catch (Exception ex) { App.Log("Błąd przy tworzeniu App: " + ex); throw; }
+            });
+            App.Log("Koniec");
+        }
+        catch (Exception ex) { App.Log("Błąd w Main: " + ex); return 1; }
         return 0;
     }
 

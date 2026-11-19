@@ -33,16 +33,24 @@ public sealed class App : Application, IXamlMetadataProvider
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        Resources.MergedDictionaries.Add(new XamlControlsResources());
-        Directory.CreateDirectory(DataDir);
-        Prefs = Prefs.Load(DataDir);
-        Window = new MainWindow();
-        Window.Start();
+        try
+        {
+            Log("OnLaunched: zasoby");
+            Resources.MergedDictionaries.Add(new XamlControlsResources());
+            Directory.CreateDirectory(DataDir);
+            Prefs = Prefs.Load(DataDir);
+            Log("OnLaunched: okno");
+            Window = new MainWindow();
+            Log("OnLaunched: start");
+            Window.Start();
+            Log("OnLaunched: gotowe");
+        }
+        catch (Exception ex) { Log("Błąd w OnLaunched: " + ex); throw; }
     }
 
     public static void Log(string line)
     {
-        try { File.AppendAllText(Path.Combine(DataDir, "dziennik.txt"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {line}{Environment.NewLine}"); } catch { }
+        try { Directory.CreateDirectory(DataDir); File.AppendAllText(Path.Combine(DataDir, "dziennik.txt"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {line}{Environment.NewLine}"); } catch { }
     }
 }
 
