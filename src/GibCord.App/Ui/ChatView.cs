@@ -58,6 +58,8 @@ public sealed class ChatView : Grid, IDisposable
     bool _loadingOlder;
     bool _disposed;
     int _bottomTries;
+    double _lastOffset;
+    long _progUntil;
 
     public ChatView(Shell sh, long cid)
     {
@@ -73,7 +75,8 @@ public sealed class ChatView : Grid, IDisposable
         _sv = U.Scroll(content);
         _sv.VerticalAnchorRatio = 1;
         _sv.ViewChanged += (_, _) => OnScrolled();
-        content.SizeChanged += (_, _) => { if (_stick) ScrollToBottom(); };
+        content.SizeChanged += (_, _) => { if (_stick) { _bottomTries = 0; ScrollToBottom(); } };
+        _sv.SizeChanged += (_, _) => { if (_stick) { _bottomTries = 0; ScrollToBottom(); } };
 
         _pill = new Border
         {
@@ -331,8 +334,12 @@ public sealed class ChatView : Grid, IDisposable
 
     void OnScrolled()
     {
-        var atBottom = _sv.ScrollableHeight - _sv.VerticalOffset < 80;
-        _stick = atBottom && S.Window(Cid).AtTail;
+        var off = _sv.VerticalOffset;
+        var atBottom = _sv.ScrollableHeight - off < 80;
+        // „przyklejenie” do dołu puszcza tylko przewinięcie w górę przez człowieka (lista rośnie przy wczytywaniu)
+        if (atBottom) _stick = S.Window(Cid).AtTail;
+        else if (off < _lastOffset - 1 && Environment.TickCount64 > _progUntil) _stick = false;
+        _lastOffset = off;
         if (_stick && _pill.Visibility == Visibility.Visible && S.Window(Cid).AtTail) _pill.Visibility = Visibility.Collapsed;
         if (_sv.VerticalOffset < 600 && !_loadingOlder && S.Window(Cid).HasOlder && _rows.Count > 0) _ = LoadOlder();
     }
@@ -348,9 +355,18 @@ public sealed class ChatView : Grid, IDisposable
     void ScrollToBottom()
     {
         if (_disposed) return;
-        _sv.ChangeView(null, double.MaxValue, null, true);
+        _progUntil = Environment.TickCount64 + 400;
+        _sv.ChangeView(null, _sv.ScrollableHeight, null, true);
         // wysokość listy szacowana przy wirtualizacji — dociągnij jeszcze kilka razy
-        if (_bottomTries++ < 6) DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => { if (_stick) _sv.ChangeView(null, _sv.ScrollableHeight, null, true); });
+        if (_bottomTries++ < 8)
+            DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+            {
+                if (!_stick || _disposed) return;
+                _progUntil = Environment.TickCount64 + 400;
+                _sv.UpdateLayout();
+                _sv.ChangeView(null, _sv.ScrollableHeight, null, true);
+                if (_sv.ScrollableHeight - _sv.VerticalOffset > 2) ScrollToBottom();
+            });
     }
 
     void UpdatePill()

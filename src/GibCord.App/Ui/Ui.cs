@@ -151,7 +151,7 @@ public static class U
     public static Border Box(UIElement? child, Brush? bg = null, double radius = 0, Thickness? pad = null, Brush? border = null, double borderW = 0) => new()
     {
         Child = child, Background = bg, CornerRadius = new CornerRadius(radius), Padding = pad ?? new Thickness(0),
-        BorderBrush = border, BorderThickness = new Thickness(borderW),
+        BorderBrush = border, BorderThickness = new Thickness(borderW), VerticalAlignment = VerticalAlignment.Center,
     };
 
     public static Thickness Th(double all) => new(all);

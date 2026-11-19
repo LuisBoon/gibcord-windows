@@ -53,6 +53,7 @@ jobs:
         run: |
           $s = (Get-ChildItem publish -Recurse | Measure-Object Length -Sum).Sum
           Write-Host ("Aplikacja: {0:N1} MB, plików: {1}" -f ($s / 1MB), (Get-ChildItem publish -Recurse -File).Count)
+          Get-ChildItem publish -Recurse -File | Sort-Object Length -Descending | Select-Object -First 30 | ForEach-Object { "{0,8:N1} MB  {1}" -f ($_.Length / 1MB), $_.FullName.Substring((Resolve-Path publish).Path.Length + 1) }
 
       - name: Zrzuty ekranu (tryb pokazowy)
         timeout-minutes: 8
