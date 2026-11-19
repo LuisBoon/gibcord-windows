@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>6.0.0-beta.1</Version>
+    <Authors>LuisBoon</Authors>
+    <Product>GibCord</Product>
+    <Copyright>GibCord</Copyright>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CA1416;IDE0130</NoWarn>
+  </PropertyGroup>
+</Project>

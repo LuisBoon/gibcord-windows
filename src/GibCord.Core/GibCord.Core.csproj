@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Rdzeń GibCorda bez okien: API, WebSocket, stan, pamięć podręczna, formatowanie.
+       Działa na każdym systemie, więc testy idą też na Linuksie (kopia testowa serwera). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>GibCord.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="GibCord.Core.Tests" />
+  </ItemGroup>
+</Project>
