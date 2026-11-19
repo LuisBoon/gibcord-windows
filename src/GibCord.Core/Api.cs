@@ -122,6 +122,9 @@ public sealed class GibCordApi : IDisposable
         Send(HttpMethod.Delete, $"messages/{messageId}/reactions/{Uri.EscapeDataString(emoji)}", ct: ct);
     public Task MarkRead(long channelId, long messageId, CancellationToken ct = default) =>
         Send(HttpMethod.Post, $"channels/{channelId}/read", new { messageId }, ct);
+    public Task PinMessage(long id, CancellationToken ct = default) => Send(HttpMethod.Put, $"messages/{id}/pin", ct: ct);
+    public Task UnpinMessage(long id, CancellationToken ct = default) => Send(HttpMethod.Delete, $"messages/{id}/pin", ct: ct);
+    public Task VotePoll(long id, IReadOnlyList<long> optionIds, CancellationToken ct = default) => Send(HttpMethod.Put, $"messages/{id}/poll", new { optionIds }, ct);
     public Task<List<Message>> GetPins(long channelId, CancellationToken ct = default) => Send<List<Message>>(HttpMethod.Get, $"channels/{channelId}/pins", ct: ct);
 
     /// <summary>Wysyła plik (surowe bajty). Zwraca załącznik do dołączenia do wiadomości.</summary>
@@ -138,6 +141,24 @@ public sealed class GibCordApi : IDisposable
     public Task AddFriend(string username, CancellationToken ct = default) => Send(HttpMethod.Post, "friends", new { username = username.Trim().TrimStart('@') }, ct);
     public Task AcceptFriend(long userId, CancellationToken ct = default) => Send(HttpMethod.Post, $"friends/{userId}/accept", ct: ct);
     public Task RemoveFriend(long userId, CancellationToken ct = default) => Send(HttpMethod.Delete, $"friends/{userId}", ct: ct);
+
+    // ── serwery, zaproszenia, powiadomienia ──
+    public async Task<string> CreateInvite(long serverId, CancellationToken ct = default) =>
+        (await Send(HttpMethod.Post, $"servers/{serverId}/invites", ct: ct).ConfigureAwait(false)).Str("code") ?? "";
+    public async Task<(long Id, string Name, int Members)> GetInvite(string code, CancellationToken ct = default)
+    {
+        var e = await Send(HttpMethod.Get, "invites/" + Uri.EscapeDataString(code), ct: ct).ConfigureAwait(false);
+        var sv = e.Prop("server");
+        return (sv.Long("id") ?? 0, sv.Str("name") ?? "", (int)(sv.Long("memberCount") ?? 0));
+    }
+    public Task<Server> JoinInvite(string code, CancellationToken ct = default) => Send<Server>(HttpMethod.Post, $"invites/{Uri.EscapeDataString(code)}/join", ct: ct);
+    public Task<Server> CreateServer(string name, CancellationToken ct = default) => Send<Server>(HttpMethod.Post, "servers", new { name }, ct);
+    public Task LeaveServer(long serverId, CancellationToken ct = default) => Send(HttpMethod.Post, $"servers/{serverId}/leave", ct: ct);
+    /// <summary>scope: server | channel | dm. Null czyści wartość (dziedziczenie).</summary>
+    public Task SetNotify(string scope, long id, string? level, long? mutedUntil, CancellationToken ct = default) =>
+        Send(HttpMethod.Put, $"notify/{scope}/{id}", new Dictionary<string, object?> { ["level"] = level, ["mutedUntil"] = mutedUntil }, ct);
+    public Task ForgotPassword(string login, CancellationToken ct = default) => Send(HttpMethod.Post, "password/forgot", new { login }, ct);
+    public Task HideDm(long dmId, CancellationToken ct = default) => Send(HttpMethod.Post, $"dms/{dmId}/hide", ct: ct);
 
     public void Dispose() => _http.Dispose();
 }

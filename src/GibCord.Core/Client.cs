@@ -60,6 +60,9 @@ public sealed class GibCordClient : IAsyncDisposable
 
     public bool HasToken => !string.IsNullOrEmpty(_tokens.Load());
 
+    /// <summary>Tryb pokazowy: bez sieci, wszystko tylko w pamięci.</summary>
+    public bool Offline { get; init; }
+
     // ───────────────────────── logowanie ─────────────────────────
 
     public async Task<LoginResult> Login(string username, string password)
@@ -206,6 +209,7 @@ public sealed class GibCordClient : IAsyncDisposable
     {
         ActiveChannelId = cid;
         if (cid == 0) return;
+        if (Offline) { if (Store.IsUnread(cid)) Store.MarkReadLocal(cid, Store.LastIdOf(cid)); return; }
         var w = Store.Window(cid);
         if (!_fresh.Contains(cid) || !w.AtTail)
         {
@@ -233,7 +237,7 @@ public sealed class GibCordClient : IAsyncDisposable
     public async Task<int> LoadOlder(long cid)
     {
         var w = Store.Window(cid);
-        if (!w.HasOlder || !_loadingOlder.Add(cid)) return 0;
+        if (Offline || !w.HasOlder || !_loadingOlder.Add(cid)) return 0;
         try
         {
             var first = w.Items.FirstOrDefault(x => x.Send == SendState.Sent && x.Id > 0);
@@ -285,7 +289,7 @@ public sealed class GibCordClient : IAsyncDisposable
 
     void ScheduleRead(long cid, int delayMs = 400)
     {
-        if (!Store.IsUnread(cid) && Store.MentionsIn(cid) == 0) return;
+        if (Offline || (!Store.IsUnread(cid) && Store.MentionsIn(cid) == 0)) return;
         if (_readTimers.TryGetValue(cid, out var old)) old.Cancel();
         var cts = new CancellationTokenSource();
         _readTimers[cid] = cts;
@@ -324,6 +328,14 @@ public sealed class GibCordClient : IAsyncDisposable
 
     async Task<string?> Deliver(Message local)
     {
+        if (Offline)
+        {
+            await Task.Delay(300);
+            var copy = Json.Deserialize<Message>(Json.Serialize(local))!;
+            copy.Id = Store.LastIdOf(local.ChannelId) + 1;
+            _ui(() => { Store.Upsert(copy, live: false); Store.MarkReadLocal(copy.ChannelId, copy.Id); });
+            return null;
+        }
         try
         {
             var m = await Api.SendMessage(local.ChannelId, local.Content, local.ReplyTo?.Id, local.Attachments.Select(a => a.Id).ToList(), local.Nonce);

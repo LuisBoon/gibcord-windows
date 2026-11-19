@@ -1,0 +1,385 @@
+using System.Text.RegularExpressions;
+using GibCord.Core;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using Windows.Storage.Streams;
+using Windows.System;
+
+namespace GibCord.App.Ui;
+
+/// <summary>Pole wpisywania: Enter wysyła, Shift+Enter nowa linia, ↑ edytuje ostatnią, @ podpowiada osoby.</summary>
+public sealed partial class Composer : StackPanel
+{
+    readonly ChatView _v;
+    readonly TextBox _box;
+    readonly Border _frame;
+    readonly Border _bar = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(12, 12, 0, 0), Background = U.B("#4D0A0618"), Padding = U.Th(14, 6, 8, 6) };
+    readonly StackPanel _files = new() { Orientation = Orientation.Horizontal, Spacing = 8, Visibility = Visibility.Collapsed, Padding = U.Th(12, 10, 12, 4) };
+    readonly Border _blocked = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(14), Background = U.W(.05), Padding = U.Th(16, 12), Margin = U.Th(16, 4, 16, 14) };
+    readonly TextBlock _hint = U.T("", 11, null, Theme.Mu2);
+    readonly Button _attach;
+    readonly Popup _suggest = new() { IsLightDismissEnabled = false };
+    readonly StackPanel _suggestList = new() { Padding = U.Th(6) };
+    readonly List<Pending> _pending = [];
+    readonly Dictionary<string, long> _mentions = [];
+    ReplyRef? _reply;
+    Message? _editing;
+    List<(string Label, string Insert)> _sugg = [];
+    int _suggIdx;
+    int _atStart = -1;
+
+    sealed class Pending
+    {
+        public string Name = "";
+        public Attachment? Att;
+        public string? Error;
+        public Task? Upload;
+    }
+
+    public Composer(ChatView v)
+    {
+        _v = v;
+        _box = new TextBox
+        {
+            AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MaxHeight = 220, MinHeight = 46, FontSize = 14.5, FontFamily = Theme.Font,
+            BorderThickness = U.Th(0), Background = Theme.Transparent, Padding = U.Th(4, 12, 4, 10), VerticalAlignment = VerticalAlignment.Center,
+            IsSpellCheckEnabled = true, Language = "pl-PL",
+        };
+        // przezroczyste tło także po najechaniu i w trakcie pisania
+        foreach (var k in new[] { "TextControlBackground", "TextControlBackgroundPointerOver", "TextControlBackgroundFocused", "TextControlBorderBrush", "TextControlBorderBrushPointerOver", "TextControlBorderBrushFocused" })
+            _box.Resources[k] = Theme.Transparent;
+        _box.PreviewKeyDown += OnKey;
+        _box.TextChanged += (_, _) => OnText();
+        _box.Paste += OnPaste;
+
+        _attach = U.IconButton("", "Dodaj plik (albo przeciągnij go na czat)", () => _ = PickFiles(), 16, 34);
+        var emoji = U.IconButton("", "Emoji", () => { }, 17, 34);
+        emoji.Click += (_, _) => EmojiPicker.Show(emoji, _v, Insert);
+        var row = new Grid().Cols("auto", "*", "auto").Add(_attach.At(0, 0).With(b => b.VerticalAlignment = VerticalAlignment.Bottom), _box.At(0, 1),
+            emoji.At(0, 2).With(b => b.VerticalAlignment = VerticalAlignment.Bottom));
+        row.Margin = U.Th(6, 0, 6, 4);
+        var inner = U.V(0, _files, row);
+        _frame = new Border { Child = inner, CornerRadius = new CornerRadius(14), Background = Theme.Input, BorderBrush = Theme.InputLine, BorderThickness = U.Th(1) };
+        _box.GotFocus += (_, _) => _frame.BorderBrush = U.Alpha("#ffb98f", .45);
+        _box.LostFocus += (_, _) => { _frame.BorderBrush = Theme.InputLine; HideSuggest(); };
+
+        var wrap = U.V(0, _bar, _frame);
+        wrap.Margin = U.Th(16, 2, 16, 0);
+        this.Add(wrap, _hint.With(h => h.Margin = U.Th(20, 3, 16, 8)), _blocked);
+        _suggest.Child = new Border { Child = _suggestList, Background = U.B("#F5281f40"), CornerRadius = new CornerRadius(12), BorderBrush = U.W(.14), BorderThickness = U.Th(1), Width = 320 };
+        Loaded += (_, _) => _suggest.XamlRoot = XamlRoot;
+        RefreshState();
+    }
+
+    Store S => _v.S;
+    public bool CanAttach => _v.S.Can(_v.Cid, Perm.AttachFiles);
+    public void FocusBox() { if (_box.Visibility == Visibility.Visible) _box.Focus(FocusState.Programmatic); }
+
+    /// <summary>Uprawnienia, wyciszenie, kanał tylko do odczytu, tryb powolny.</summary>
+    public void RefreshState()
+    {
+        var can = S.Can(_v.Cid, Perm.SendMessages);
+        var ch = _v.Ch;
+        string? why = null;
+        if (S.TimedOutUntil(_v.Srv) is long until) why = $"Masz wyciszenie do {Format.When(until)} — nie możesz teraz pisać.";
+        else if (!can) why = "Nie masz uprawnień do pisania na tym kanale.";
+        else if (ch is { Readonly: true } && !S.Can(_v.Cid, Perm.ManageMessages)) why = "Ten kanał jest tylko do czytania.";
+        else if (_v.DmObj is { IsGroup: false } d && S.DmOther(d) is { } o && S.Blocked.Contains(o.Id)) why = $"Blokujesz {o.Name}. Odblokuj tę osobę na stronie, żeby pisać.";
+        _blocked.Child = U.H(10, U.I("", 15, Theme.Mu), U.T(why ?? "", 13.5, null, Theme.Mu, wrap: true));
+        _blocked.Visibility = why is null ? Visibility.Collapsed : Visibility.Visible;
+        ((FrameworkElement)Children[0]).Visibility = why is null ? Visibility.Visible : Visibility.Collapsed;
+        _hint.Visibility = why is null ? Visibility.Visible : Visibility.Collapsed;
+        _attach.Visibility = CanAttach ? Visibility.Visible : Visibility.Collapsed;
+        _box.PlaceholderText = ch is not null ? $"Napisz na #{ch.Name}" : _v.DmObj is { } dm ? $"Napisz do {(dm.IsGroup ? S.DmTitle(dm) : "@" + S.DmOther(dm)?.Name)}" : "Napisz wiadomość";
+        _hint.Text = ch is { Slowmode: > 0 } && !S.Can(_v.Cid, Perm.ManageMessages) ? $"Tryb powolny: jedna wiadomość co {ch.Slowmode} s" : "";
+    }
+
+    // ───────────────────────── klawisze i tekst ─────────────────────────
+
+    void OnKey(object sender, KeyRoutedEventArgs e)
+    {
+        var shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        if (_suggest.IsOpen)
+        {
+            if (e.Key == VirtualKey.Down) { _suggIdx = (_suggIdx + 1) % _sugg.Count; DrawSuggest(); e.Handled = true; return; }
+            if (e.Key == VirtualKey.Up) { _suggIdx = (_suggIdx - 1 + _sugg.Count) % _sugg.Count; DrawSuggest(); e.Handled = true; return; }
+            if (e.Key is VirtualKey.Tab or VirtualKey.Enter) { Accept(_suggIdx); e.Handled = true; return; }
+            if (e.Key == VirtualKey.Escape) { HideSuggest(); e.Handled = true; return; }
+        }
+        switch (e.Key)
+        {
+            case VirtualKey.Enter when !shift:
+                e.Handled = true;
+                _ = Submit();
+                break;
+            case VirtualKey.Escape when _editing is not null || _reply is not null:
+                e.Handled = true;
+                CancelBar();
+                break;
+            case VirtualKey.Up when _box.Text.Length == 0 && _editing is null:
+                if (_v.LastOwn() is { } last) { e.Handled = true; StartEdit(last); }
+                break;
+        }
+    }
+
+    void OnText()
+    {
+        if (_box.Text.Length > 0 && _editing is null) _v.Sh.C.Typing(_v.Cid);
+        UpdateSuggest();
+    }
+
+    void Insert(string text)
+    {
+        var at = _box.SelectionStart;
+        _box.Text = _box.Text.Insert(at, text);
+        _box.SelectionStart = at + text.Length;
+        _box.Focus(FocusState.Programmatic);
+    }
+
+    public void InsertMention(long uid)
+    {
+        var name = "@" + S.NameOf(uid, _v.Srv);
+        _mentions[name] = uid;
+        Insert((_box.Text.Length > 0 && !_box.Text.EndsWith(' ') ? " " : "") + name + " ");
+    }
+
+    // ── podpowiedzi @osoba ──
+
+    [GeneratedRegex(@"(?:^|\s)@([\p{L}\p{N}_.]{0,32})$")]
+    private static partial Regex AtRe();
+
+    void UpdateSuggest()
+    {
+        var upto = _box.Text[..Math.Min(_box.SelectionStart, _box.Text.Length)];
+        var m = AtRe().Match(upto);
+        if (!m.Success) { HideSuggest(); return; }
+        var q = Fold(m.Groups[1].Value);
+        _atStart = upto.Length - m.Groups[1].Value.Length - 1;
+        IEnumerable<long> ids = _v.Srv is { } srv ? srv.Members.Select(x => x.UserId) : _v.DmObj?.UserIds ?? [];
+        _sugg = ids.Where(id => id != S.Me.Id)
+            .Select(id => (Id: id, Name: S.NameOf(id, _v.Srv), User: S.U(id)?.Username ?? ""))
+            .Where(x => Fold(x.Name).StartsWith(q) || Fold(x.User).StartsWith(q) || (q.Length >= 2 && Fold(x.Name).Contains(q)))
+            .OrderBy(x => S.StatusOf(x.Id) == "offline").ThenBy(x => x.Name)
+            .Take(7)
+            .Select(x => ($"{x.Name}  ·  @{x.User}", "@" + x.Name + "|" + x.Id))
+            .ToList();
+        if (_v.Srv is not null && S.Can(_v.Cid, Perm.MentionEveryone) && ("wszyscy".StartsWith(q) || "everyone".StartsWith(q)))
+            _sugg.Add(("@wszyscy — powiadamia wszystkich na kanale", "@everyone|0"));
+        if (_sugg.Count == 0) { HideSuggest(); return; }
+        _suggIdx = Math.Min(_suggIdx, _sugg.Count - 1);
+        DrawSuggest();
+        if (!_suggest.IsOpen)
+        {
+            var pt = _frame.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0));
+            _suggest.HorizontalOffset = pt.X + 8;
+            _suggest.VerticalOffset = pt.Y - 12 - Math.Min(7, _sugg.Count) * 36 - 12;
+            _suggest.IsOpen = true;
+        }
+    }
+
+    void DrawSuggest()
+    {
+        _suggestList.Children.Clear();
+        for (var i = 0; i < _sugg.Count; i++)
+        {
+            var idx = i;
+            var (label, ins) = _sugg[i];
+            var uid = long.Parse(ins[(ins.LastIndexOf('|') + 1)..]);
+            UIElement icon = uid == 0 ? U.I("", 16) : new Avatar(24).Set(S, _v.Sh.C.Api, uid, _v.Srv);
+            var row = U.Row(U.H(10, icon, U.T(label, 13.5, U.Semi)), () => Accept(idx), i == _suggIdx, 8, U.Th(8, 0), U.Th(0, 1));
+            row.Height = 34;
+            _suggestList.Children.Add(row);
+        }
+        if (_suggest.IsOpen)
+            _suggest.VerticalOffset = _frame.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0)).Y - 12 - _sugg.Count * 36 - 12;
+    }
+
+    void Accept(int i)
+    {
+        if (i < 0 || i >= _sugg.Count || _atStart < 0) return;
+        var ins = _sugg[i].Insert;
+        var bar = ins.LastIndexOf('|');
+        var name = ins[..bar];
+        var uid = long.Parse(ins[(bar + 1)..]);
+        if (uid != 0) _mentions[name] = uid;
+        var end = _box.SelectionStart;
+        _box.Text = _box.Text[.._atStart] + name + " " + _box.Text[end..];
+        _box.SelectionStart = _atStart + name.Length + 1;
+        HideSuggest();
+    }
+
+    void HideSuggest() { _suggest.IsOpen = false; _atStart = -1; _suggIdx = 0; }
+
+    static string Fold(string s)
+    {
+        var n = s.ToLowerInvariant().Replace('ł', 'l').Normalize(System.Text.NormalizationForm.FormD);
+        return new string(n.Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray());
+    }
+
+    /// <summary>„@Ola” wybrane z podpowiedzi → &lt;@id&gt; w wysyłanej treści.</summary>
+    string Encode(string text)
+    {
+        foreach (var (name, id) in _mentions.OrderByDescending(kv => kv.Key.Length))
+            text = text.Replace(name, $"<@{id}>");
+        return text;
+    }
+
+    string Decode(string content) => Markup.Parse(content).Count == 0 ? content : Regex.Replace(content, @"<@(\d+)>", m =>
+    {
+        var id = long.Parse(m.Groups[1].Value);
+        var name = "@" + S.NameOf(id, _v.Srv);
+        _mentions[name] = id;
+        return name;
+    });
+
+    // ───────────────────────── odpowiedź / edycja ─────────────────────────
+
+    public void StartReply(Message m)
+    {
+        _editing = null;
+        _reply = new ReplyRef { Id = m.Id, AuthorId = m.AuthorId, Content = m.Content.Length > 200 ? m.Content[..200] : m.Content };
+        ShowBar($"Odpowiadasz: {S.NameOf(m.AuthorId, _v.Srv)}", "");
+        FocusBox();
+    }
+
+    public void StartEdit(Message m)
+    {
+        _reply = null;
+        _editing = m;
+        _box.Text = Decode(m.Content);
+        _box.SelectionStart = _box.Text.Length;
+        ShowBar("Edytujesz wiadomość · Enter zapisuje, Esc anuluje", "");
+        FocusBox();
+    }
+
+    void ShowBar(string text, string glyph)
+    {
+        _bar.Child = new Grid().Cols("auto", "*", "auto").Add(U.I(glyph, 13, Theme.Accent).At(0, 0),
+            U.T(text, 12.5, U.Semi, Theme.Mu).With(t => t.Margin = U.Th(8, 0)).At(0, 1),
+            U.IconButton("", "Anuluj (Esc)", CancelBar, 11, 24).At(0, 2));
+        _bar.Visibility = Visibility.Visible;
+        _frame.CornerRadius = new CornerRadius(0, 0, 14, 14);
+    }
+
+    void CancelBar()
+    {
+        if (_editing is not null) _box.Text = "";
+        _editing = null;
+        _reply = null;
+        _bar.Visibility = Visibility.Collapsed;
+        _frame.CornerRadius = new CornerRadius(14);
+    }
+
+    // ───────────────────────── wysyłanie ─────────────────────────
+
+    async Task Submit()
+    {
+        HideSuggest();
+        var text = Encode(_box.Text).Trim();
+        if (_editing is { } m)
+        {
+            if (text.Length == 0) { CancelBar(); _v.Delete(m); return; }
+            var em = m;
+            CancelBar();
+            _box.Text = "";
+            if (text != em.Content) { var err = await _v.Sh.C.Edit(em, text); if (err is not null) _v.Sh.Info(err, true); }
+            return;
+        }
+        if (_pending.Any(p => p.Upload is { IsCompleted: false }))
+        {
+            _v.Sh.Info("Poczekaj, aż pliki się wyślą…");
+            await Task.WhenAll(_pending.Where(p => p.Upload is not null).Select(p => p.Upload!));
+        }
+        var atts = _pending.Where(p => p.Att is not null).Select(p => p.Att!).ToList();
+        if (text.Length == 0 && atts.Count == 0) return;
+        var max = _v.Sh.C.Info?.Limits.MessageLength ?? 4000;
+        if (text.Length > max) { _v.Sh.Info($"Wiadomość jest za długa ({text.Length} z {max} znaków).", true); return; }
+        var reply = _reply;
+        _box.Text = "";
+        _mentions.Clear();
+        CancelBar();
+        ClearFiles();
+        _v.Sh.C.StoppedTyping(_v.Cid);
+        var error = await _v.Sh.C.Send(_v.Cid, text, reply, atts);
+        if (error is not null) _v.Sh.Info(error, true);
+    }
+
+    // ───────────────────────── pliki ─────────────────────────
+
+    async Task PickFiles()
+    {
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.Downloads };
+        picker.FileTypeFilter.Add("*");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, _v.Sh.W.Hwnd);
+        var files = await picker.PickMultipleFilesAsync();
+        foreach (var f in files) await AddFile(f);
+    }
+
+    async void OnPaste(object sender, TextControlPasteEventArgs e)
+    {
+        var dv = Clipboard.GetContent();
+        if (dv.Contains(StandardDataFormats.StorageItems))
+        {
+            e.Handled = true;
+            foreach (var it in await dv.GetStorageItemsAsync()) if (it is StorageFile f) await AddFile(f);
+        }
+        else if (dv.Contains(StandardDataFormats.Bitmap) && !dv.Contains(StandardDataFormats.Text))
+        {
+            e.Handled = true;
+            var r = await dv.GetBitmapAsync();
+            using var s = await r.OpenReadAsync();
+            var ms = new MemoryStream();
+            await s.AsStreamForRead().CopyToAsync(ms);
+            ms.Position = 0;
+            AddStream(ms, $"wklejony-{DateTime.Now:yyyyMMdd-HHmmss}.png", "image/png", ms.Length);
+        }
+    }
+
+    public async Task AddFile(StorageFile f)
+    {
+        if (!CanAttach) { _v.Sh.Info("Na tym kanale nie można wysyłać plików.", true); return; }
+        var props = await f.GetBasicPropertiesAsync();
+        var stream = await f.OpenStreamForReadAsync();
+        AddStream(stream, f.Name, string.IsNullOrEmpty(f.ContentType) ? null : f.ContentType, (long)props.Size);
+    }
+
+    void AddStream(Stream data, string name, string? mime, long size)
+    {
+        var max = _v.Sh.C.Info?.Limits.AttachmentsPerMessage ?? 10;
+        if (_pending.Count >= max) { _v.Sh.Info($"Najwyżej {max} plików w jednej wiadomości.", true); data.Dispose(); return; }
+        var p = new Pending { Name = name };
+        _pending.Add(p);
+        DrawFiles();
+        p.Upload = Task.Run(async () =>
+        {
+            var (att, err) = await _v.Sh.C.Upload(data, name, mime, size);
+            data.Dispose();
+            _v.Sh.W.UiRun(() => { p.Att = att; p.Error = err; DrawFiles(); if (err is not null) _v.Sh.Info($"{name}: {err}", true); });
+        });
+        FocusBox();
+    }
+
+    void DrawFiles()
+    {
+        _files.Children.Clear();
+        foreach (var p in _pending.ToList())
+        {
+            var state = p.Error is not null ? U.I("", 14, Theme.Red) : p.Att is null ? new ProgressRing { IsActive = true, Width = 14, Height = 14 } : (FrameworkElement)U.I("", 14, Theme.Green);
+            var x = U.IconButton("", "Usuń z wiadomości", () => { _pending.Remove(p); DrawFiles(); }, 10, 22);
+            var card = U.Box(U.H(8, state, U.T(p.Name, 12.5, U.Semi).With(t => t.MaxWidth = 180), x), U.W(.08), 10, U.Th(10, 4, 4, 4));
+            _files.Children.Add(card);
+        }
+        _files.Visibility = _pending.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void ClearFiles()
+    {
+        _pending.Clear();
+        DrawFiles();
+    }
+}

@@ -8,7 +8,8 @@ public sealed class LiveFactAttribute : FactAttribute
 {
     public LiveFactAttribute()
     {
-        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GC_TEST_URL"))) Skip = "Brak kopii testowej serwera (GC_TEST_URL)";
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GC_TEST_URL")) || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GC_TEST_PASS")))
+            Skip = "Brak kopii testowej serwera (GC_TEST_URL i GC_TEST_PASS)";
     }
 }
 
@@ -16,7 +17,7 @@ public sealed class LiveFactAttribute : FactAttribute
 public sealed class LivePair : IAsyncLifetime
 {
     public static readonly Uri Url = new(Environment.GetEnvironmentVariable("GC_TEST_URL") ?? "http://127.0.0.1:1");
-    public static readonly string Pass = Environment.GetEnvironmentVariable("GC_TEST_PASS") ?? "Tajne-haslo-123";
+    public static readonly string Pass = Environment.GetEnvironmentVariable("GC_TEST_PASS") ?? "";
     public readonly object Lock = new();
     public GibCordClient A = null!, B = null!;
     public readonly List<Message> NotifA = [], NotifB = [];
@@ -26,7 +27,7 @@ public sealed class LivePair : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GC_TEST_URL"))) return;
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GC_TEST_URL")) || Pass.Length == 0) return;
         A = New(); B = New();
         Assert.NotNull((await A.Login("tester", Pass)).Token);
         Assert.NotNull((await B.Login("@Ola", Pass)).Token);

@@ -1,0 +1,107 @@
+# GibCord 6.0 na Windows — budowanie na prawdziwym Windowsie.
+#  • każdy push na main: testy, aplikacja, zrzuty ekranu z trybu pokazowego, instalator (artefakty, bez wydania)
+#  • tag v6.X.Y-beta.N: to samo + wydanie na GitHubie (Velopack: Setup.exe i automatyczne aktualizacje)
+name: Budowanie
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: budowanie-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: '1'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  VPK_VERSION: '1.2.161'
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Wersja
+        id: ver
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') { $v = $env:GITHUB_REF_NAME.Substring(1) }
+          else { $v = "6.0.0-ci.$($env:GITHUB_RUN_NUMBER)" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Wersja: $v"
+
+      - name: Testy rdzenia
+        timeout-minutes: 10
+        run: dotnet test tests/GibCord.Core.Tests -c Release
+
+      - name: Aplikacja (publikacja)
+        run: dotnet publish src/GibCord.App -c Release -r win-x64 -p:Platform=x64 --self-contained -o publish -p:Version=${{ steps.ver.outputs.version }} -p:PublishReadyToRun=true
+
+      - name: Rozmiar
+        shell: pwsh
+        run: |
+          $s = (Get-ChildItem publish -Recurse | Measure-Object Length -Sum).Sum
+          Write-Host ("Aplikacja: {0:N1} MB, plików: {1}" -f ($s / 1MB), (Get-ChildItem publish -Recurse -File).Count)
+
+      - name: Zrzuty ekranu (tryb pokazowy)
+        timeout-minutes: 8
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force zrzuty | Out-Null
+          foreach ($v in 'chat','dm','friends','login','switcher','profile') {
+            $out = Join-Path $pwd "zrzuty\$v.png"
+            $p = Start-Process -FilePath publish\GibCord.exe -ArgumentList '--demo','--view',$v,'--screenshot',"`"$out`"" -PassThru
+            if (-not $p.WaitForExit(45000)) { $p.Kill(); Write-Host "::warning::Zrzut $v: przekroczony czas" }
+            if (Test-Path $out) { Write-Host "OK $v" } else { Write-Host "::warning::Brak zrzutu $v (kod $($p.ExitCode))" }
+          }
+          Get-ChildItem zrzuty | Format-Table Name, Length
+          $log = Join-Path $env:LOCALAPPDATA 'GibCord6-dane\dziennik.txt'
+          if (Test-Path $log) { Copy-Item $log zrzuty\dziennik.txt; Get-Content $log -Tail 40 }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zrzuty
+          path: zrzuty
+          retention-days: 7
+
+      - name: Instalator (Velopack)
+        shell: pwsh
+        run: |
+          dotnet tool install -g vpk --version $env:VPK_VERSION
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            # poprzednie wydanie → mniejsze aktualizacje (delta)
+            vpk download github --repoUrl "https://github.com/$env:GITHUB_REPOSITORY" --token "$env:GH_TOKEN" --pre -o Releases
+            if ($LASTEXITCODE -ne 0) { Write-Host 'Brak poprzedniego wydania'; $global:LASTEXITCODE = 0 }
+          }
+          vpk pack -u GibCord6 -v ${{ steps.ver.outputs.version }} -p publish -e GibCord.exe -o Releases `
+            --packTitle "GibCord 6.0 beta" --packAuthors "GibCord" --icon src/GibCord.App/Assets/gibcord.ico --shortcuts Desktop,StartMenuRoot
+          Get-ChildItem Releases | Format-Table Name, Length
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GibCord-6-instalator
+          path: Releases/*-Setup.exe
+          retention-days: 14
+
+      - name: Wydanie na GitHubie
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          vpk upload github --repoUrl "https://github.com/$env:GITHUB_REPOSITORY" --token "$env:GH_TOKEN" -o Releases `
+            --publish --pre --releaseName "GibCord ${{ steps.ver.outputs.version }}" --tag "$env:GITHUB_REF_NAME" --merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

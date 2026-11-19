@@ -552,6 +552,9 @@ public sealed class Store
                 Raise(ChangeKind.Dms, d.Id);
                 break;
             }
+            case "dm_hidden":
+                if (e.Long("dmId") is long hid && DmById(hid) is { } hdm) { hdm.HiddenAt = e.Long("hiddenAt"); Raise(ChangeKind.Dms, hid); }
+                break;
             case "dm_remove":
                 if (e.Long("dmId") is long dr) { Dms.RemoveAll(x => x.Id == dr); Windows.Remove(dr); Raise(ChangeKind.Dms, dr); }
                 break;
