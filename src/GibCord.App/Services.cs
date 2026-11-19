@@ -1,8 +1,5 @@
 using System.Windows.Input;
-using GibCord.App.Ui;
-using H.NotifyIcon;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Imaging;
+using System.Runtime.InteropServices;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 using Microsoft.Windows.BadgeNotifications;
@@ -81,51 +78,133 @@ public sealed class RelayCommand(Action run) : ICommand
     public void Execute(object? parameter) => run();
 }
 
-/// <summary>Ikona w zasobniku (obok zegara): GibCord działa po zamknięciu okna, jak Discord.</summary>
-public static class Tray
+/// <summary>
+/// Ikona w zasobniku (obok zegara): GibCord działa po zamknięciu okna, jak Discord.
+/// Czysty Win32 (Shell_NotifyIcon + podklasa okna), bez dodatkowych bibliotek.
+/// </summary>
+public static partial class Tray
 {
-    static TaskbarIcon? _icon;
-    static bool _unread;
-    public static bool Available => _icon is not null;
+    const uint WM_APP_TRAY = 0x8000 + 17, WM_LBUTTONUP = 0x0202, WM_RBUTTONUP = 0x0205, WM_CONTEXTMENU = 0x007B;
+    const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2, NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4;
+    static MainWindow? _w;
+    static IntPtr _icon, _iconUnread;
+    static bool _added, _unread;
+    static uint _taskbarCreated;
+    static SubclassProc? _proc;
+    static string _tip = "GibCord";
+    public static bool Available => _added;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct NOTIFYICONDATAW
+    {
+        public uint cbSize; public IntPtr hWnd; public uint uID; public uint uFlags; public uint uCallbackMessage; public IntPtr hIcon;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szTip;
+        public uint dwState; public uint dwStateMask;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string szInfo;
+        public uint uVersion;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string szInfoTitle;
+        public uint dwInfoFlags; public Guid guidItem; public IntPtr hBalloonIcon;
+    }
+
+    delegate IntPtr SubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, UIntPtr id, UIntPtr data);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern bool Shell_NotifyIconW(uint msg, ref NOTIFYICONDATAW data);
+    [DllImport("comctl32.dll")] static extern bool SetWindowSubclass(IntPtr hwnd, SubclassProc proc, UIntPtr id, UIntPtr data);
+    [DllImport("comctl32.dll")] static extern bool RemoveWindowSubclass(IntPtr hwnd, SubclassProc proc, UIntPtr id);
+    [DllImport("comctl32.dll")] static extern IntPtr DefSubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr LoadImageW(IntPtr hinst, string name, uint type, int cx, int cy, uint flags);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern uint RegisterWindowMessageW(string name);
+    [DllImport("user32.dll")] static extern IntPtr CreatePopupMenu();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool AppendMenuW(IntPtr menu, uint flags, UIntPtr id, string? text);
+    [DllImport("user32.dll")] static extern uint TrackPopupMenuEx(IntPtr menu, uint flags, int x, int y, IntPtr hwnd, IntPtr tpm);
+    [DllImport("user32.dll")] static extern bool DestroyMenu(IntPtr menu);
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);
+    [StructLayout(LayoutKind.Sequential)] struct POINT { public int X, Y; }
+
+    static IntPtr LoadIco(string file)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", file);
+        return LoadImageW(IntPtr.Zero, path, 1 /* IMAGE_ICON */, 16, 16, 0x10 /* LR_LOADFROMFILE */);
+    }
 
     public static void Init(MainWindow w)
     {
         try
         {
-            var menu = new MenuFlyout();
-            menu.Items.Add(new MenuFlyoutItem { Text = "Otwórz GibCord", Command = new RelayCommand(w.BringToFront) });
-            menu.Items.Add(new MenuFlyoutSeparator());
-            menu.Items.Add(new MenuFlyoutItem { Text = "Zamknij GibCord", Command = new RelayCommand(w.Quit) });
-            _icon = new TaskbarIcon
-            {
-                ToolTipText = "GibCord",
-                IconSource = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "tray.ico"))),
-                ContextMenuMode = ContextMenuMode.PopupMenu,
-                ContextFlyout = menu,
-                NoLeftClickDelay = true,
-                LeftClickCommand = new RelayCommand(w.BringToFront),
-            };
-            _icon.ForceCreate(false);
+            _w = w;
+            _icon = LoadIco("tray.ico");
+            _iconUnread = LoadIco("tray-unread.ico");
+            _taskbarCreated = RegisterWindowMessageW("TaskbarCreated");
+            _proc = WndProc;
+            SetWindowSubclass(w.Hwnd, _proc, (UIntPtr)17, UIntPtr.Zero);
+            Add();
         }
-        catch (Exception ex) { App.Log("Zasobnik niedostępny: " + ex.Message); _icon = null; }
+        catch (Exception ex) { App.Log("Zasobnik niedostępny: " + ex.Message); }
+    }
+
+    static NOTIFYICONDATAW Data() => new()
+    {
+        cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATAW>(), hWnd = _w!.Hwnd, uID = 1, uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP,
+        uCallbackMessage = WM_APP_TRAY, hIcon = _unread ? _iconUnread : _icon, szTip = _tip, szInfo = "", szInfoTitle = "",
+    };
+
+    static void Add()
+    {
+        var d = Data();
+        _added = Shell_NotifyIconW(NIM_ADD, ref d);
+        if (!_added) App.Log("Zasobnik: Shell_NotifyIcon(NIM_ADD) nie wyszło");
+    }
+
+    static IntPtr WndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, UIntPtr id, UIntPtr data)
+    {
+        if (msg == WM_APP_TRAY)
+        {
+            var ev = (uint)(lParam.ToInt64() & 0xFFFF);
+            if (ev == WM_LBUTTONUP) _w?.BringToFront();
+            else if (ev is WM_RBUTTONUP or WM_CONTEXTMENU) ShowMenu(hwnd);
+            return IntPtr.Zero;
+        }
+        if (msg == _taskbarCreated && _taskbarCreated != 0) Add(); // Eksplorator uruchomił się ponownie
+        return DefSubclassProc(hwnd, msg, wParam, lParam);
+    }
+
+    static void ShowMenu(IntPtr hwnd)
+    {
+        var menu = CreatePopupMenu();
+        AppendMenuW(menu, 0, (UIntPtr)1, "Otwórz GibCord");
+        AppendMenuW(menu, 0x800 /* MF_SEPARATOR */, UIntPtr.Zero, null);
+        AppendMenuW(menu, 0, (UIntPtr)2, "Zamknij GibCord");
+        GetCursorPos(out var p);
+        SetForegroundWindow(hwnd);
+        var cmd = TrackPopupMenuEx(menu, 0x0100 /* TPM_RETURNCMD */ | 0x0002 /* TPM_RIGHTBUTTON */, p.X, p.Y, hwnd, IntPtr.Zero);
+        DestroyMenu(menu);
+        if (cmd == 1) _w?.BringToFront();
+        else if (cmd == 2) _w?.Quit();
     }
 
     public static void SetUnread(bool unread, int n = 0)
     {
-        if (_icon is null || _unread == unread) return;
+        if (!_added || (_unread == unread && !unread)) return;
         _unread = unread;
-        try
-        {
-            _icon.IconSource = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", unread ? "tray-unread.ico" : "tray.ico")));
-            _icon.ToolTipText = unread ? $"GibCord — nieprzeczytane: {n}" : "GibCord";
-        }
-        catch { }
+        _tip = unread ? $"GibCord — nieprzeczytane: {n}" : "GibCord";
+        var d = Data();
+        Shell_NotifyIconW(NIM_MODIFY, ref d);
     }
 
     public static void Dispose()
     {
-        try { _icon?.Dispose(); } catch { }
-        _icon = null;
+        if (_w is null) return;
+        try
+        {
+            if (_added) { var d = Data(); Shell_NotifyIconW(NIM_DELETE, ref d); }
+            if (_proc is not null) RemoveWindowSubclass(_w.Hwnd, _proc, (UIntPtr)17);
+            if (_icon != IntPtr.Zero) DestroyIcon(_icon);
+            if (_iconUnread != IntPtr.Zero) DestroyIcon(_iconUnread);
+        }
+        catch { }
+        _added = false;
     }
 }
 
