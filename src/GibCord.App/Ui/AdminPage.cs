@@ -57,11 +57,10 @@ public sealed class AdminPage : Grid
         Item("servers", "", "Serwery");
         Item("reports", "", "Zgłoszenia");
         Item("system", "\uE9D9", "System i wykresy");
+        Item("activity", "\uE823", "Aktywność osób");
         Item("log", "", "Dziennik");
         Item("announce", "", "Ogłoszenie");
         Item("mail", "\uE715", "Poczta");
-        _nav.Add(U.HLine(.08).With(l => l.Margin = U.Th(10, 10)));
-        _nav.Add(U.Row(U.H(10, U.I("", 15, Theme.Mu), U.T("Aktywność osób (strona)", 13.5, U.Semi, Theme.Mu)), () => _ = Launcher.LaunchUriAsync(new Uri(Api.BaseUri, "admin/aktywnosc")), false, 8, U.Th(10, 0), U.Th(0, 1)).With(r => r.Height = 38));
         _body.Children.Clear();
         _wide.Children.Clear();
         var wide = _section == "mail";
@@ -74,6 +73,10 @@ public sealed class AdminPage : Grid
             case "servers": Servers(); break;
             case "reports": Reports(); break;
             case "log": Log(); break;
+            case "activity":
+                Title("Aktywność osób", "Kto był w GibCordzie o jakiej godzinie. Kliknij osobę, żeby zobaczyć jej kartę.");
+                _body.Add(new AdminActivity(_sh));
+                break;
             case "system":
                 Title("System i wykresy", "Stan maszyny, ruch i osoby — jak w panelu na stronie.");
                 _body.Add(new AdminSystem(_sh));

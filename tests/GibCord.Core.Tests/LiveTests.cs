@@ -374,6 +374,30 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
     }
 
 
+
+    [LiveFact]
+    public async Task AktywnoscOsob()
+    {
+        var a = p.A;
+        // pola, z których korzysta AdminActivity.cs
+        var d = await a.Api.GetJson("admin/activity");
+        Assert.False(string.IsNullOrEmpty(d.Str("date")));
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, d.Prop("days").ValueKind);
+        Assert.True(d.Long("dayStart") > 0);
+        Assert.True(d.Long("total") >= 2);
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, d.Prop("users").ValueKind);
+        foreach (var x in d.Prop("users").EnumerateArray())
+        {
+            Assert.True(x.Prop("user").Long("id") > 0);
+            Assert.Equal(System.Text.Json.JsonValueKind.Array, x.Prop("segments").ValueKind);
+        }
+        var c = await a.Api.GetJson($"admin/users/{a.Store.Me.Id}/activity");
+        Assert.Equal(a.Store.Me.Id, c.Prop("user").Long("id"));
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, c.Prop("days").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, c.Prop("visits").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, c.Prop("devices").ValueKind);
+        if (c.Prop("days").GetArrayLength() > 0) Assert.False(string.IsNullOrEmpty(c.Prop("days")[0].Str("date")));
+    }
     [LiveFact]
     public async Task PocztaAdmina()
     {
