@@ -23,9 +23,10 @@ public sealed class AdminPage : Grid
     GibCordApi Api => _sh.C.Api;
     Store S => _sh.S;
 
-    public AdminPage(Shell sh)
+    public AdminPage(Shell sh, string section = "stats")
     {
         _sh = sh;
+        _section = section;
         Background = U.B("#F5181230");
         this.Cols("250", "*", "auto");
         _sv = U.Scroll(_body);
@@ -54,11 +55,12 @@ public sealed class AdminPage : Grid
         Item("users", "", "Konta");
         Item("servers", "", "Serwery");
         Item("reports", "", "Zgłoszenia");
+        Item("system", "\uE9D9", "System i wykresy");
         Item("log", "", "Dziennik");
         Item("announce", "", "Ogłoszenie");
         _nav.Add(U.HLine(.08).With(l => l.Margin = U.Th(10, 10)));
         _nav.Add(U.Row(U.H(10, U.I("", 15, Theme.Mu), U.T("Poczta (na stronie)", 13.5, U.Semi, Theme.Mu)), () => _ = Launcher.LaunchUriAsync(new Uri(Api.BaseUri, "admin/poczta")), false, 8, U.Th(10, 0), U.Th(0, 1)).With(r => r.Height = 38));
-        _nav.Add(U.Row(U.H(10, U.I("", 15, Theme.Mu), U.T("Aktywność i wykresy (strona)", 13.5, U.Semi, Theme.Mu)), () => _ = Launcher.LaunchUriAsync(new Uri(Api.BaseUri, "admin/aktywnosc")), false, 8, U.Th(10, 0), U.Th(0, 1)).With(r => r.Height = 38));
+        _nav.Add(U.Row(U.H(10, U.I("", 15, Theme.Mu), U.T("Aktywność osób (strona)", 13.5, U.Semi, Theme.Mu)), () => _ = Launcher.LaunchUriAsync(new Uri(Api.BaseUri, "admin/aktywnosc")), false, 8, U.Th(10, 0), U.Th(0, 1)).With(r => r.Height = 38));
         _body.Children.Clear();
         switch (_section)
         {
@@ -66,6 +68,10 @@ public sealed class AdminPage : Grid
             case "servers": Servers(); break;
             case "reports": Reports(); break;
             case "log": Log(); break;
+            case "system":
+                Title("System i wykresy", "Stan maszyny, ruch i osoby — jak w panelu na stronie.");
+                _body.Add(new AdminSystem(_sh));
+                break;
             case "announce": Announce(); break;
             default: Stats(); break;
         }

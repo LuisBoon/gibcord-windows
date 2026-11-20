@@ -669,12 +669,12 @@ public sealed class Shell : Grid
 
     AdminPage? _admin;
 
-    public void ShowAdmin()
+    public void ShowAdmin(string section = "stats")
     {
         if (!S.Me.IsAdmin) return;
         CloseAdmin();
         CloseSettings();
-        _admin = new AdminPage(this);
+        _admin = new AdminPage(this, section);
         _admin.At(0, 0, colSpan: 5);
         Children.Add(_admin);
         _admin.Loaded += (_, _) => _admin?.Focus(FocusState.Programmatic);
