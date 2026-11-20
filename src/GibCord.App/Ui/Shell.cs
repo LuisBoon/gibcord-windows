@@ -208,6 +208,7 @@ public sealed class Shell : Grid
     public void StartCall(long dmId) { if (C.VoiceChannelId != dmId) _ = C.StartCall(dmId); }
 
     public void RefreshVoice() => Dirty(voice: true, side: true);
+    public void RefreshRail() => Dirty(rail: true);
 
     void ShowLoading()
     {
@@ -317,7 +318,7 @@ public sealed class Shell : Grid
         if (p.LastServer > 0 && S.ServerById(p.LastServer) is { } srv)
             Go(srv.Id, p.LastChannel.TryGetValue(srv.Id, out var lc) && S.ChannelById(lc) is { IsVoice: false } ? lc : 0);
         else if (p.LastServer == 0) Go(0, p.LastDm != 0 && S.DmById(p.LastDm) is not null ? p.LastDm : 0);
-        else if (S.Servers.FirstOrDefault() is { } first) Go(first.Id, 0);
+        else if (ServerRail.Ordered(S).FirstOrDefault() is { } first) Go(first.Id, 0);
         else Go(0, 0);
     }
 
@@ -577,7 +578,7 @@ public sealed class Shell : Grid
     void StepUnread(int dir)
     {
         var all = new List<(long S, long C)>();
-        foreach (var srv in S.Servers)
+        foreach (var srv in ServerRail.Ordered(S))
             foreach (var c in S.ChannelTree(srv).SelectMany(g => g.Channels).Where(c => !c.IsVoice)) all.Add((srv.Id, c.Id));
         foreach (var d in S.DmsSorted()) all.Add((0, d.Id));
         var i = all.FindIndex(x => x.C == ChannelId);

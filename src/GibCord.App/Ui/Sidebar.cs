@@ -15,6 +15,32 @@ public sealed class ServerRail : Grid
     readonly Shell _sh;
     readonly StackPanel _list = new() { Spacing = 9, Padding = U.Th(0, 12, 0, 12) };
 
+    static long _dragId;
+
+    /// <summary>Serwery w kolejności ustawionej przez przeciąganie (nowe na końcu).</summary>
+    public static List<Server> Ordered(Store s)
+    {
+        var order = App.Prefs.ServerOrder;
+        return s.Servers.Select((x, i) => (x, i)).OrderBy(t => order.IndexOf(t.x.Id) is var k && k >= 0 ? k : order.Count + t.i).Select(t => t.x).ToList();
+    }
+
+    /// <summary>Przenosi serwer na pozycję <paramref name="index"/> (po usunięciu z obecnej).</summary>
+    public static void MoveTo(Shell sh, long id, int index)
+    {
+        var ids = Ordered(sh.S).Select(x => x.Id).ToList();
+        if (!ids.Remove(id)) return;
+        ids.Insert(Math.Clamp(index, 0, ids.Count), id);
+        App.Prefs.ServerOrder = ids;
+        App.Prefs.Save();
+        sh.RefreshRail();
+    }
+
+    public static void MoveBy(Shell sh, long id, int delta)
+    {
+        var i = Ordered(sh.S).FindIndex(x => x.Id == id);
+        if (i >= 0) MoveTo(sh, id, i + delta);
+    }
+
     public ServerRail(Shell sh)
     {
         _sh = sh;
@@ -30,8 +56,11 @@ public sealed class ServerRail : Grid
         var pending = s.Friends.Values.Count(f => f.Status == "incoming");
         _list.Add(Item(homeLogo, "Rozmowy prywatne i znajomi", _sh.ServerId == 0, unread: false, mentions: s.DmUnreadTotal() + pending, () => _sh.Go(0, _sh.ServerId == 0 ? _sh.ChannelId : App.Prefs.LastDm), home: true));
         _list.Add(new Rectangle { Width = 28, Height = 1, Fill = U.W(.16), HorizontalAlignment = HorizontalAlignment.Center });
-        foreach (var srv in s.Servers)
+        var ordered = Ordered(s);
+        for (var idx = 0; idx < ordered.Count; idx++)
         {
+            var srv = ordered[idx];
+            var at = idx;
             FrameworkElement icon;
             if (_sh.C.Api.Abs(srv.Icon) is { } uri) icon = new Image { Source = Images.Get(uri, 96), Stretch = Stretch.UniformToFill };
             else if (srv.Official) icon = U.I("", 20);
@@ -40,6 +69,29 @@ public sealed class ServerRail : Grid
             var muted = s.ServerMuted(srv.Id);
             var item = Item(icon, srv.Name, sel, unread: s.ServerUnread(srv), mentions: muted ? 0 : s.ServerMentions(srv), () => _sh.Go(srv.Id, 0), bg: srv.Official ? U.B("#3b2a5c") : null);
             item.ContextFlyout = ServerMenu.Build(_sh, srv);
+            // przeciąganie ikon zmienia kolejność serwerów
+            item.CanDrag = true;
+            item.AllowDrop = true;
+            item.DragStarting += (_, e) => { _dragId = srv.Id; e.Data.SetText(srv.Name); e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move; };
+            item.DropCompleted += (_, _) => _dragId = 0;
+            item.DragOver += (_, e) =>
+            {
+                if (_dragId == 0 || _dragId == srv.Id) return;
+                e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+                e.DragUIOverride.IsCaptionVisible = false;
+                e.DragUIOverride.IsGlyphVisible = false;
+            };
+            item.Drop += (_, e) =>
+            {
+                if (_dragId == 0 || _dragId == srv.Id) return;
+                var from = ordered.FindIndex(x => x.Id == _dragId);
+                var below = e.GetPosition(item).Y > item.ActualHeight / 2;
+                var target = at + (below ? 1 : 0);
+                if (from >= 0 && from < target) target--; // po usunięciu z góry wszystko przesuwa się o jeden
+                var id = _dragId;
+                _dragId = 0;
+                MoveTo(_sh, id, target);
+            };
             _list.Add(item);
         }
         var add = Item(U.I("", 18, Theme.Green), "Dodaj serwer", false, false, 0, () => AddServerDialog.Show(_sh), bg: U.W(.07));

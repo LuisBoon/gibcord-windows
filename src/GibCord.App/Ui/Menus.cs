@@ -83,6 +83,15 @@ static class ServerMenu
             var section = s.CanServer(srv, Perm.ManageServer) ? "overview" : s.CanServer(srv, Perm.ManageChannels) ? "channels" : s.CanServer(srv, Perm.ManageRoles) ? "roles" : "members";
             f.Items.Add(M.Item("Ustawienia serwera", "\uE713", () => sh.ShowServerSettings(srv.Id, section)));
         }
+        // kolejność na pasku (tylko na tym komputerze; można też przeciągać ikony)
+        var pos = ServerRail.Ordered(s).FindIndex(x => x.Id == srv.Id);
+        var count = s.Servers.Count;
+        if (count > 1)
+        {
+            f.Items.Add(new MenuFlyoutSeparator());
+            if (pos > 0) f.Items.Add(M.Item("Przesuń wyżej", "\uE70E", () => ServerRail.MoveBy(sh, srv.Id, -1)));
+            if (pos >= 0 && pos < count - 1) f.Items.Add(M.Item("Przesuń niżej", "\uE70D", () => ServerRail.MoveBy(sh, srv.Id, 1)));
+        }
         if (srv.OwnerId != s.Me.Id && !srv.Official)
         {
             f.Items.Add(new MenuFlyoutSeparator());

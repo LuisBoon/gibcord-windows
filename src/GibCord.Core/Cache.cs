@@ -111,6 +111,8 @@ public sealed class Prefs
     public long StatusClearAt { get; set; }
     /// <summary>Czyje są szkice i ostatnie kanały (po zmianie konta czyścimy je).</summary>
     public long LastUserId { get; set; }
+    /// <summary>Własna kolejność serwerów na pasku (tylko na tym komputerze).</summary>
+    public List<long> ServerOrder { get; set; } = [];
     public bool MembersPanel { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)
