@@ -12,12 +12,23 @@ więc konta, wiadomości, serwery i znajomi są wspólne.
 | `src/GibCord.App` | Okno WinUI 3 napisane w samym C# (bez plików XAML): logowanie z 2FA, serwery i kanały, czat, rozmowy prywatne, znajomi, powiadomienia Windows, zasobnik, Ctrl+K, aktualizacje (Velopack). |
 | `tests/GibCord.Core.Tests` | Testy rdzenia. Testy „na żywo” uruchamiają się tylko z kopią testową serwera (`GC_TEST_URL`, `GC_TEST_PASS`). |
 
-## Etapy
+## Co umie (beta 4)
 
-1. **Fundament** (ta wersja beta): logowanie, serwery, kanały, czat, rozmowy prywatne, znajomi, powiadomienia.
-2. Głos: rozmowy przez serwer LiveKit, kamera, transmisje, push-to-talk, redukcja szumów, nakładka w grze, gry i Spotify przy nicku.
-3. Reszta: role i uprawnienia, wątki, automoderacja, szablony, wspólne oglądanie, mini-gry, panel admina.
-4. Przesiadka z obecnej aplikacji.
+- **Czat**: wiadomości, odpowiedzi, edycja, reakcje, przypinanie, wątki (panel z boku), wyszukiwarka (Ctrl+F, `od:@ktoś`, `ma:zdjęcie`), GIF-y, emoji z szukaniem po polsku, naklejki, ankiety, mini-gry, pliki, wiadomości głosowe, filmy i dźwięki w czacie, szkice, kolejka wiadomości bez internetu, linki do GibCorda i karty zaproszeń.
+- **Rozmowy**: głos przez LiveKit, kamera, transmisja ekranu (720p–1440p, 30/60 kl/s, dźwięk z komputera bez dźwięków rozmowy), podglądy transmisji, soundboard, wspólne oglądanie (YouTube i filmy z czatu), naciśnij-aby-mówić, nakładka w grze, skróty Ctrl+Shift+M/D działające w grach.
+- **Rozmowy prywatne i grupy**: tworzenie grup, ustawienia grupy, rozmowy wideo.
+- **Ustawienia**: konto (profil, e-mail, hasło, 2FA z kodem QR, urządzenia, blokady, Spotify), aplikacja (motywy, nakładka, autostart, zasobnik), serwer (kanały, kategorie, uprawnienia, role, członkowie, bany, emoji/naklejki/dźwięki, automoderacja, zgłoszenia, dziennik, szablon), panel admina.
+- **Windows**: powiadomienia z odpowiedzią w dymku, licznik na ikonie, zasobnik, autostart, linki `gibcord://`, aktualizacje Velopack, paczka do Microsoft Store.
+
+## Testy na żywo
+
+Kopia testowa serwera (nigdy produkcja): `node server.mjs` z `DC_TEST_HOOKS=1 EMAIL_GATE=0 PORT=8893 DATA_DIR=<pusty katalog>`, konta `tester` (pierwsze = admin) i `ola` oraz serwer z kanałem `pogaduchy`. Potem:
+
+```
+GC_TEST_URL=http://127.0.0.1:8893 GC_TEST_PASS=… dotnet test tests/GibCord.Core.Tests --filter LiveTests
+```
+
+Serwer pozwala na 10 logowań na minutę z jednego adresu.
 
 ## Budowanie
 
