@@ -45,6 +45,73 @@ public sealed partial class ServerSettingsPage
 
     // ───────────────────────── Role ─────────────────────────
 
+    /// <summary>„Podgląd jako rola”: zaznacz role i zobacz, co osoba z dokładnie takimi rolami widzi i może na każdym kanale.</summary>
+    async Task PreviewAsRole()
+    {
+        if (Srv is not { } srv) return;
+        var sid = _sid;
+        var sel = new HashSet<long>();
+        var cols = new (long Bit, string Name)[] { (Perm.ViewChannel, "widzi"), (Perm.SendMessages, "pisze"), (Perm.AttachFiles, "pliki"), (Perm.Connect, "wchodzi"), (Perm.Speak, "mówi"), (Perm.ManageMessages, "moderuje") };
+        var chips = new WrapPanel { Spacing = 6 };
+        var table = new StackPanel { Spacing = 1 };
+        var summary = U.T("", 12, null, Theme.Mu, wrap: true);
+        var ver = 0;
+        async Task Load()
+        {
+            var my = ++ver;
+            summary.Text = "Wczytuję…";
+            try
+            {
+                var r = await Api.GetJson($"servers/{sid}/perms-preview?roleIds={string.Join(',', sel)}");
+                if (my != ver) return;
+                table.Children.Clear();
+                var head = new Grid { Padding = U.Th(8, 4) }.Cols(["*", .. cols.Select(_ => "62")]);
+                head.Add(U.T("Kanał", 11.5, U.Bold, Theme.Mu2).At(0, 0));
+                for (var i = 0; i < cols.Length; i++) head.Add(U.T(cols[i].Name, 11.5, U.Bold, Theme.Mu2).With(t => t.HorizontalAlignment = HorizontalAlignment.Center).At(0, i + 1));
+                table.Add(head);
+                var chans = r.Prop("channels");
+                foreach (var c in S.ChannelTree(srv).SelectMany(g => g.Channels))
+                {
+                    var v = chans.Long(c.Id.ToString()) ?? 0;
+                    var row = new Grid { Padding = U.Th(8, 3), Background = U.W(.04), CornerRadius = new CornerRadius(6) }.Cols(["*", .. cols.Select(_ => "62")]);
+                    row.Add(U.T((c.IsVoice ? "🔊 " : "# ") + c.Name, 13).At(0, 0));
+                    for (var i = 0; i < cols.Length; i++)
+                    {
+                        var b = cols[i].Bit;
+                        var na = (c.IsVoice && (b == Perm.SendMessages || b == Perm.AttachFiles || b == Perm.ManageMessages)) || (!c.IsVoice && (b == Perm.Connect || b == Perm.Speak));
+                        var yes = (v & b) == b;
+                        row.Add(U.T(na ? "·" : yes ? "✓" : "✕", 13, U.Bold, na ? Theme.Mu2 : yes ? Theme.Green : Theme.Red).With(t => t.HorizontalAlignment = HorizontalAlignment.Center).At(0, i + 1));
+                    }
+                    table.Add(row);
+                }
+                var srvBits = r.Long("server") ?? 0;
+                var names = PermGroups.SelectMany(g => g.Items).Where(x => x.Bit != Perm.ViewChannel && (srvBits & x.Bit) == x.Bit).Select(x => x.Name.ToLowerInvariant()).ToList();
+                summary.Text = "Na serwerze: " + (names.Count == 0 ? "tylko podstawowe" : string.Join(", ", names)) + ".";
+            }
+            catch (Exception ex) { if (my == ver) summary.Text = GibCordClient.Friendly(ex); }
+        }
+        foreach (var role in srv.Roles.Where(x => x.Name != "@everyone").OrderByDescending(x => x.Position))
+        {
+            var id = role.Id;
+            var t = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Content = U.H(6, new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 10, Height = 10, Fill = U.B(role.Color ?? "#8b8599") }, U.T(role.Name, 12.5, U.Semi)), CornerRadius = new CornerRadius(12), Padding = U.Th(10, 4) };
+            t.Checked += (_, _) => { sel.Add(id); _ = Load(); };
+            t.Unchecked += (_, _) => { sel.Remove(id); _ = Load(); };
+            chips.Children.Add(t);
+        }
+        var body = U.V(10, U.T("Zaznacz role — zobaczysz, co osoba z dokładnie takimi rolami widzi i może na każdym kanale. Bez zaznaczenia: tylko @wszyscy.", 12.5, null, Theme.Mu, wrap: true),
+            chips, table, summary);
+        body.Width = 600;
+        var d = new ContentDialog
+        {
+            Title = "Podgląd jako rola", Content = new ScrollViewer { Content = body, MaxHeight = 560 }, CloseButtonText = "Zamknij",
+            XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
+        };
+        d.Resources["ContentDialogMaxWidth"] = 700.0;
+        _ = Load();
+        await M.WaitNoDialog(XamlRoot);
+        await d.ShowAsync();
+    }
+
     void Roles()
     {
         var srv = Srv!;
@@ -64,6 +131,7 @@ public sealed partial class ServerSettingsPage
             }
             catch (Exception ex) { Err(ex); }
         }, 36));
+        list.Add(U.Ghost("Podgląd jako rola", () => _ = PreviewAsRole(), 32).With(b => { b.HorizontalAlignment = HorizontalAlignment.Stretch; b.Margin = U.Th(0, 0, 0, 6); }));
         foreach (var r in roles)
         {
             var rid = r.Id;
