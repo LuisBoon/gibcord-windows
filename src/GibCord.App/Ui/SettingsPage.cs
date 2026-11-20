@@ -527,7 +527,11 @@ public sealed class SettingsPage : Grid
         foreach (var label in new[] { "Lewy górny", "Prawy górny", "Lewy dolny", "Prawy dolny" }) corner.Items.Add(label);
         corner.SelectedIndex = p.OverlayCorner switch { "tr" => 1, "bl" => 2, "br" => 3, _ => 0 };
         corner.SelectionChanged += (_, _) => { p.OverlayCorner = corner.SelectedIndex switch { 1 => "tr", 2 => "bl", 3 => "br", _ => "tl" }; p.Save(); };
-        _body.Add(Card(Label("Nakładka w grze (Ctrl+Shift+O)"), mode, corner, U.T("Pokazuje w grze, kto jest na kanale i kto mówi.", 12, null, Theme.Mu2, wrap: true)));
+        var size = new ComboBox { Header = U.T("Rozmiar", 13.5, U.Semi), Width = 220 };
+        foreach (var label in new[] { "Mała", "Zwykła", "Duża" }) size.Items.Add(label);
+        size.SelectedIndex = p.OverlaySize switch { "s" => 0, "l" => 2, _ => 1 };
+        size.SelectionChanged += (_, _) => { p.OverlaySize = size.SelectedIndex switch { 0 => "s", 2 => "l", _ => "m" }; p.Save(); };
+        _body.Add(Card(Label("Nakładka w grze (Ctrl+Shift+O)"), mode, corner, size, U.T("Pokazuje w grze, kto jest na kanale i kto mówi.", 12, null, Theme.Mu2, wrap: true)));
         _body.Add(Card(Label("Aktualizacje"), U.T($"Masz wersję {Updater.Version}. Nowe wersje instalują się same po ponownym uruchomieniu.", 13, null, Theme.Mu, wrap: true),
             U.Ghost("Sprawdź teraz", async () =>
             {

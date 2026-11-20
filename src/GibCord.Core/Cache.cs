@@ -97,6 +97,8 @@ public sealed class Prefs
     /// <summary>Nakładka w grze: "off", "game" (tylko gdy wykryto grę), "always" (zawsze w rozmowie); róg: tl, tr, bl, br.</summary>
     public string OverlayMode { get; set; } = "game";
     public string OverlayCorner { get; set; } = "tl";
+    /// <summary>Rozmiar nakładki: s (mała), m (zwykła), l (duża).</summary>
+    public string OverlaySize { get; set; } = "m";
     public bool MembersPanel { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)

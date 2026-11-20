@@ -99,9 +99,11 @@ public sealed class GameOverlay : IDisposable
     {
         const int rowH = 34, pad = 10, w = 240;
         var h = pad * 2 + Math.Max(1, members.Count) * rowH;
-        using var bmp = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
+        var k = App.Prefs.OverlaySize switch { "s" => .8f, "l" => 1.35f, _ => 1f };
+        using var bmp = new Bitmap((int)Math.Ceiling(w * k), (int)Math.Ceiling(h * k), PixelFormat.Format32bppPArgb);
         using (var g = Graphics.FromImage(bmp))
         {
+            g.ScaleTransform(k, k);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             g.Clear(Color.Transparent);
