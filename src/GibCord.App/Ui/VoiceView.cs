@@ -438,7 +438,8 @@ public sealed class VoiceView : Grid, IDisposable
             vol.ValueChanged += (_, e) => { C.Voice.Options.StreamVolume = e.NewValue / 100; App.Prefs.Save(); };
             ToolTipService.SetToolTip(vol, "Głośność transmisji");
             var full = U.IconButton(_sh.FocusMode ? "\uE73F" : "\uE740", _sh.FocusMode ? "Wyjdź z pełnego ekranu (Esc)" : "Pełny ekran", () => { _sh.ToggleFocus(); Refresh(); }, 15, 30);
-            var tools = U.H(8, U.I(G.Speaker, 14, Theme.Mu), vol, full, stop);
+            var pip = U.IconButton("\uE8A7", PipWindow.IsOpenFor(watched.UserId) ? "Zamknij okienko na wierzchu" : "Okienko na wierzchu (oglądaj nad innymi programami)", () => { if (_sh.FocusMode) _sh.ToggleFocus(); PipWindow.Toggle(_sh, watched.UserId); Refresh(); }, 15, 30);
+            var tools = U.H(8, U.I(G.Speaker, 14, Theme.Mu), vol, pip, full, stop);
             tools.Padding = U.Th(10, 2, 6, 2);
             big.Add(new Border { Background = U.B("#99120c22"), CornerRadius = new CornerRadius(8), Padding = U.Th(10, 4), Margin = U.Th(10), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Child = who });
             big.Add(new Border { Background = U.B("#99120c22"), CornerRadius = new CornerRadius(10), Child = tools, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = U.Th(10) });

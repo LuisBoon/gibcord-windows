@@ -119,6 +119,7 @@ public sealed class Shell : Grid
     /// <summary>Odpięcie od klienta i zwolnienie widoków (wylogowanie, bramka, zmiana motywu — inaczej stary widok żyje dalej w tle).</summary>
     public void Detach()
     {
+        PipWindow.CloseAll(); // okienko transmisji należy do tej sesji okna
         S.Changed -= OnChange;
         C.StatusChanged -= OnStatus;
         C.Error -= OnError;
