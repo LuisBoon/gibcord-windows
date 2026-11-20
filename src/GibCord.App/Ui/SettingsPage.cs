@@ -77,8 +77,7 @@ public sealed class SettingsPage : Grid
         _nav.Add(U.Row(U.H(10, U.I("", 15, Theme.Red), U.T("Wyloguj się", 13.5, U.Semi, Theme.Red)), async () =>
         {
             if (!await M.Confirm(_sh, "Wylogować się?", "Na tym komputerze trzeba będzie zalogować się ponownie. Zapisane wiadomości znikną z dysku.", "Wyloguj")) return;
-            await _sh.C.Logout();
-            _sh.W.ShowLogin(null);
+            await _sh.W.LogoutActive();
         }, false, 8, U.Th(10, 0), U.Th(0, 1)).With(r => r.Height = 38));
 
         _body.Children.Clear();

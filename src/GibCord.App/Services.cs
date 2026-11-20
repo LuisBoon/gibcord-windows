@@ -16,6 +16,8 @@ public static class Toasts
     /// <summary>Odpowiedź wpisana w dymku (klucz rozmowy, tekst) i „Oznacz jako przeczytane” — bez otwierania okna.</summary>
     public static Action<long, string>? Reply;
     public static Action<long>? MarkRead;
+    /// <summary>Kliknięcie w powiadomienie z konta w tle: (konto, klucz rozmowy).</summary>
+    public static Action<long, long>? OpenAccount;
 
     public static void Init(Action<long> open)
     {
@@ -26,6 +28,7 @@ public static class Toasts
                 a.Arguments.TryGetValue("c", out var cs);
                 a.Arguments.TryGetValue("a", out var act);
                 long.TryParse(cs, out var cid);
+                if (a.Arguments.TryGetValue("acc", out var accs) && long.TryParse(accs, out var acc) && acc != 0) { OpenAccount?.Invoke(acc, cid); return; }
                 switch (act)
                 {
                     case "reply" when a.UserInput.TryGetValue("odp", out var text) && !string.IsNullOrWhiteSpace(text):
@@ -45,13 +48,14 @@ public static class Toasts
         catch (Exception ex) { App.Log("Powiadomienia niedostępne: " + ex.Message); }
     }
 
-    public static void Show(string title, string body, long channelId, string group, bool canReply = false)
+    public static void Show(string title, string body, long channelId, string group, bool canReply = false, long account = 0)
     {
         if (!_ok) return;
         try
         {
             var b = new AppNotificationBuilder()
                 .AddArgument("c", channelId.ToString())
+                .AddArgument("acc", account.ToString())
                 .AddText(title)
                 .AddText(string.IsNullOrWhiteSpace(body) ? "Nowa wiadomość" : body);
             if (canReply && channelId != 0)

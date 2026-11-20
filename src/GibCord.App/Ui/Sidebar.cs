@@ -378,7 +378,15 @@ public sealed class Sidebar : Grid
         leftBtn.PointerExited += (_, _) => leftBtn.Background = Theme.Transparent;
         leftBtn.Tip("Zmień status");
         leftBtn.ContextFlyout = StatusMenu.Build(_sh);
-        leftBtn.Tapped += (_, _) => leftBtn.ContextFlyout.ShowAt(leftBtn);
+        leftBtn.Tapped += (_, _) => StatusMenu.Build(_sh).ShowAt(leftBtn); // świeże liczniki kont
+        // inne konta mają coś nowego — kropka z liczbą przy awatarze
+        if (!_sh.C.Offline && Accounts.Background.UnreadTotal is var bgn and > 0)
+        {
+            var dot = U.Box(U.T(bgn > 99 ? "99+" : bgn.ToString(), 9.5, U.Bold, Theme.OnAccent), Theme.Accent, 8, U.Th(4, 0));
+            dot.HorizontalAlignment = HorizontalAlignment.Right; dot.VerticalAlignment = VerticalAlignment.Top; dot.Margin = U.Th(0, -3, -6, 0);
+            dot.Tip($"Na innych kontach: {bgn} nowe");
+            left.Add(dot.At(0, 0));
+        }
         var (mic, hp) = VoiceUi.MuteButtons(_sh);
         var cog = U.IconButton(G.Settings, "Ustawienia (prawy przycisk: szybkie przełączniki)", () => _sh.ShowSettings(), 15, 30);
         cog.ContextFlyout = SettingsMenu.Build(_sh);

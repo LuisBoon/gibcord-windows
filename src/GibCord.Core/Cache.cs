@@ -82,6 +82,19 @@ public sealed class DiskCache
 }
 
 /// <summary>Drobne ustawienia aplikacji (ostatni kanał, rozmiar okna…) w jednym pliku JSON.</summary>
+/// <summary>Rzeczy zależne od konta (przy kilku kontach każde ma swoje).</summary>
+public sealed class AccountPrefs
+{
+    public Dictionary<long, string> Drafts { get; set; } = [];
+    public Dictionary<long, long> LastChannel { get; set; } = [];
+    public long LastServer { get; set; } = -1;
+    public long LastDm { get; set; }
+    public long StatusClearAt { get; set; }
+    public string StatusClearText { get; set; } = "";
+    public List<long> ServerOrder { get; set; } = [];
+    public long AnnouncementSeen { get; set; }
+}
+
 public sealed class Prefs
 {
     public Dictionary<long, long> LastChannel { get; set; } = [];
@@ -134,6 +147,24 @@ public sealed class Prefs
     public long AnnouncementSeen { get; set; }
     /// <summary>Szkice wiadomości na kanałach (klucz listy → tekst).</summary>
     public Dictionary<long, string> Drafts { get; set; } = [];
+    /// <summary>Kilka kont: ustawienia pozostałych kont (szkice, ostatnie kanały, kolejność serwerów…), aktywnego — w polach wyżej.</summary>
+    public Dictionary<long, AccountPrefs> PerAccount { get; set; } = [];
+
+    /// <summary>Przejście z konta <paramref name="from"/> na <paramref name="to"/>: odkłada jego rzeczy, wyjmuje tamtego.</summary>
+    public void SwapAccount(long from, long to)
+    {
+        if (from == to) return;
+        if (from != 0)
+            PerAccount[from] = new AccountPrefs
+            {
+                Drafts = Drafts, LastChannel = LastChannel, LastServer = LastServer, LastDm = LastDm,
+                StatusClearAt = StatusClearAt, StatusClearText = StatusClearText, ServerOrder = ServerOrder, AnnouncementSeen = AnnouncementSeen,
+            };
+        var a = to != 0 && PerAccount.Remove(to, out var got) ? got : new AccountPrefs();
+        Drafts = a.Drafts; LastChannel = a.LastChannel; LastServer = a.LastServer; LastDm = a.LastDm;
+        StatusClearAt = a.StatusClearAt; StatusClearText = a.StatusClearText; ServerOrder = a.ServerOrder; AnnouncementSeen = a.AnnouncementSeen;
+        LastUserId = to;
+    }
 
     public void UseEmoji(string e)
     {

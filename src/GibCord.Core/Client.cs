@@ -21,8 +21,8 @@ public sealed class MemoryTokenStore(string? token = null) : ITokenStore
 /// </summary>
 public sealed partial class GibCordClient : IAsyncDisposable
 {
-    readonly ITokenStore _tokens;
-    readonly DiskCache? _cache;
+    ITokenStore _tokens;
+    DiskCache? _cache;
     readonly Action<Action> _ui;
     readonly HashSet<long> _fresh = [];
     readonly HashSet<long> _loadingOlder = [];
@@ -128,6 +128,22 @@ public sealed partial class GibCordClient : IAsyncDisposable
         _cache?.Clear();
         ResetLocal();
     }
+
+    /// <summary>Kilka kont: ten sam klient przechodzi na inne konto (token i pamięć podręczna tamtego konta).
+    /// Rozmowa głosowa się kończy, stan i otwarte kanały poprzedniego konta znikają; z tokenem — od razu łączy.</summary>
+    public async Task SwitchTo(ITokenStore tokens, DiskCache? cache)
+    {
+        await Stop();
+        ResetLocal();
+        _tokens = tokens;
+        _cache = cache;
+        Api.Token = tokens.Load();
+        Info = null;
+        if (HasToken) await Start();
+    }
+
+    /// <summary>Pamięć podręczna konta, które właśnie się zalogowało (wcześniej nie było wiadomo, czyje to konto).</summary>
+    public void UseCache(DiskCache? cache) => _cache = cache;
 
     /// <summary>Po wylogowaniu: stan, kolejka niewysłanych i otwarte kanały poprzedniego konta znikają.</summary>
     void ResetLocal()

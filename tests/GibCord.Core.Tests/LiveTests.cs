@@ -129,6 +129,24 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
         await p.Until(() => !a.Store.Notes.ContainsKey(bid), "notatka usunięta");
     }
 
+    /// <summary>Kilka kont: ten sam klient przechodzi na drugie konto i z powrotem (stan i połączenie tamtego konta).</summary>
+    [LiveFact]
+    public async Task PrzelaczanieKont()
+    {
+        // tokeny kont z p.A i p.B (bez nowych logowań — serwer pozwala na 10 na minutę)
+        var ta = p.A.Api.Token!; var tb = p.B.Api.Token!;
+        var c = new GibCordClient(LivePair.Url, new MemoryTokenStore(ta), null, a => { lock (p.Lock) a(); });
+        await c.Start();
+        await p.Until(() => c.Store.Loaded && c.Store.Me.Username == "tester" && c.Status == GatewayStatus.Connected, "konto tester");
+        await c.SwitchTo(new MemoryTokenStore(tb), null);
+        await p.Until(() => c.Store.Loaded && c.Store.Me.Username == "ola" && c.Status == GatewayStatus.Connected, "przełączenie na ola", 12000);
+        await c.SwitchTo(new MemoryTokenStore(ta), null);
+        await p.Until(() => c.Store.Loaded && c.Store.Me.Username == "tester" && c.Status == GatewayStatus.Connected, "powrót na tester", 12000);
+        await c.SwitchTo(new MemoryTokenStore(), null); // bez tokenu — nic nie łączy, stan pusty
+        await p.Until(() => !c.Store.Loaded && c.Status != GatewayStatus.Connected, "wylogowany stan");
+        await c.DisposeAsync();
+    }
+
     [LiveFact]
     public async Task RozmowaNaKanaleIWDm()
     {

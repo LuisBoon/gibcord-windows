@@ -16,9 +16,12 @@ public sealed class LoginPage : Grid
     string? _ticket;
     bool _busy;
 
-    public LoginPage(MainWindow w, string? message)
+    readonly long _backTo;
+
+    public LoginPage(MainWindow w, string? message, long backTo = 0)
     {
         _w = w;
+        _backTo = backTo;
         _error = U.T("", 13, null, Theme.Red, wrap: true).With(t => t.Visibility = Visibility.Collapsed);
         var card = new Border
         {
@@ -64,6 +67,19 @@ public sealed class LoginPage : Grid
         _form.Add(U.H(6,
             U.T("Nie masz konta?", 13, null, Theme.Mu),
             Action("Załóż konto", ShowRegister)).With(p => p.HorizontalAlignment = HorizontalAlignment.Center));
+        // kilka kont: zapisane konta na tym komputerze i powrót do poprzedniego
+        var saved = Accounts.Others(0).ToList();
+        if (saved.Count > 0)
+        {
+            _form.Add(U.HLine(.1).With(l => l.Margin = U.Th(0, 4)));
+            _form.Add(U.T(_backTo != 0 ? "TWOJE KONTA NA TYM KOMPUTERZE · WRÓĆ DO" : "TWOJE KONTA NA TYM KOMPUTERZE", 11, U.Bold, Theme.Mu2));
+            foreach (var a in saved)
+            {
+                var row = U.Row(U.H(10, U.Box(U.T(a.Name.Length > 0 ? a.Name[..1].ToUpperInvariant() : "?", 13, U.Bold, Theme.OnAccent), U.B(a.Color), 16, U.Th(9, 4)),
+                    U.V(0, U.T(a.Name, 13.5, U.Semi), U.T("@" + a.Username, 11.5, null, Theme.Mu))), () => _ = _w.ResumeAccount(a.Id), false, 10, U.Th(8, 6), U.Th(0, 1));
+                _form.Add(row);
+            }
+        }
         SetError(message);
         user.Loaded += (_, _) => user.Focus(FocusState.Programmatic);
     }

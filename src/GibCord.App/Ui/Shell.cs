@@ -209,6 +209,8 @@ public sealed class Shell : Grid
 
     public void RefreshVoice() => Dirty(voice: true, side: true);
     public void RefreshRail() => Dirty(rail: true);
+    /// <summary>Kilka kont: liczniki kont w tle przy panelu „ja”.</summary>
+    public void RefreshAccounts() => Dirty(side: true);
 
     void ShowLoading()
     {

@@ -98,7 +98,14 @@ public sealed class MainWindow : Window
             if (Options.Screenshot is { } path) _ = Screenshot(path);
             return;
         }
-        Client = new GibCordClient(new Uri(Options.Server), new DpapiTokenStore(Path.Combine(App.DataDir, "sesja.bin")), new DiskCache(Path.Combine(App.DataDir, "pamiec")), UiRun) { Prefs = App.Prefs };
+        // kilka kont: pamięć podręczna każdego konta osobno (stary katalog „pamiec” należy do ostatniego konta)
+        var lastId = App.Prefs.LastUserId;
+        try { if (lastId > 0 && Directory.Exists(Accounts.CachePath(0)) && !Directory.Exists(Accounts.CachePath(lastId))) Directory.Move(Accounts.CachePath(0), Accounts.CachePath(lastId)); } catch { }
+        Client = new GibCordClient(new Uri(Options.Server), new DpapiTokenStore(Accounts.ActiveTokenPath), new DiskCache(Accounts.CachePath(lastId)), UiRun) { Prefs = App.Prefs };
+        Accounts.Background.Ui = UiRun;
+        Accounts.Background.Notify += OnBackgroundNotify;
+        Accounts.Background.UnreadChanged += () => Dq.TryEnqueue(() => { _lastUnread = -1; UpdateUnread(); _shell?.RefreshAccounts(); });
+        Toasts.OpenAccount = (acc, cid) => Dq.TryEnqueue(async () => { BringToFront(); await SwitchAccount(acc); if (cid != 0) OpenFromNotification(cid); });
         Client.Voice.Options = App.Prefs.Voice;
         Screen = new ScreenShare(Client);
         Cam = new Camera(Client);
@@ -116,13 +123,18 @@ public sealed class MainWindow : Window
         {
             var me = Client.Store.Me.Id;
             if (c.Kind is not ChangeKind.All || me == 0 || me == Inbox.For) return;
-            // inne konto niż poprzednio na tym komputerze → szkice i ostatnie kanały poprzedniej osoby znikają
+            // inne konto niż poprzednio na tym komputerze → szkice i ostatnie kanały tamtego konta odkładamy (kilka kont)
             if (App.Prefs.LastUserId != me)
             {
-                if (App.Prefs.LastUserId != 0) { App.Prefs.Drafts.Clear(); App.Prefs.LastChannel.Clear(); App.Prefs.LastDm = 0; App.Prefs.StatusClearAt = 0; }
-                App.Prefs.LastUserId = me;
+                App.Prefs.SwapAccount(App.Prefs.LastUserId, me);
                 App.Prefs.Save();
+                Client.UseCache(new DiskCache(Accounts.CachePath(me)));
             }
+            Accounts.Remember(Client.Store.Me);
+            Accounts.Background.Stop(me);
+            try { File.Delete(Accounts.TokenPath(me)); } catch { } // zalogowano się od nowa na konto, które czekało w tle
+            foreach (var o in Accounts.Others(me)) Accounts.Background.Start(o.Id, new Uri(Options.Server));
+            _shell?.RefreshAccounts();
             Inbox.Load(me);
         };
         // przypomnienia „przypomnij mi o tej wiadomości”
@@ -221,13 +233,13 @@ public sealed class MainWindow : Window
 
     // ───────────────────────── widoki ─────────────────────────
 
-    public void ShowLogin(string? message)
+    public void ShowLogin(string? message, long backTo = 0)
     {
         Inbox.Unload(); // przypomnienia poprzedniego konta nie mogą wyskoczyć po wylogowaniu
         _shell?.Detach();
         _shell = null;
         _host.Children.Clear();
-        _host.Children.Add(new LoginPage(this, message));
+        _host.Children.Add(new LoginPage(this, message, backTo));
         TitleBar.SetShellMode(false);
         UpdateUnread();
     }
@@ -315,6 +327,79 @@ public sealed class MainWindow : Window
         if (Native.GetForegroundWindow() != Hwnd) Native.Flash(Hwnd);
     }
 
+    /// <summary>Powiadomienie z konta w tle — z nazwą konta, kliknięcie przełącza konto.</summary>
+    void OnBackgroundNotify(long acc, string title, string body, long key)
+    {
+        if (!App.Prefs.Notifications) return;
+        var a = Accounts.List.FirstOrDefault(x => x.Id == acc);
+        Tones.Play("msg");
+        Toasts.Show($"{title} · konto {a?.Username ?? "inne"}", body, key, $"a{acc}c{key}", account: acc);
+    }
+
+    // ───────────────────────── kilka kont ─────────────────────────
+
+    bool _switching;
+    /// <summary>Przejście na inne zapisane konto: obecne idzie do tła (powiadomienia), tamto do okna.</summary>
+    public async Task SwitchAccount(long id)
+    {
+        var cur = Client.Store.Me.Id;
+        if (_switching || id == cur || id == 0) return;
+        _switching = true;
+        try
+        {
+            if (Voice is not null && Client.VoiceChannelId != 0) await Client.LeaveVoice();
+            Accounts.Background.Stop(id);
+            Accounts.Park(cur);
+            if (!Accounts.Unpark(id)) { _shell?.Info("To konto trzeba zalogować ponownie.", true); Accounts.Forget(id); return; }
+            Inbox.Unload();
+            App.Prefs.SwapAccount(cur, id);
+            App.Prefs.Save();
+            ShowShell();
+            await Client.SwitchTo(new DpapiTokenStore(Accounts.ActiveTokenPath), new DiskCache(Accounts.CachePath(id)));
+            if (cur != 0) Accounts.Background.Start(cur, new Uri(Options.Server));
+        }
+        catch (Exception ex) { App.Log("Przełączanie konta: " + ex); _shell?.Info("Nie udało się przełączyć konta.", true); }
+        finally { _switching = false; }
+    }
+
+    /// <summary>„Dodaj konto”: obecne konto idzie do tła, okno pokazuje logowanie (z powrotem do poprzedniego).</summary>
+    public async Task AddAccount()
+    {
+        var cur = Client.Store.Me.Id;
+        if (Voice is not null && Client.VoiceChannelId != 0) await Client.LeaveVoice();
+        Accounts.Park(cur);
+        try { File.Delete(Accounts.ActiveTokenPath); } catch { }
+        App.Prefs.SwapAccount(cur, 0);
+        App.Prefs.Save();
+        Inbox.Unload();
+        await Client.SwitchTo(new DpapiTokenStore(Accounts.ActiveTokenPath), null);
+        if (cur != 0) Accounts.Background.Start(cur, new Uri(Options.Server));
+        ShowLogin(null, backTo: cur);
+    }
+
+    /// <summary>Wylogowanie aktywnego konta; pozostałe konta zostają (ekran logowania pokaże je do wyboru).</summary>
+    public async Task LogoutActive()
+    {
+        var me = Client.Store.Me.Id;
+        await Client.Logout();
+        if (me != 0) Accounts.Forget(me);
+        App.Prefs.SwapAccount(me, 0);
+        App.Prefs.PerAccount.Remove(me);
+        App.Prefs.Save();
+        ShowLogin(null);
+    }
+
+    /// <summary>Z ekranu logowania (dodawanie konta albo po wylogowaniu) — na zapisane konto.</summary>
+    public async Task ResumeAccount(long id)
+    {
+        Accounts.Background.Stop(id);
+        if (!Accounts.Unpark(id)) { Accounts.Forget(id); ShowLogin("To konto trzeba zalogować ponownie."); return; }
+        App.Prefs.SwapAccount(App.Prefs.LastUserId, id);
+        App.Prefs.Save();
+        ShowShell();
+        await Client.SwitchTo(new DpapiTokenStore(Accounts.ActiveTokenPath), new DiskCache(Accounts.CachePath(id)));
+    }
+
     void OpenFromNotification(long cid) => Dq.TryEnqueue(() =>
     {
         BringToFront();
@@ -381,11 +466,12 @@ public sealed class MainWindow : Window
         var s = Client?.Store;
         if (s is null || !s.Loaded) { Title = "GibCord"; Tray.SetUnread(false); return; }
         var n = s.Mentions.Where(kv => !s.ChannelMuted(kv.Key)).Sum(kv => kv.Value) + s.DmUnreadTotal();
-        if (n == _lastUnread) return;
-        _lastUnread = n;
+        var all = n + Accounts.Background.UnreadTotal; // ikona i pasek zadań: wszystkie konta
+        if (all == _lastUnread) return;
+        _lastUnread = all;
         Title = n > 0 ? $"({n}) GibCord" : "GibCord";
-        Tray.SetUnread(n > 0, n);
-        Badge.Set(n);
+        Tray.SetUnread(all > 0, all);
+        Badge.Set(all);
     }
 
     // ───────────────────────── okno ─────────────────────────

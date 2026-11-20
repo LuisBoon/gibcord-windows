@@ -46,3 +46,22 @@ public class SafeFileTests
     [Fact]
     public void BrakPlikuToNull() => Assert.Null(SafeFile.Read<Dane>(Path.Combine(Dir(), "nie-ma.json")));
 }
+
+public sealed class AccountPrefsTests
+{
+    [Fact]
+    public void KazdeKontoMaSwojeSzkiceIOstatnieKanaly()
+    {
+        var p = new Prefs { LastUserId = 1 };
+        p.Drafts[10] = "szkic konta 1"; p.LastChannel[5] = 50; p.LastServer = 5; p.ServerOrder = [5, 6];
+        p.SwapAccount(1, 2); // przełączenie na konto 2 — puste
+        Assert.Empty(p.Drafts); Assert.Empty(p.LastChannel); Assert.Equal(-1, p.LastServer); Assert.Equal(2, p.LastUserId);
+        p.Drafts[20] = "szkic konta 2";
+        p.SwapAccount(2, 1); // powrót — wszystko konta 1 wraca
+        Assert.Equal("szkic konta 1", p.Drafts[10]); Assert.Equal(50, p.LastChannel[5]); Assert.Equal(5, p.LastServer); Assert.Equal([5, 6], p.ServerOrder);
+        Assert.False(p.Drafts.ContainsKey(20));
+        Assert.Equal("szkic konta 2", p.PerAccount[2].Drafts[20]);
+        p.SwapAccount(1, 1); // to samo konto — bez zmian
+        Assert.Equal("szkic konta 1", p.Drafts[10]);
+    }
+}

@@ -146,6 +146,24 @@ static class StatusMenu
     {
         var f = new MenuFlyout();
         var cur = sh.S.Me.Status;
+        // kilka kont: przełącznik na górze
+        if (!sh.C.Offline)
+        {
+            var me = sh.S.Me;
+            var others = Accounts.Others(me.Id).ToList();
+            var bgUnread = Accounts.Background.UnreadTotal;
+            var acc = new MenuFlyoutSubItem { Text = others.Count == 0 ? "Konta" : $"Konta ({others.Count + 1})" + (bgUnread > 0 ? $" · {bgUnread} nowe" : ""), Icon = new FontIcon { Glyph = "\uE716" } };
+            acc.Items.Add(new MenuFlyoutItem { Text = $"{me.Name} (@{me.Username})  ✓", IsEnabled = false });
+            foreach (var o in others)
+            {
+                var n = Accounts.Background.UnreadOf(o.Id);
+                acc.Items.Add(M.Item($"{o.Name} (@{o.Username})" + (n > 0 ? $"  · {n} nowe" : ""), "\uE77B", () => _ = sh.W.SwitchAccount(o.Id)));
+            }
+            acc.Items.Add(new MenuFlyoutSeparator());
+            acc.Items.Add(M.Item("Dodaj konto…", "\uE710", () => _ = sh.W.AddAccount()));
+            f.Items.Add(acc);
+            f.Items.Add(new MenuFlyoutSeparator());
+        }
         foreach (var (st, label) in new[] { ("online", "Dostępny"), ("idle", "Zaraz wracam"), ("dnd", "Nie przeszkadzać"), ("invisible", "Niewidoczny") })
         {
             var i = new MenuFlyoutItem { Text = label + (cur == st ? "  ✓" : ""), Icon = new FontIcon { Glyph = "", Foreground = Theme.StatusBrush(st == "invisible" ? "offline" : st) } };
@@ -219,8 +237,7 @@ static class SettingsMenu
         f.Items.Add(M.Item("Wyloguj się", "", async () =>
         {
             if (!await M.Confirm(sh, "Wylogować się?", "Na tym komputerze trzeba będzie zalogować się ponownie. Zapisane wiadomości znikną z dysku.", "Wyloguj")) return;
-            await sh.C.Logout();
-            sh.W.ShowLogin(null);
+            await sh.W.LogoutActive();
         }, danger: true));
         return f;
     }
