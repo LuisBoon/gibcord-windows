@@ -207,7 +207,7 @@ static class ImageEditor
 
         await Show();
         var hint = U.T("Przeciągnij po obrazku: zamaż albo przytnij zaznaczony fragment. Rysuj — trzymaj i prowadź. Tekst — kliknij w miejsce.", 12, null, Theme.Mu, wrap: true);
-        var body = U.V(10, bar, swatches, host, new Grid().Cols("*", "auto").Add(hint.At(0, 0), info.At(0, 1)));
+        var body = U.V(10, bar, swatches, host, new Grid { ColumnSpacing = 16 }.Cols("*", "auto").Add(hint.At(0, 0), info.At(0, 1)));
         var dlg = new ContentDialog
         {
             Title = "Edytuj obrazek", Content = body, PrimaryButtonText = "Gotowe", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary,
