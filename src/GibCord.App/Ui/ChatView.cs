@@ -64,11 +64,12 @@ public sealed partial class ChatView : Grid, IDisposable
     readonly Border _pill;
     readonly CallBar? _call;
     readonly Grid _listArea = new Grid().Rows("auto", "*");
+    readonly Border _unreadBar = new() { Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Top, Margin = U.Th(16, 8, 16, 0), CornerRadius = new CornerRadius(10), Background = U.B("#E6e8708f"), Padding = U.Th(14, 6) };
     VoiceView? _stage;
     readonly DispatcherQueueTimer _typingTimer;
     readonly long _lastReadAtOpen;
     bool _stick = true;
-    bool _loadingOlder, _loadingNewer;
+    bool _loadingOlder, _loadingNewer, _unreadShown;
     bool _disposed;
     int _bottomTries;
     double _lastOffset;
@@ -103,7 +104,7 @@ public sealed partial class ChatView : Grid, IDisposable
         _typing.Margin = U.Th(18, 0, 0, 0);
         _composer = new Composer(this);
         if (tid == 0 && S.DmById(cid) is not null) { _call = new CallBar(sh, cid); _listArea.Add(_call.At(0)); }
-        _listArea.Add(_sv.At(1), _pill.At(1));
+        _listArea.Add(_sv.At(1), _pill.At(1), _unreadBar.At(1));
         this.Add(_header.At(0), _listArea.At(1), _typing.At(2), _composer.At(3));
 
         AllowDrop = true;
@@ -134,6 +135,22 @@ public sealed partial class ChatView : Grid, IDisposable
     }
 
     public void FocusComposer() => _composer.FocusBox();
+
+    /// <summary>„N nowych wiadomości od HH:MM” u góry — skok do pierwszej nieprzeczytanej albo zamknięcie.</summary>
+    void ShowUnreadBar()
+    {
+        if (_lastReadAtOpen <= 0) return;
+        var unread = S.Window(Key).Items.Where(m => m.Id > _lastReadAtOpen && m.AuthorId != S.Me.Id && m.Send == SendState.Sent && !m.IsSystem).ToList();
+        if (unread.Count < 3) return; // przy kilku nowych wystarczy znacznik NOWE
+        var first = unread[0];
+        var jump = new HyperlinkButton { Content = U.T("Skocz do pierwszej", 12.5, U.Bold, U.B("#ffffff")), Padding = U.Th(8, 0) };
+        jump.Click += async (_, _) => { _unreadBar.Visibility = Visibility.Collapsed; await JumpTo(first.Id); };
+        var close = U.IconButton(G.Close, "Zamknij", () => _unreadBar.Visibility = Visibility.Collapsed, 10, 24, U.B("#ffffff"));
+        _unreadBar.Child = new Grid().Cols("*", "auto", "auto").Add(
+            U.T($"{unread.Count}{(S.Window(Key).HasOlder && unread.Count >= 40 ? "+" : "")} {Format.Plural(unread.Count, "nowa wiadomość", "nowe wiadomości", "nowych wiadomości")} od {Format.Time(first.CreatedAt)}", 12.5, U.Bold, U.B("#ffffff")).At(0, 0),
+            jump.At(0, 1), close.At(0, 2));
+        _unreadBar.Visibility = Visibility.Visible;
+    }
 
     /// <summary>Przerysowanie wszystkich wiadomości (np. po zablokowaniu / odblokowaniu osoby).</summary>
     public void Rerender() { if (_disposed) return; _rows.Clear(); Sync(); }
@@ -297,6 +314,7 @@ public sealed partial class ChatView : Grid, IDisposable
         _rows.Clear();
         foreach (var r in fresh) _rows.Add(r);
         UpdateTop(w);
+        if (!_unreadShown && !w.FromCache && w.Items.Count > 0) { _unreadShown = true; ShowUnreadBar(); }
         if (w.AtTail) { _stick = true; _bottomTries = 0; ScrollToBottom(); }
         UpdatePill();
     }
@@ -415,6 +433,7 @@ public sealed partial class ChatView : Grid, IDisposable
         var atBottom = _sv.ScrollableHeight - off < 80;
         // „przyklejenie” do dołu puszcza tylko przewinięcie w górę przez człowieka (lista rośnie przy wczytywaniu)
         if (atBottom) _stick = S.Window(Key).AtTail;
+        if (_unreadBar.Visibility == Visibility.Visible && off < 200 && _rows.Count > 0 && !S.Window(Key).HasOlder) _unreadBar.Visibility = Visibility.Collapsed;
         else if (off < _lastOffset - 1 && Environment.TickCount64 > _progUntil) _stick = false;
         _lastOffset = off;
         if (_stick && _pill.Visibility == Visibility.Visible && S.Window(Key).AtTail) _pill.Visibility = Visibility.Collapsed;
