@@ -26,7 +26,8 @@ static class Motion
     {
         get
         {
-            if (App.Prefs.ReduceMotion || (Options.Screenshot is not null && !Options.ForceMotion)) return false; // zrzuty w CI: bez ruchu, żeby nie złapać klatki w połowie
+            if (Options.ForceMotion) return true; // CI (--motion): animacje mimo wyłączonych w systemie (na maszynach CI są wyłączone)
+            if (App.Prefs.ReduceMotion || Options.Screenshot is not null) return false; // zrzuty w CI: bez ruchu, żeby nie złapać klatki w połowie
             var now = Environment.TickCount64;
             if (now - _sysAt > 5000)
             {
