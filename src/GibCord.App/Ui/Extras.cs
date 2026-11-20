@@ -7,17 +7,60 @@ using Windows.System;
 
 namespace GibCord.App.Ui;
 
-/// <summary>Obrazek na cały ekran (klik obok albo Esc zamyka).</summary>
+/// <summary>Obrazek na cały ekran: przybliżanie kółkiem (Ctrl+kółko albo gest), zapis na dysk, kopiowanie, otwarcie w przeglądarce. Esc zamyka.</summary>
 public static class Lightbox
 {
+    static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+
     public static void Show(Shell sh, Uri url, string name)
     {
         var img = new Image { Source = Images.Get(url), Stretch = Stretch.Uniform, MaxWidth = 1600 };
+        var zoom = new ScrollViewer
+        {
+            Content = img, ZoomMode = ZoomMode.Enabled, MinZoomFactor = 1, MaxZoomFactor = 8,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollMode = ScrollMode.Auto, VerticalScrollMode = ScrollMode.Auto,
+        };
+        img.DoubleTapped += (_, e) => { zoom.ChangeView(null, null, zoom.ZoomFactor > 1.1f ? 1 : 2.5f); e.Handled = true; };
+        var save = U.Ghost("Zapisz…", async () =>
+        {
+            try
+            {
+                var picker = new Windows.Storage.Pickers.FileSavePicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary, SuggestedFileName = Path.GetFileNameWithoutExtension(name) };
+                var ext = Path.GetExtension(name);
+                if (string.IsNullOrEmpty(ext)) ext = Path.GetExtension(url.AbsolutePath);
+                if (string.IsNullOrEmpty(ext)) ext = ".png";
+                picker.FileTypeChoices.Add("Obraz", [ext]);
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, sh.W.Hwnd);
+                var f = await picker.PickSaveFileAsync();
+                if (f is null) return;
+                var bytes = await Http.GetByteArrayAsync(url);
+                await Windows.Storage.FileIO.WriteBytesAsync(f, bytes);
+                sh.Info("Zapisano: " + f.Name);
+            }
+            catch (Exception ex) { sh.Info("Nie udało się zapisać: " + ex.Message, true); }
+        });
+        var copy = U.Ghost("Kopiuj obraz", async () =>
+        {
+            try
+            {
+                var bytes = await Http.GetByteArrayAsync(url);
+                var ms = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+                await ms.WriteAsync(System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions.AsBuffer(bytes));
+                ms.Seek(0);
+                var dp = new Windows.ApplicationModel.DataTransfer.DataPackage();
+                dp.SetBitmap(Windows.Storage.Streams.RandomAccessStreamReference.CreateFromStream(ms));
+                Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dp);
+                sh.Info("Obraz skopiowany");
+            }
+            catch (Exception ex) { sh.Info("Nie udało się skopiować: " + ex.Message, true); }
+        });
         var open = U.Ghost("Otwórz w przeglądarce", () => _ = Launcher.LaunchUriAsync(url));
         var close = U.Ghost("Zamknij (Esc)", sh.CloseOverlay);
         var g = new Grid { Padding = U.Th(40, 0, 40, 30), MaxHeight = 900 }.Rows("*", "auto").Add(
-            img.At(0),
-            U.H(10, U.T(name, 13, U.Semi, Theme.Mu), open, close).With(p => { p.HorizontalAlignment = HorizontalAlignment.Center; p.Margin = U.Th(0, 12, 0, 0); }).At(1));
+            zoom.At(0),
+            U.V(4, U.H(10, U.T(name, 13, U.Semi, Theme.Mu), save, copy, open, close).With(p => p.HorizontalAlignment = HorizontalAlignment.Center),
+                U.T("Kółko myszy z Ctrl albo podwójne kliknięcie — przybliżenie", 11, null, Theme.Mu2).With(t => t.HorizontalAlignment = HorizontalAlignment.Center)).With(p => p.Margin = U.Th(0, 12, 0, 0)).At(1));
         sh.ShowOverlay(g, () => close.Focus(FocusState.Programmatic));
     }
 }
