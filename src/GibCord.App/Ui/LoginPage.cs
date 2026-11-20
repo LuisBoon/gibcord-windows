@@ -59,11 +59,11 @@ public sealed class LoginPage : Grid
         pass.KeyDown += (_, e) => { if (e.Key == VirtualKey.Enter) { Submit(); e.Handled = true; } };
 
         _form.Add(Label("NAZWA UŻYTKOWNIKA"), user, Label("HASŁO"), pass, _error, go.With(b => b.Margin = U.Th(0, 6, 0, 0)));
-        _form.Add(LinkRow("Nie pamiętasz hasła?", "https://gibcord.luisboon.pl/reset"));
+        _form.Add(Action("Nie pamiętasz hasła?", () => ShowForgot(user.Text)));
         _form.Add(U.HLine(.1).With(l => l.Margin = U.Th(0, 4)));
         _form.Add(U.H(6,
             U.T("Nie masz konta?", 13, null, Theme.Mu),
-            Link("Załóż je na stronie", "https://gibcord.luisboon.pl/")).With(p => p.HorizontalAlignment = HorizontalAlignment.Center));
+            Action("Załóż konto", ShowRegister)).With(p => p.HorizontalAlignment = HorizontalAlignment.Center));
         SetError(message);
         user.Loaded += (_, _) => user.Focus(FocusState.Programmatic);
     }
@@ -84,6 +84,72 @@ public sealed class LoginPage : Grid
         _form.Add(U.Ghost("Wróć do hasła", () => ShowPassword(null)).With(b => b.HorizontalAlignment = HorizontalAlignment.Center));
         SetError(null);
         code.Loaded += (_, _) => code.Focus(FocusState.Programmatic);
+    }
+
+    static HyperlinkButton Action(string text, Action a) => new HyperlinkButton
+    {
+        Content = U.T(text, 13, U.Semi, Theme.Accent), Padding = U.Th(0), HorizontalAlignment = HorizontalAlignment.Center,
+    }.With(b => b.Click += (_, _) => a());
+
+    void ShowRegister()
+    {
+        Header("Załóż konto", "Jedno konto działa wszędzie: w aplikacji, na stronie i na telefonie.");
+        var user = Field("np. ola_123");
+        var display = Field("np. Ola (opcjonalnie)");
+        var email = Field("twoj@adres.pl");
+        email.InputScope = new Microsoft.UI.Xaml.Input.InputScope { Names = { new Microsoft.UI.Xaml.Input.InputScopeName(Microsoft.UI.Xaml.Input.InputScopeNameValue.EmailSmtpAddress) } };
+        var pass = new PasswordBox { PlaceholderText = "Hasło (co najmniej 8 znaków)", Height = 42, FontSize = 14, CornerRadius = new CornerRadius(10), Padding = U.Th(12, 10) };
+        var pass2 = new PasswordBox { PlaceholderText = "Powtórz hasło", Height = 42, FontSize = 14, CornerRadius = new CornerRadius(10), Padding = U.Th(12, 10) };
+        Button? go = null;
+        async void Submit()
+        {
+            if (_busy || go is null) return;
+            if (pass.Password != pass2.Password) { SetError("Hasła się różnią."); return; }
+            _busy = true; go.IsEnabled = false; SetError(null);
+            try
+            {
+                var r = await _w.Client.Register(user.Text, pass.Password, display.Text, email.Text);
+                if (r.Token is not null) _w.LoggedIn();
+                else SetError("Konto założone — zaloguj się.");
+            }
+            catch (Exception ex) { SetError(GibCordClient.Friendly(ex)); }
+            finally { _busy = false; go.IsEnabled = true; }
+        }
+        go = U.Primary("Załóż konto", Submit, 44);
+        pass2.KeyDown += (_, e) => { if (e.Key == VirtualKey.Enter) { Submit(); e.Handled = true; } };
+        _form.Add(Label("NAZWA UŻYTKOWNIKA (a–z, 0–9, _ i .)"), user, Label("NAZWA WYŚWIETLANA"), display, Label("E-MAIL (wyślemy link potwierdzający)"), email,
+            Label("HASŁO"), pass, pass2, _error, go.With(b => b.Margin = U.Th(0, 6, 0, 0)));
+        _form.Add(U.T("Zakładając konto, akceptujesz zasady GibCorda: szanuj innych, bez spamu i treści nielegalnych.", 11.5, null, Theme.Mu2, wrap: true).With(t => t.TextAlignment = TextAlignment.Center));
+        _form.Add(U.Ghost("Mam już konto", () => ShowPassword(null)).With(b => b.HorizontalAlignment = HorizontalAlignment.Center));
+        SetError(null);
+        user.Loaded += (_, _) => user.Focus(FocusState.Programmatic);
+    }
+
+    void ShowForgot(string login)
+    {
+        Header("Nie pamiętasz hasła?", "Podaj nazwę użytkownika albo e-mail. Jeśli adres jest potwierdzony, wyślemy na niego link do ustawienia nowego hasła.");
+        var box = Field("nazwa użytkownika albo e-mail");
+        box.Text = login;
+        Button? go = null;
+        async void Submit()
+        {
+            if (_busy || go is null || string.IsNullOrWhiteSpace(box.Text)) return;
+            _busy = true; go.IsEnabled = false; SetError(null);
+            try
+            {
+                await _w.Client.Api.ForgotPassword(box.Text.Trim());
+                Header("Sprawdź skrzynkę", "Jeśli to konto ma potwierdzony e-mail, za chwilę przyjdzie link do zmiany hasła (ważny godzinę). Otwórz go, ustaw nowe hasło i wróć tutaj.");
+                _form.Add(U.Primary("Wróć do logowania", () => ShowPassword(null), 44));
+            }
+            catch (Exception ex) { SetError(GibCordClient.Friendly(ex)); }
+            finally { _busy = false; go.IsEnabled = true; }
+        }
+        go = U.Primary("Wyślij link", Submit, 44);
+        box.KeyDown += (_, e) => { if (e.Key == VirtualKey.Enter) { Submit(); e.Handled = true; } };
+        _form.Add(Label("KONTO"), box, _error, go);
+        _form.Add(U.Ghost("Wróć do logowania", () => ShowPassword(null)).With(b => b.HorizontalAlignment = HorizontalAlignment.Center));
+        SetError(null);
+        box.Loaded += (_, _) => box.Focus(FocusState.Programmatic);
     }
 
     static HyperlinkButton Link(string text, string url) => new()

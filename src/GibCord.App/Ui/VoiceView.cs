@@ -330,9 +330,15 @@ public sealed class VoiceView : Grid, IDisposable
             var big = new Grid { Margin = U.Th(16, 16, 16, 8) };
             big.Add(new Border { Background = U.B("#cc08040f"), CornerRadius = new CornerRadius(14), Child = img });
             var who = U.T($"{s.NameOf(watched.UserId, srv)} nadaje ekran", 12.5, U.Semi);
-            var stop = U.Ghost("Przestań oglądać", () => { C.Voice.Unwatch(watched.UserId); Refresh(); }, 30);
+            var stop = U.Ghost("Przestań oglądać", () => { if (_sh.FocusMode) _sh.ToggleFocus(); C.Voice.Unwatch(watched.UserId); Refresh(); }, 30);
+            var vol = new Slider { Minimum = 0, Maximum = 200, StepFrequency = 5, Width = 120, Value = Math.Round(C.Voice.Options.StreamVolume * 100), VerticalAlignment = VerticalAlignment.Center };
+            vol.ValueChanged += (_, e) => { C.Voice.Options.StreamVolume = e.NewValue / 100; App.Prefs.Save(); };
+            ToolTipService.SetToolTip(vol, "Głośność transmisji");
+            var full = U.IconButton(_sh.FocusMode ? "\uE73F" : "\uE740", _sh.FocusMode ? "Wyjdź z pełnego ekranu (Esc)" : "Pełny ekran", () => { _sh.ToggleFocus(); Refresh(); }, 15, 30);
+            var tools = U.H(8, U.I(G.Speaker, 14, Theme.Mu), vol, full, stop);
+            tools.Padding = U.Th(10, 2, 6, 2);
             big.Add(new Border { Background = U.B("#99120c22"), CornerRadius = new CornerRadius(8), Padding = U.Th(10, 4), Margin = U.Th(10), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Child = who });
-            big.Add(stop.With(b => { b.HorizontalAlignment = HorizontalAlignment.Right; b.VerticalAlignment = VerticalAlignment.Top; b.Margin = U.Th(10); }));
+            big.Add(new Border { Background = U.B("#99120c22"), CornerRadius = new CornerRadius(10), Child = tools, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = U.Th(10) });
             _stage.Add(big.At(0));
             var strip = U.H(10);
             strip.Padding = U.Th(16, 0, 16, 8);

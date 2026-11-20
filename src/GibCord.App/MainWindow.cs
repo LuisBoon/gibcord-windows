@@ -104,6 +104,7 @@ public sealed class MainWindow : Window
         _presence = new Presence(Client);
         _overlay = new GameOverlay(Client, Dq, () => _presence.InGame);
         Client.SessionEnded += why => ShowLogin(why);
+        Client.EmailGateRequired += ShowEmailGate;
         Client.Notify += OnNotify;
         Client.FriendRequest += u => { if (App.Prefs.Notifications) Toasts.Show("Zaproszenie do znajomych", $"{u.Name} chce dodać Cię do znajomych", 0, "fr" + u.Id); };
         Client.Store.Changed += c => { if (c.Kind is ChangeKind.All or ChangeKind.Reads or ChangeKind.Dms or ChangeKind.MessageAdded or ChangeKind.Notify or ChangeKind.Servers) UpdateUnread(); };
@@ -148,6 +149,27 @@ public sealed class MainWindow : Window
         _host.Children.Add(new LoginPage(this, message));
         TitleBar.SetShellMode(false);
         UpdateUnread();
+    }
+
+    /// <summary>Pełny ekran (transmisja) — tytuł i ramka okna znikają, Esc wraca.</summary>
+    public void SetFullScreen(bool on)
+    {
+        try
+        {
+            AppWindow.SetPresenter(on ? Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen : Microsoft.UI.Windowing.AppWindowPresenterKind.Overlapped);
+            if (!on && AppWindow.Presenter is OverlappedPresenter op) { op.PreferredMinimumWidth = 940; op.PreferredMinimumHeight = 560; }
+        }
+        catch (Exception ex) { App.Log("Pełny ekran: " + ex.Message); }
+        TitleBar.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    public void ShowEmailGate()
+    {
+        _shell?.Detach();
+        _shell = null;
+        _host.Children.Clear();
+        _host.Children.Add(new EmailGatePage(this));
+        TitleBar.SetShellMode(false);
     }
 
     public void ShowShell()

@@ -89,6 +89,7 @@ public sealed class Shell : Grid
 
         Accel(VirtualKey.K, VirtualKeyModifiers.Control, OpenSwitcher);
         Accel(VirtualKey.F, VirtualKeyModifiers.Control, () => OpenSearch());
+        KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape && FocusMode) { e.Handled = true; ToggleFocus(); Dirty(voice: true); } };
         Accel(VirtualKey.Left, VirtualKeyModifiers.Menu, Back);
         Accel(VirtualKey.Right, VirtualKeyModifiers.Menu, Forward);
         Accel(VirtualKey.Up, VirtualKeyModifiers.Menu, () => Step(-1));
@@ -553,6 +554,20 @@ public sealed class Shell : Grid
         t.IsRepeating = false;
         t.Tick += (_, _) => _toasts.Children.Remove(b);
         t.Start();
+    }
+
+    // ── pełny ekran transmisji: chowa kolumny, okno na cały ekran ──
+    public bool FocusMode { get; private set; }
+
+    public void ToggleFocus()
+    {
+        FocusMode = !FocusMode;
+        var v = FocusMode ? Visibility.Collapsed : Visibility.Visible;
+        _rail.Visibility = v;
+        _side.Visibility = v;
+        if (FocusMode) { _members.Visibility = Visibility.Collapsed; _threadHost.Visibility = Visibility.Collapsed; }
+        else { _members.Refresh(); _threadHost.Visibility = _threadHost.Child is null ? Visibility.Collapsed : Visibility.Visible; }
+        W.SetFullScreen(FocusMode);
     }
 
     /// <summary>Ogłoszenie właścicieli GibCorda (pasek u góry, zamykany krzyżykiem — do następnego ogłoszenia).</summary>

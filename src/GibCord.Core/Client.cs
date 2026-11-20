@@ -50,6 +50,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
     public event Action<Message>? Notify;
     public event Action<User>? FriendRequest;
     public event Action<string>? SessionEnded;
+    /// <summary>Serwer wymaga potwierdzenia adresu e-mail (WS 4005) — aplikacja pokazuje ekran z linkiem do wysłania.</summary>
+    public event Action? EmailGateRequired;
     public event Action<string>? Error;
 
     public GibCordClient(Uri baseUri, ITokenStore tokens, DiskCache? cache, Action<Action> ui, HttpMessageHandler? handler = null)
@@ -77,6 +79,13 @@ public sealed partial class GibCordClient : IAsyncDisposable
     public async Task<LoginResult> LoginMfa(string ticket, string code)
     {
         var r = await Api.LoginMfa(ticket, code);
+        if (r.Token is not null) Accept(r.Token);
+        return r;
+    }
+
+    public async Task<LoginResult> Register(string username, string password, string? displayName, string? email)
+    {
+        var r = await Api.Register(username, password, displayName, email);
         if (r.Token is not null) Accept(r.Token);
         return r;
     }
@@ -149,6 +158,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
         StatusChanged?.Invoke(s, delay);
         if (s == GatewayStatus.SessionEnded) EndSession("Sesja wygasła albo wylogowano Cię na innym urządzeniu. Zaloguj się ponownie.");
         else if (s == GatewayStatus.Suspended) EndSession("To konto jest zawieszone.");
+        else if (s == GatewayStatus.EmailGate) { _ = Stop(); EmailGateRequired?.Invoke(); }
     }
 
     void EndSession(string why)

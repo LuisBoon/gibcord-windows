@@ -96,6 +96,15 @@ public sealed class GibCordApi : IDisposable
     public Task<LoginResult> LoginMfa(string ticket, string code, CancellationToken ct = default) =>
         Send<LoginResult>(HttpMethod.Post, "login/mfa", new { ticket, code = code.Replace(" ", "").Replace("-", "") }, ct);
     public Task Logout(CancellationToken ct = default) => Send(HttpMethod.Post, "logout", ct: ct);
+    public Task<LoginResult> Register(string username, string password, string? displayName, string? email, CancellationToken ct = default) =>
+        Send<LoginResult>(HttpMethod.Post, "register", new { username = username.Trim().TrimStart('@'), password, displayName = string.IsNullOrWhiteSpace(displayName) ? null : displayName.Trim(), email = string.IsNullOrWhiteSpace(email) ? null : email.Trim() }, ct);
+    /// <summary>GET /api/me — działa też przy bramce e-mail (emailGate:true).</summary>
+    public async Task<(User Me, bool EmailGate)> GetMe(CancellationToken ct = default)
+    {
+        var e = await Send(HttpMethod.Get, "me", ct: ct).ConfigureAwait(false);
+        return (e.Prop("me").To<User>() ?? new User(), e.Bool("emailGate") == true);
+    }
+    public Task ResendEmail(CancellationToken ct = default) => Send(HttpMethod.Post, "email/resend", ct: ct);
     /// <summary>Przesiadka ze starej aplikacji: jednorazowy kod → sesja (bez wpisywania hasła).</summary>
     public Task<LoginResult> RedeemHandoff(string code, CancellationToken ct = default) =>
         Send<LoginResult>(HttpMethod.Post, "auth/handoff/redeem", new { code }, ct);

@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace GibCord.Core;
 
-public enum GatewayStatus { Offline, Connecting, Connected, Reconnecting, SessionEnded, Suspended }
+public enum GatewayStatus { Offline, Connecting, Connected, Reconnecting, SessionEnded, Suspended, EmailGate }
 
 /// <summary>Zdarzenie z WebSocket: typ (<c>t</c>) i cała ramka.</summary>
 public readonly record struct GatewayEvent(string Type, JsonElement Data);
@@ -93,7 +93,7 @@ public sealed class Gateway : IAsyncDisposable
             if (code is 4001 or 4003 or 4005)
             {
                 CloseCode = code;
-                SetStatus(code == 4003 ? GatewayStatus.Suspended : GatewayStatus.SessionEnded);
+                SetStatus(code == 4003 ? GatewayStatus.Suspended : code == 4005 ? GatewayStatus.EmailGate : GatewayStatus.SessionEnded);
                 return;
             }
             if (ct.IsCancellationRequested) break;
