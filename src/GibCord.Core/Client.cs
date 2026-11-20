@@ -19,7 +19,7 @@ public sealed class MemoryTokenStore(string? token = null) : ITokenStore
 /// Spina wszystko: REST, WebSocket, stan i pamięć podręczną. Okno woła metody tej klasy
 /// i słucha <see cref="Store.Changed"/>. Zmiany stanu zawsze idą przez <c>ui</c> (wątek okna).
 /// </summary>
-public sealed class GibCordClient : IAsyncDisposable
+public sealed partial class GibCordClient : IAsyncDisposable
 {
     readonly ITokenStore _tokens;
     readonly DiskCache? _cache;
@@ -127,6 +127,8 @@ public sealed class GibCordClient : IAsyncDisposable
     public async Task Stop()
     {
         _session++;
+        VoiceChannelId = 0;
+        if (_voice is not null) await _voice.DisconnectAsync();
         var gw = _gw; _gw = null;
         if (gw is not null) await gw.DisposeAsync();
         Status = GatewayStatus.Offline;
@@ -173,8 +175,9 @@ public sealed class GibCordClient : IAsyncDisposable
 
     void OnEvent(GatewayEvent ev)
     {
-        if (ev.Type == "hello") { _ = RefreshState(); return; }
+        if (ev.Type == "hello") { _ = RefreshState(); RejoinVoiceAfterReconnect(); return; }
         Store.Apply(ev);
+        OnVoiceEvent(ev);
         switch (ev.Type)
         {
             case "message_create":

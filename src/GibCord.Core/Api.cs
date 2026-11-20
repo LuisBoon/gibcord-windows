@@ -160,5 +160,10 @@ public sealed class GibCordApi : IDisposable
     public Task ForgotPassword(string login, CancellationToken ct = default) => Send(HttpMethod.Post, "password/forgot", new { login }, ct);
     public Task HideDm(long dmId, CancellationToken ct = default) => Send(HttpMethod.Post, $"dms/{dmId}/hide", ct: ct);
 
+    // ── głos (LiveKit) ──
+    /// <summary>Świeży token do serwera głosu — działa tylko, gdy jesteśmy na tym kanale (voice_state).</summary>
+    public async Task<Voice.VoiceMedia?> VoiceToken(long channelId, CancellationToken ct = default) =>
+        Voice.VoiceMediaJson.Parse(await Send(HttpMethod.Post, "voice/token", new { channelId }, ct).ConfigureAwait(false));
+
     public void Dispose() => _http.Dispose();
 }

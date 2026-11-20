@@ -20,6 +20,7 @@ env:
   DOTNET_NOLOGO: '1'
   DOTNET_CLI_TELEMETRY_OPTOUT: '1'
   VPK_VERSION: '1.2.161'
+  LIVEKIT_VERSION: '1.13.11'
 
 jobs:
   windows:
@@ -41,9 +42,23 @@ jobs:
           "version=$v" >> $env:GITHUB_OUTPUT
           Write-Host "Wersja: $v"
 
-      - name: Testy rdzenia
+      - name: Serwer głosu do testów (LiveKit --dev)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/livekit/livekit/releases/download/v$env:LIVEKIT_VERSION/livekit_$($env:LIVEKIT_VERSION)_windows_amd64.zip" -OutFile lk.zip
+          Expand-Archive lk.zip -DestinationPath lk
+          $exe = Get-ChildItem lk -Recurse -Filter livekit-server.exe | Select-Object -First 1
+          Start-Process -FilePath $exe.FullName -ArgumentList '--dev','--bind','127.0.0.1' -RedirectStandardOutput lk-out.txt -RedirectStandardError lk-err.txt
+          for ($i = 0; $i -lt 30; $i++) { try { Invoke-WebRequest http://127.0.0.1:7880 -UseBasicParsing -TimeoutSec 2 | Out-Null; break } catch { Start-Sleep 1 } }
+          Write-Host 'LiveKit działa'
+
+      - name: Testy rdzenia (z głosem przez LiveKit)
         timeout-minutes: 10
-        run: dotnet test tests/GibCord.Core.Tests -c Release
+        run: dotnet test tests/GibCord.Core.Tests -c Release --logger "console;verbosity=normal"
+        env:
+          GC_LK_URL: ws://127.0.0.1:7880
+          GC_LK_KEY: devkey
+          GC_LK_SECRET: secret
 
       - name: Aplikacja (publikacja)
         run: dotnet publish src/GibCord.App -c Release -r win-x64 -p:Platform=x64 --self-contained -o publish -p:Version=${{ steps.ver.outputs.version }} -p:PublishReadyToRun=true
