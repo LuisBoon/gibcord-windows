@@ -59,13 +59,13 @@ public sealed partial class WatchPanel : Grid, IDisposable
         }
         var queueBtn = U.IconButton("", "Kolejka filmów", () => { }, 15, 36);
         queueBtn.Flyout = new Flyout { Content = new ScrollViewer { Content = _queue, MaxHeight = 360, Width = 360 } };
-        var controls = new Grid { Padding = U.Th(16, 0, 16, 8), ColumnSpacing = 10 }.Cols("auto", "*", "auto", "auto", "auto", "auto").Add(
-            _play.At(0, 0),
-            U.V(0, _title.With(t => t.MaxWidth = 600), new Grid { ColumnSpacing = 8 }.Cols("*", "auto").Add(_seek.At(0, 0), _time.At(0, 1))).At(0, 1),
-            reacts.At(0, 2),
-            queueBtn.At(0, 3),
-            U.IconButton("", "Następny film", () => C.Watch(new { t = "watch_skip" }), 15, 36).At(0, 4),
-            U.IconButton("", "Zakończ wspólne oglądanie", () => C.Watch(new { t = "watch_stop" }), 15, 36, Theme.Red).At(0, 5));
+        // dwa rzędy: tytuł i pasek czasu na całą szerokość, pod spodem przyciski (mieści się też w wąskim oknie)
+        var bar = new Grid { ColumnSpacing = 10 }.Cols("auto", "*", "auto").Add(_play.At(0, 0), _seek.At(0, 1), _time.At(0, 2));
+        var buttons = new Grid().Cols("*", "auto").Add(U.Scroll2(reacts).At(0, 0), U.H(2, queueBtn,
+            U.IconButton("\uE893", "Następny film", () => C.Watch(new { t = "watch_skip" }), 15, 36),
+            U.IconButton("\uE71A", "Zakończ wspólne oglądanie", () => C.Watch(new { t = "watch_stop" }), 15, 36, Theme.Red)).At(0, 1));
+        var controls = U.V(4, _title, bar, buttons);
+        controls.Padding = U.Th(16, 0, 16, 8);
         this.Add(playerBox.At(0), controls.At(1));
 
         C.WatchReacted += OnReact;

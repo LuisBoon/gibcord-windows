@@ -225,7 +225,8 @@ public sealed class SettingsPage : Grid
                 }, 34) : null)),
             Card(Label("Urodziny"), birthday, showAge, U.T("W dniu urodzin przy nicku pojawi się 🎂, a znajomi dostaną przypomnienie.", 11.5, null, Theme.Mu2, wrap: true)),
             save);
-        var preview = ProfileCard.Build(_sh, me.Id, () => { });
+        // podgląd obok tylko w szerokim oknie — w wąskim formularz ma całe miejsce
+        var preview = _sh.ActualWidth > 1150 ? ProfileCard.Build(_sh, me.Id, () => { }) : null;
         var grid = new Grid { ColumnSpacing = 24 }.Cols("*", "auto").Add(form.At(0, 0));
         if (preview is not null)
             grid.Add(U.V(8, Label("Podgląd"), new Border { Child = preview, Background = U.B("#FA2a2147"), CornerRadius = new CornerRadius(14) }).With(p => p.VerticalAlignment = VerticalAlignment.Top).At(0, 1));
