@@ -188,6 +188,7 @@ public static class U
             BorderThickness = Th(0), CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Center,
         };
         ToolTipService.SetToolTip(b, tip);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tip); // czytniki ekranu (Narrator) mówią, co robi przycisk
         b.Click += (_, _) => click();
         return b;
     }
@@ -254,7 +255,11 @@ public static class U
         HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollMode = ScrollMode.Disabled,
     };
 
-    public static void Tip(this FrameworkElement e, string text) => ToolTipService.SetToolTip(e, text);
+    public static void Tip(this FrameworkElement e, string text)
+    {
+        ToolTipService.SetToolTip(e, text);
+        if (string.IsNullOrEmpty(Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(e))) Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(e, text);
+    }
 
     public static void Hand(this UIElement e) => e.With(_ => { });
 
