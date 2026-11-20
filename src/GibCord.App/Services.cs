@@ -261,6 +261,8 @@ public static class Updater
     }
 
     public static bool IsInstalled { get { try { return _mgr?.IsInstalled == true; } catch { return false; } } }
+    /// <summary>Beta albo kompilacja testowa (wersja z „-”, np. 6.0.0-beta.10, 6.0.0-ci.42) — wtedy znaczek „beta”.</summary>
+    public static bool IsPrerelease => Version.Contains('-');
 
     public static async Task Run(Action<string> onReady)
     {

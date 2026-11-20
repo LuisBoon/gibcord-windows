@@ -26,6 +26,7 @@ public sealed class TitleBarView : Grid
             ? U.Box(U.T("KOPIA · " + new Uri(Options.Server).Authority, 10, U.Bold, U.B("#ffffff")), U.B("#d6455e"), 5, U.Th(5, 1)) // próba na kopii — żeby nie pomylić z prawdziwym
             : U.Box(U.T("6.0 beta", 10, U.Bold, Theme.OnAccent), Theme.Accent, 5, U.Th(5, 1));
         beta.VerticalAlignment = VerticalAlignment.Center;
+        if (!Options.OtherServer && !Updater.IsPrerelease) beta.Visibility = Visibility.Collapsed; // wersja końcowa (6.0.0) — bez znaczka
         this.Add(U.H(8, logo, _name, beta).With(p => p.Margin = U.Th(12, 0, 0, 0)).At(0, 0));
 
         _back = U.IconButton("", "Wstecz (Alt+←)", () => _w.CurrentShell?.Back(), 12, 28);

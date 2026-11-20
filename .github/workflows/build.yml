@@ -110,7 +110,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { Write-Host 'Brak poprzedniego wydania'; $global:LASTEXITCODE = 0 }
           }
           vpk pack -u GibCord6 -v ${{ steps.ver.outputs.version }} -p publish -e GibCord.exe -o Releases `
-            --packTitle "GibCord 6.0 beta" --packAuthors "GibCord" --icon src/GibCord.App/Assets/gibcord.ico --shortcuts Desktop,StartMenuRoot
+            --packTitle "$(if ('${{ steps.ver.outputs.version }}' -match '-') { 'GibCord 6.0 beta' } else { 'GibCord' })" --packAuthors "GibCord" --icon src/GibCord.App/Assets/gibcord.ico --shortcuts Desktop,StartMenuRoot
           Get-ChildItem Releases | Format-Table Name, Length
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -126,7 +126,7 @@ jobs:
         shell: pwsh
         run: |
           vpk upload github --repoUrl "https://github.com/$env:GITHUB_REPOSITORY" --token "$env:GH_TOKEN" -o Releases `
-            --publish --pre --releaseName "GibCord ${{ steps.ver.outputs.version }}" --tag "$env:GITHUB_REF_NAME" --merge
+            --publish $(if ($env:GITHUB_REF_NAME -match '-') { '--pre' }) --releaseName "GibCord ${{ steps.ver.outputs.version }}" --tag "$env:GITHUB_REF_NAME" --merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
