@@ -71,6 +71,7 @@ public sealed class SettingsPage : Grid
         Item("notify", "", "Powiadomienia");
         Item("app", "", "Aplikacja");
         _nav.Add(U.HLine(.08).With(l => l.Margin = U.Th(10, 10)));
+        if (S.Me.IsAdmin) _nav.Add(U.Row(U.H(10, U.I("\uE7EF", 15, Theme.Accent), U.T("Panel admina GibCorda", 13.5, U.Semi, Theme.Accent)), () => _sh.ShowAdmin(), false, 8, U.Th(10, 0), U.Th(0, 1)).With(r => r.Height = 38));
         _nav.Add(U.Row(U.H(10, U.I("", 15, Theme.Mu), U.T($"Co nowego · {Updater.Version}", 13.5, U.Semi, Theme.Mu)), () => { _sh.CloseSettings(); _sh.OpenChannelByKind("changelog"); }, false, 8, U.Th(10, 0), U.Th(0, 1)).With(r => r.Height = 38));
         _nav.Add(U.Row(U.H(10, U.I("", 15, Theme.Red), U.T("Wyloguj się", 13.5, U.Semi, Theme.Red)), async () =>
         {

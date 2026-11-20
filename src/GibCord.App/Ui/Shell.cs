@@ -580,6 +580,27 @@ public sealed class Shell : Grid
         _chat?.FocusComposer();
     }
 
+    AdminPage? _admin;
+
+    public void ShowAdmin()
+    {
+        if (!S.Me.IsAdmin) return;
+        CloseAdmin();
+        CloseSettings();
+        _admin = new AdminPage(this);
+        _admin.At(0, 0, colSpan: 5);
+        Children.Add(_admin);
+        _admin.Loaded += (_, _) => _admin?.Focus(FocusState.Programmatic);
+    }
+
+    public void CloseAdmin()
+    {
+        if (_admin is null) return;
+        Children.Remove(_admin);
+        _admin = null;
+        _chat?.FocusComposer();
+    }
+
     ServerSettingsPage? _srvSettings;
 
     public void ShowServerSettings(long serverId, string section = "overview")

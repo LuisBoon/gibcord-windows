@@ -190,7 +190,7 @@ public sealed class GibCordApi : IDisposable
         content.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrEmpty(contentType) ? "application/octet-stream" : contentType);
         return await SendRaw(HttpMethod.Post, path, content, ct).ConfigureAwait(false);
     }
-    public Task<System.Text.Json.JsonElement> DeleteJson(string path, CancellationToken ct = default) => Send(HttpMethod.Delete, path, ct: ct);
+    public Task<System.Text.Json.JsonElement> DeleteJson(string path, object? body = null, CancellationToken ct = default) => Send(HttpMethod.Delete, path, body, ct);
     public Task<System.Text.Json.JsonElement> PatchJson(string path, object body, CancellationToken ct = default) => Send(HttpMethod.Patch, path, body, ct);
     public Task<System.Text.Json.JsonElement> PostJson(string path, object? body = null, CancellationToken ct = default) => Send(HttpMethod.Post, path, body, ct);
     public Task<System.Text.Json.JsonElement> PutJson(string path, object? body = null, CancellationToken ct = default) => Send(HttpMethod.Put, path, body, ct);

@@ -374,6 +374,31 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
     }
 
     [LiveFact]
+    public async Task PanelAdmina()
+    {
+        var (a, b) = (p.A, p.B);
+        Assert.True(a.Store.Me.IsAdmin); // pierwsze konto na kopii testowej
+        var st = await a.Api.GetJson("admin/stats");
+        Assert.True(st.Long("users") >= 2);
+        var us = await a.Api.GetJson("admin/users?q=ola&filter=all&limit=10");
+        Assert.Contains(us.Prop("users").EnumerateArray(), u => u.Str("username") == "ola");
+        var sv = await a.Api.GetJson("admin/servers?q=&limit=10");
+        var sid = sv.Prop("servers").EnumerateArray().First().Long("id")!.Value;
+        var full = await a.Api.GetJson($"admin/servers/{sid}");
+        var cid = full.Prop("server").Prop("channels").EnumerateArray().First(c => c.Str("type") == "text").Long("id")!.Value;
+        var msgs = await a.Api.GetJson($"admin/channels/{cid}/messages?limit=5");
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, msgs.ValueKind);
+        await a.Api.PostJson("admin/announce", new { text = "test ogłoszenia", level = "info" });
+        await p.Until(() => b.Store.Announcement?.Text == "test ogłoszenia", "ogłoszenie u B");
+        await a.Api.DeleteJson("admin/announce");
+        await p.Until(() => b.Store.Announcement is null, "usunięte ogłoszenie u B");
+        var log = await a.Api.GetJson("admin/log?limit=20");
+        Assert.Contains(log.Prop("entries").EnumerateArray(), e => e.Str("action") == "announce");
+        var reps = await a.Api.GetJson("admin/reports?status=open");
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, reps.Prop("reports").ValueKind);
+    }
+
+    [LiveFact]
     public async Task PisanieZalacznikIStarszeWiadomosci()
     {
         var (a, b) = (p.A, p.B);

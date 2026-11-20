@@ -183,6 +183,7 @@ static class SettingsMenu
         }));
         f.Items.Add(M.Item("Otwórz GibCorda w przeglądarce", "", () => _ = Launcher.LaunchUriAsync(sh.C.Api.BaseUri)));
         f.Items.Add(M.Item("Wszystkie ustawienia…", "\uE713", () => sh.ShowSettings()));
+        if (sh.S.Me.IsAdmin) f.Items.Add(M.Item("Panel admina", "\uE7EF", () => sh.ShowAdmin()));
         f.Items.Add(M.Item($"GibCord {Updater.Version} · Co nowego", "", () => sh.OpenChannelByKind("changelog")));
         f.Items.Add(new MenuFlyoutSeparator());
         f.Items.Add(M.Item("Wyloguj się", "", async () =>
