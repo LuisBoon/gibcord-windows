@@ -293,6 +293,28 @@ public sealed partial class GibCordClient : IAsyncDisposable
         finally { _loadingOlder.Remove(cid); }
     }
 
+    /// <summary>Po skoku w przeszłość: doczytuje nowsze wiadomości przy przewijaniu w dół. Zwraca liczbę dopisanych.</summary>
+    public async Task<int> LoadNewer(long cid)
+    {
+        var w = Store.Window(cid);
+        if (Offline || w.AtTail || !_loadingOlder.Add(-cid - 1_000_000_000_000)) return 0;
+        try
+        {
+            var last = w.Items.LastOrDefault(x => x.Send == SendState.Sent && x.Id > 0);
+            if (last is null) return 0;
+            var (ch, th) = Where(cid);
+            var msgs = await Api.GetMessages(ch, around: last.Id, limit: 100, thread: th);
+            var newer = msgs.Where(x => x.Id > last.Id).ToList();
+            var newest = cid < 0 ? Store.ThreadById(-cid)?.LastMessageId ?? 0 : Store.LastIdOf(cid);
+            var atTail = newer.Count < 50 || (newer.Count > 0 && newer[^1].Id >= newest);
+            _ui(() => Store.AppendNewer(cid, newer, atTail));
+            if (atTail && WindowActive && cid == ActiveChannelId) ScheduleRead(cid, 0);
+            return newer.Count;
+        }
+        catch (Exception ex) { _ui(() => Error?.Invoke(Friendly(ex))); return 0; }
+        finally { _loadingOlder.Remove(-cid - 1_000_000_000_000); }
+    }
+
     /// <summary>Skok do wiadomości (np. odpowiedź) — wczytuje jej okolicę, gdy nie ma jej na liście.</summary>
     public async Task<bool> JumpTo(long cid, long messageId)
     {

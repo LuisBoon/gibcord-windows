@@ -256,4 +256,18 @@ public class StoreTests
         Assert.False(s.Windows.ContainsKey(-3));
         Assert.Equal(JsonValueKind.Undefined, s.Window(10).Items[0].Thread.ValueKind);
     }
+
+    [Fact]
+    public void DoczytanieNowszychPoSkoku()
+    {
+        var s = Make();
+        // okno ze środka historii (po skoku)
+        s.SetWindow(10, [Msg(2, 10, 2), Msg(3, 10, 2)], hasOlder: true, atTail: false);
+        var added = new List<long>();
+        s.Changed += c => { if (c.Kind == ChangeKind.MessageAdded) added.Add(c.Id); };
+        s.AppendNewer(10, [Msg(3, 10, 2), Msg(4, 10, 1), Msg(5, 10, 2)], atTail: true);
+        Assert.Equal([2L, 3, 4, 5], s.Window(10).Items.Select(m => m.Id));
+        Assert.Equal([4L, 5], added);
+        Assert.True(s.Window(10).AtTail);
+    }
 }

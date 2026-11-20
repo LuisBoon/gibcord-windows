@@ -325,6 +325,22 @@ public sealed class Store
         Raise(ChangeKind.MessagesReset, cid, cid);
     }
 
+    /// <summary>Nowsze wiadomości doczytane po skoku w przeszłość (przewijanie w dół). Dopisywane na koniec po kolei.</summary>
+    public void AppendNewer(long key, List<Message> newer, bool atTail)
+    {
+        var w = Window(key);
+        var have = w.Items.Select(x => x.Id).ToHashSet();
+        foreach (var m in newer.Where(x => x.Key == key && !have.Contains(x.Id)).OrderBy(x => x.Id))
+        {
+            var at = w.Items.Count;
+            while (at > 0 && (w.Items[at - 1].Send != SendState.Sent || w.Items[at - 1].Id > m.Id)) at--;
+            w.Items.Insert(at, m);
+            Raise(ChangeKind.MessageAdded, m.Id, key, m);
+        }
+        w.AtTail = atTail;
+        if (atTail) Raise(ChangeKind.Reads, key < 0 ? 0 : key, key);
+    }
+
     /// <summary>Wiadomość wysyłana — od razu na liście, szara do potwierdzenia.</summary>
     public void AddPending(Message m)
     {

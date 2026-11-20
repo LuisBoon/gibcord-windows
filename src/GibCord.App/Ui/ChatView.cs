@@ -68,7 +68,7 @@ public sealed partial class ChatView : Grid, IDisposable
     readonly DispatcherQueueTimer _typingTimer;
     readonly long _lastReadAtOpen;
     bool _stick = true;
-    bool _loadingOlder;
+    bool _loadingOlder, _loadingNewer;
     bool _disposed;
     int _bottomTries;
     double _lastOffset;
@@ -359,8 +359,8 @@ public sealed partial class ChatView : Grid, IDisposable
                 var r = new Row(m) { DaySep = prev is null || !Format.SameDay(prev.CreatedAt, m.CreatedAt) };
                 r.Grouped = Groups(prev, m, r.DaySep);
                 _rows.Add(r);
-                if (m.AuthorId == S.Me.Id) { _stick = true; ScrollToBottom(); }
-                else if (!_stick) ShowPill("Nowe wiadomości  ↓");
+                if (m.AuthorId == S.Me.Id && !_loadingNewer) { _stick = true; ScrollToBottom(); }
+                else if (!_stick && !_loadingNewer) ShowPill("Nowe wiadomości  ↓");
                 break;
             }
             case ChangeKind.MessageUpdated when c.Message is { } m:
@@ -419,6 +419,7 @@ public sealed partial class ChatView : Grid, IDisposable
         _lastOffset = off;
         if (_stick && _pill.Visibility == Visibility.Visible && S.Window(Key).AtTail) _pill.Visibility = Visibility.Collapsed;
         if (_sv.VerticalOffset < 600 && !_loadingOlder && S.Window(Key).HasOlder && _rows.Count > 0) _ = LoadOlder();
+        if (_sv.ScrollableHeight - off < 700 && !_loadingNewer && !S.Window(Key).AtTail && _rows.Count > 0) _ = LoadNewer();
     }
 
     async Task LoadOlder()
@@ -427,6 +428,13 @@ public sealed partial class ChatView : Grid, IDisposable
         UpdateTop(S.Window(Key));
         try { await Sh.C.LoadOlder(Key); }
         finally { _loadingOlder = false; if (!_disposed) UpdateTop(S.Window(Key)); }
+    }
+
+    async Task LoadNewer()
+    {
+        _loadingNewer = true;
+        try { await Sh.C.LoadNewer(Key); }
+        finally { _loadingNewer = false; if (!_disposed) UpdatePill(); }
     }
 
     void ScrollToBottom()
