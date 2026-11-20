@@ -12,12 +12,12 @@ więc konta, wiadomości, serwery i znajomi są wspólne.
 | `src/GibCord.App` | Okno WinUI 3 napisane w samym C# (bez plików XAML): logowanie z 2FA, serwery i kanały, czat, rozmowy prywatne, znajomi, powiadomienia Windows, zasobnik, Ctrl+K, aktualizacje (Velopack). |
 | `tests/GibCord.Core.Tests` | Testy rdzenia. Testy „na żywo” uruchamiają się tylko z kopią testową serwera (`GC_TEST_URL`, `GC_TEST_PASS`). |
 
-## Co umie (beta 6)
+## Co umie (beta 8)
 
 - **Czat**: wiadomości, odpowiedzi, edycja, reakcje, przypinanie, wątki (panel z boku), wyszukiwarka (Ctrl+F, `od:@ktoś`, `ma:zdjęcie`), GIF-y, emoji z szukaniem po polsku i podpowiedziami po dwukropku (`:serce`), naklejki, ankiety, mini-gry, pliki, wiadomości głosowe, filmy i dźwięki w czacie, szkice, kolejka wiadomości bez internetu, linki do GibCorda i karty zaproszeń, Skrzynka (Ctrl+I: wzmianki, zapisane, przypomnienia), przeglądarka obrazków z przybliżaniem.
-- **Rozmowy**: głos przez LiveKit, kamera, transmisja ekranu (720p–1440p, 30/60 kl/s, dźwięk z komputera bez dźwięków rozmowy), podglądy transmisji, okienko transmisji na wierzchu (obraz w obrazie), soundboard, wspólne oglądanie (YouTube i filmy z czatu), naciśnij-aby-mówić, nakładka w grze, skróty Ctrl+Shift+M/D działające w grach.
+- **Rozmowy**: głos przez LiveKit, kamera, transmisja ekranu (720p–1440p, 30/60 kl/s, dźwięk z komputera bez dźwięków rozmowy), podglądy transmisji, okienko transmisji na wierzchu (obraz w obrazie), soundboard, wspólne oglądanie (YouTube i filmy z czatu), naciśnij-aby-mówić, nakładka w grze (z dymkami nowych wiadomości), skróty Ctrl+Shift+M/D działające w grach.
 - **Rozmowy prywatne i grupy**: tworzenie grup, ustawienia grupy, rozmowy wideo.
-- **Ustawienia**: konto (profil, e-mail, hasło, 2FA z kodem QR, urządzenia, blokady, Spotify), aplikacja (motywy, rozmiar tekstu, tryb zwarty, nakładka, autostart, zasobnik, ściąga skrótów Ctrl+/), serwer (kanały, kategorie, uprawnienia, role, członkowie, bany, emoji/naklejki/dźwięki, automoderacja, zgłoszenia, dziennik, szablon), panel admina.
+- **Ustawienia**: konto (profil, e-mail, hasło, 2FA z kodem QR, urządzenia, blokady, Spotify), aplikacja (motywy, rozmiar tekstu, tryb zwarty, nakładka, autostart, zasobnik, ściąga skrótów Ctrl+/), serwer (kanały, kategorie, uprawnienia, role z podglądem „jako rola”, członkowie, bany, emoji/naklejki/dźwięki, automoderacja, zgłoszenia, dziennik, szablon), panel admina (konta, serwery, zgłoszenia, system i wykresy, aktywność osób, poczta, dziennik, ogłoszenia).
 - **Windows**: powiadomienia z odpowiedzią w dymku, licznik na ikonie, zasobnik, autostart, linki `gibcord://`, aktualizacje Velopack, paczka do Microsoft Store.
 
 ## Testy na żywo
