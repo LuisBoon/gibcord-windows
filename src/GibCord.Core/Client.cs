@@ -465,10 +465,11 @@ public sealed partial class GibCordClient : IAsyncDisposable
     void ScheduleThreadRead(long tid)
     {
         var t = Store.ThreadById(tid);
-        if (Offline || t is null || t.Following != true) return;
+        if (t is null) return;
         var last = Store.Windows.GetValueOrDefault(-tid)?.Items.LastOrDefault(x => x.Send == SendState.Sent)?.Id ?? t.LastMessageId ?? 0;
-        if (last <= (t.LastRead ?? 0)) return;
-        Store.MarkThreadReadLocal(tid, last);
+        var before = t.LastRead ?? 0;
+        Store.MarkThreadReadLocal(tid, last); // gasi też wzmianki z wątku w liczniku kanału
+        if (Offline || t.Following != true || last <= before) return;
         _ = Task.Run(async () => { try { await Api.MarkThreadRead(tid, last); } catch { } });
     }
 

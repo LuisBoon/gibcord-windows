@@ -43,6 +43,8 @@ public sealed class Store
     public Dictionary<long, MessageWindow> Windows { get; } = [];
     /// <summary>Znane wątki (z wiadomości, list i zdarzeń). Okno wiadomości wątku: <c>Windows[-id]</c>.</summary>
     public Dictionary<long, ThreadInfo> Threads { get; } = [];
+    /// <summary>Ile wzmianek z danego wątku siedzi w liczniku kanału-rodzica (gasną po przeczytaniu wątku).</summary>
+    readonly Dictionary<long, int> _threadMentions = [];
     /// <summary>Wspólne oglądanie w pokojach (kanał głosowy / rozmowa) → stan.</summary>
     public Dictionary<long, WatchState> Watches { get; } = [];
     readonly Dictionary<long, Dictionary<long, long>> _typing = [];
@@ -450,6 +452,13 @@ public sealed class Store
 
     public void MarkThreadReadLocal(long tid, long mid)
     {
+        // wzmianki z tego wątku schodzą z licznika kanału
+        if (_threadMentions.Remove(tid, out var n) && Threads.TryGetValue(tid, out var tt))
+        {
+            var left = MentionsIn(tt.ChannelId) - n;
+            if (left > 0) Mentions[tt.ChannelId] = left; else Mentions.Remove(tt.ChannelId);
+            Raise(ChangeKind.Reads, tt.ChannelId, tt.ChannelId);
+        }
         if (!Threads.TryGetValue(tid, out var t) || (t.LastRead ?? 0) >= mid) return;
         t.LastRead = mid;
         Raise(ChangeKind.Thread, tid, t.ChannelId);
@@ -481,7 +490,12 @@ public sealed class Store
                     StopTyping(m.Key, m.AuthorId);
                     Upsert(m);
                     if (m.AuthorId == Me.Id) MarkThreadReadLocal(mt, m.Id);
-                    else if (MentionsMe(m) && !Blocked.Contains(m.AuthorId)) { Mentions[m.ChannelId] = MentionsIn(m.ChannelId) + 1; Raise(ChangeKind.Reads, m.ChannelId, m.ChannelId); }
+                    else if (MentionsMe(m) && !Blocked.Contains(m.AuthorId))
+                    {
+                        Mentions[m.ChannelId] = MentionsIn(m.ChannelId) + 1;
+                        _threadMentions[mt] = _threadMentions.GetValueOrDefault(mt) + 1;
+                        Raise(ChangeKind.Reads, m.ChannelId, m.ChannelId);
+                    }
                     break;
                 }
                 if (DmById(m.ChannelId) is { HiddenAt: not null } hd) hd.HiddenAt = null;
