@@ -53,6 +53,23 @@ public sealed class GameOverlay : IDisposable
     IntPtr _hwnd;
     bool _shown, _hidden, _hotkey;
     string _last = "";
+    /// <summary>Dymki wiadomości (tylko w grze): kto, gdzie, początek treści; znikają po 6 s.</summary>
+    readonly List<(string Title, string Text, long Until)> _notes = [];
+
+    /// <summary>Tryb pokazowy (CI): udaje grę i zapisuje obraz nakładki do pliku.</summary>
+    public bool DemoGame { get; set; }
+    public string? DemoSave { get; set; }
+    bool InGame => DemoGame || _inGame();
+
+    /// <summary>Nowa wiadomość — pokaż w nakładce, jeśli właśnie grasz.</summary>
+    public void Notify(string title, string text)
+    {
+        if (!App.Prefs.OverlayMessages || App.Prefs.OverlayMode == "off" || !InGame) return;
+        _notes.Add((title, text.Length > 120 ? text[..117] + "…" : text, Environment.TickCount64 + 6000));
+        if (_notes.Count > 3) _notes.RemoveAt(0);
+        _last = "";
+        try { Tick(); } catch (Exception ex) { App.Log("Nakładka: " + ex.Message); }
+    }
 
     public GameOverlay(GibCordClient c, DispatcherQueue dq, Func<bool> inGame)
     {
@@ -106,22 +123,27 @@ public sealed class GameOverlay : IDisposable
     {
         var mode = App.Prefs.OverlayMode;
         var room = _c.VoiceChannelId;
-        var want = mode != "off" && room != 0 && !_c.Offline && (mode == "always" || _inGame());
+        var now = Environment.TickCount64;
+        if (_notes.RemoveAll(n => n.Until <= now) > 0) _last = "";
+        var inCall = mode != "off" && room != 0 && !_c.Offline && (mode == "always" || InGame);
+        var want = inCall || (_notes.Count > 0 && mode != "off");
         SyncHotkey(mode != "off" && room != 0 && !_c.Offline);
         if (want) EnsureWindow();
         if (!want || _hidden) { if (_shown) { ShowWindow(_hwnd, SW_HIDE); _shown = false; } return; }
         var s = _c.Store;
-        var members = (s.Voice.GetValueOrDefault(room) ?? []).Take(8).Select(m => (m.UserId, Name: s.NameOf(m.UserId, s.ServerOfChannel(room)), Color: Store.ColorOfUser(s.U(m.UserId)),
+        var members = (inCall ? s.Voice.GetValueOrDefault(room) ?? [] : []).Take(8).Select(m => (m.UserId, Name: s.NameOf(m.UserId, s.ServerOfChannel(room)), Color: Store.ColorOfUser(s.U(m.UserId)),
             Talk: _c.IsSpeaking(m.UserId), Muted: m.Muted || m.ServerMuted || m.Suppressed, Deaf: m.Deafened || m.ServerDeafened)).ToList();
-        var key = App.Prefs.OverlayCorner + "|" + string.Join(";", members.Select(m => $"{m.UserId}{m.Talk}{m.Muted}{m.Deaf}{m.Name}"));
+        var key = App.Prefs.OverlayCorner + "|" + string.Join(";", members.Select(m => $"{m.UserId}{m.Talk}{m.Muted}{m.Deaf}{m.Name}")) + "|" + _notes.Count + string.Join(";", _notes.Select(n => n.Until));
         if (key != _last) { _last = key; Render(members); }
         if (!_shown) { ShowWindow(_hwnd, SW_SHOWNOACTIVATE); _shown = true; }
     }
 
     void Render(List<(long UserId, string Name, string Color, bool Talk, bool Muted, bool Deaf)> members)
     {
-        const int rowH = 34, pad = 10, w = 240;
-        var h = pad * 2 + Math.Max(1, members.Count) * rowH;
+        const int rowH = 34, pad = 10, w = 240, noteH = 52, gap = 8;
+        var membersH = members.Count > 0 ? pad * 2 + members.Count * rowH : 0;
+        var notes = _notes.ToList();
+        var h = Math.Max(1, membersH + notes.Count * (noteH + gap));
         var k = App.Prefs.OverlaySize switch { "s" => .8f, "l" => 1.35f, _ => 1f };
         using var bmp = new Bitmap((int)Math.Ceiling(w * k), (int)Math.Ceiling(h * k), PixelFormat.Format32bppPArgb);
         using (var g = Graphics.FromImage(bmp))
@@ -130,8 +152,25 @@ public sealed class GameOverlay : IDisposable
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             g.Clear(Color.Transparent);
-            using (var bg = new SolidBrush(Color.FromArgb(150, 18, 12, 34))) FillRound(g, bg, new RectangleF(0, 0, w, h), 12);
+            if (membersH > 0) using (var bg = new SolidBrush(Color.FromArgb(150, 18, 12, 34))) FillRound(g, bg, new RectangleF(0, 0, w, membersH), 12);
+            // dymki wiadomości pod listą osób
+            var ny = membersH > 0 ? membersH + gap : 0;
+            using (var nbg = new SolidBrush(Color.FromArgb(215, 30, 20, 52)))
+            using (var accent = new SolidBrush(Color.FromArgb(255, 255, 170, 120)))
+            using (var nfg = new SolidBrush(Color.FromArgb(235, 246, 242, 251)))
+            using (var tf = new Font("Segoe UI", 9.5f, FontStyle.Bold, GraphicsUnit.Point))
+            using (var bf = new Font("Segoe UI", 9.5f, FontStyle.Regular, GraphicsUnit.Point))
+            using (var fmt = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
+                foreach (var n in notes)
+                {
+                    FillRound(g, nbg, new RectangleF(0, ny, w, noteH), 10);
+                    g.FillRectangle(accent, 0, ny + 8, 3, noteH - 16);
+                    g.DrawString(n.Title, tf, accent, new RectangleF(pad + 2, ny + 6, w - pad * 2, 18), fmt);
+                    g.DrawString(n.Text, bf, nfg, new RectangleF(pad + 2, ny + 26, w - pad * 2, 20), fmt);
+                    ny += noteH + gap;
+                }
             using var font = new Font("Segoe UI", 10.5f, FontStyle.Bold, GraphicsUnit.Point);
+            // (lista osób rysuje się niżej, od y = pad)
             using var small = new Font("Segoe UI", 10f, FontStyle.Bold, GraphicsUnit.Point);
             var y = pad;
             foreach (var m in members)
@@ -154,6 +193,7 @@ public sealed class GameOverlay : IDisposable
                 y += rowH;
             }
         }
+        if (DemoSave is { } ds) { try { bmp.Save(ds, ImageFormat.Png); } catch (Exception ex) { App.Log("Nakładka (zapis pokazowy): " + ex.Message); } DemoSave = null; }
         Push(bmp);
     }
 

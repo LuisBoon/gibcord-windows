@@ -569,7 +569,9 @@ public sealed class SettingsPage : Grid
         foreach (var label in new[] { "Mała", "Zwykła", "Duża" }) size.Items.Add(label);
         size.SelectedIndex = p.OverlaySize switch { "s" => 0, "l" => 2, _ => 1 };
         size.SelectionChanged += (_, _) => { p.OverlaySize = size.SelectedIndex switch { 0 => "s", 2 => "l", _ => "m" }; p.Save(); };
-        _body.Add(Card(Label("Nakładka w grze (Ctrl+Shift+O)"), mode, corner, size, U.T("Pokazuje w grze, kto jest na kanale i kto mówi.", 12, null, Theme.Mu2, wrap: true)));
+        _body.Add(Card(Label("Nakładka w grze (Ctrl+Shift+O)"), mode, corner, size,
+            Toggle("Nowe wiadomości w nakładce, gdy grasz (dymek na kilka sekund)", p.OverlayMessages, v => { p.OverlayMessages = v; p.Save(); }),
+            U.T("Pokazuje w grze, kto jest na kanale i kto mówi.", 12, null, Theme.Mu2, wrap: true)));
         _body.Add(Card(Label("Aktualizacje"), U.T($"Masz wersję {Updater.Version}. Nowe wersje instalują się same po ponownym uruchomieniu.", 13, null, Theme.Mu, wrap: true),
             U.Ghost("Sprawdź teraz", async () =>
             {

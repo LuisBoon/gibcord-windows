@@ -99,6 +99,8 @@ public sealed class Prefs
     public string OverlayCorner { get; set; } = "tl";
     /// <summary>Rozmiar nakładki: s (mała), m (zwykła), l (duża).</summary>
     public string OverlaySize { get; set; } = "m";
+    /// <summary>Nowe wiadomości w nakładce, gdy grasz (dymek na kilka sekund).</summary>
+    public bool OverlayMessages { get; set; } = true;
     /// <summary>Motyw kolorów (zapamiętany lokalnie, żeby działał od pierwszej klatki; źródło prawdy: me.settings.theme).</summary>
     public string Theme { get; set; } = "glass";
     /// <summary>Skróty Ctrl+Shift+M / Ctrl+Shift+D działające w całym systemie (tylko w trakcie rozmowy).</summary>

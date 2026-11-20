@@ -310,6 +310,7 @@ public sealed class MainWindow : Window
         if (!App.Prefs.Notifications) return;
         var s = Client.Store;
         Toasts.Show(s.NotificationTitle(m), s.PlainText(m), m.Key, "c" + m.Key, canReply: s.Can(m.ChannelId, Perm.SendMessages));
+        _overlay?.Notify(s.NotificationTitle(m), s.PlainText(m)); // w grze pełnoekranowej dymek Windows się nie pokaże
         if (Native.GetForegroundWindow() != Hwnd) Native.Flash(Hwnd);
     }
 
@@ -464,11 +465,18 @@ public sealed class MainWindow : Window
     {
         try
         {
-            await Task.Delay(Options.View is "switcher" or "profile" or "emoji" ? 3500 : 2500);
+            await Task.Delay(Options.View is "switcher" or "profile" or "emoji" or "overlay" ? 3500 : 2500);
             if (Options.View == "switcher") _shell?.OpenSwitcher();
             if (Options.View == "profile") _shell?.ShowProfileDemo();
             if (Options.View == "emoji") _shell?.ShowPickerDemo();
-            if (Options.View is "switcher" or "profile" or "emoji") await Task.Delay(1200);
+            if (Options.View == "overlay" && _overlay is { } ov)
+            {
+                ov.DemoGame = true;
+                ov.DemoSave = Path.Combine(Path.GetDirectoryName(path) ?? ".", "overlay-nakladka.png");
+                ov.Notify("Ola · #ogólne · Ekipa Gibka", "wbijacie dziś na Minecrafta? 🎮");
+                ov.Notify("Kuba", "zaraz będę, robię herbatę");
+            }
+            if (Options.View is "switcher" or "profile" or "emoji" or "overlay") await Task.Delay(1200);
             var rtb = new RenderTargetBitmap();
             await rtb.RenderAsync(_root);
             var pixels = await rtb.GetPixelsAsync();
