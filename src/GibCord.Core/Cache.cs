@@ -107,6 +107,8 @@ public sealed class Prefs
     public double MessageFontSize { get; set; } = 14.5;
     /// <summary>Tryb zwarty: bez awatarów, godzina przy każdej wiadomości, mniej odstępów.</summary>
     public bool CompactMessages { get; set; }
+    /// <summary>Kiedy wyczyścić opis statusu (0 = nie czyścić).</summary>
+    public long StatusClearAt { get; set; }
     public bool MembersPanel { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)

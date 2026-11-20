@@ -144,14 +144,23 @@ static class StatusMenu
         f.Items.Add(M.Item("Ustaw opis statusu…", "", async () =>
         {
             var box = new TextBox { Text = sh.S.Me.CustomStatus ?? "", PlaceholderText = "np. gram w Minecrafta", MaxLength = 100 };
+            var clear = new ComboBox { Header = "Wyczyść po", HorizontalAlignment = HorizontalAlignment.Stretch };
+            var vals = new[] { 0L, 30, 60, 240, -1 };
+            foreach (var l in new[] { "Nie czyść", "30 minutach", "Godzinie", "4 godzinach", "Końcu dnia" }) clear.Items.Add(l);
+            clear.SelectedIndex = 0;
             var d = new ContentDialog
             {
-                Title = "Opis statusu", Content = box, PrimaryButtonText = "Zapisz", SecondaryButtonText = "Wyczyść", CloseButtonText = "Anuluj",
+                Title = "Opis statusu", Content = U.V(10, box, clear).With(p => p.Width = 340), PrimaryButtonText = "Zapisz", SecondaryButtonText = "Wyczyść", CloseButtonText = "Anuluj",
                 DefaultButton = ContentDialogButton.Primary, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,
             };
+            await M.WaitNoDialog(sh.XamlRoot);
             var r = await d.ShowAsync();
             if (r == ContentDialogResult.None) return;
-            var err = await sh.C.SetStatus(sh.S.Me.Status, r == ContentDialogResult.Secondary ? "" : box.Text.Trim());
+            var text = r == ContentDialogResult.Secondary ? "" : box.Text.Trim();
+            var mins = vals[Math.Max(0, clear.SelectedIndex)];
+            App.Prefs.StatusClearAt = text.Length == 0 || mins == 0 ? 0 : mins < 0 ? new DateTimeOffset(DateTime.Today.AddDays(1)).ToUnixTimeMilliseconds() : Format.NowMs() + mins * 60_000;
+            App.Prefs.Save();
+            var err = await sh.C.SetStatus(sh.S.Me.Status, text);
             if (err is not null) sh.Info(err, true);
         }));
         f.Items.Add(M.Item("Edytuj profil", "\uE77B", () => sh.ShowSettings("profile")));

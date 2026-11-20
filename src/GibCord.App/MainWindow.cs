@@ -116,6 +116,13 @@ public sealed class MainWindow : Window
         remindTimer.Interval = TimeSpan.FromSeconds(20);
         remindTimer.Tick += (_, _) =>
         {
+            // opis statusu z terminem („wyczyść po godzinie”)
+            if (App.Prefs.StatusClearAt > 0 && Format.NowMs() >= App.Prefs.StatusClearAt && Client.Store.Loaded)
+            {
+                App.Prefs.StatusClearAt = 0;
+                App.Prefs.Save();
+                _ = Client.SetStatus(Client.Store.Me.Status, "");
+            }
             foreach (var r in Inbox.TakeDue())
             {
                 var key = r.ThreadId is long t ? -t : r.ChannelId;
