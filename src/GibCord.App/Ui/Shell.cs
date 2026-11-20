@@ -380,12 +380,14 @@ public sealed class Shell : Grid
             C.CloseChannel();
             _ideas = new IdeasView(this, ChannelId);
             _main.Children.Add(_ideas);
+            Motion.SlideIn(_ideas, new System.Numerics.Vector3(0, 10, 0));
         }
         else if (ChannelId != 0 && S.ChannelById(ChannelId) is { IsVoice: true })
         {
             C.CloseChannel();
             _voice = new VoiceView(this, ChannelId);
             _main.Children.Add(_voice);
+            Motion.SlideIn(_voice, new System.Numerics.Vector3(0, 10, 0));
         }
         else if (ChannelId != 0)
         {
@@ -400,6 +402,7 @@ public sealed class Shell : Grid
             C.CloseChannel();
             _friends = new FriendsView(this);
             _main.Children.Add(_friends);
+            Motion.SlideIn(_friends, new System.Numerics.Vector3(0, 10, 0));
         }
         else
         {
@@ -434,6 +437,7 @@ public sealed class Shell : Grid
         _search = new SearchPanel(this, text);
         _threadHost.Child = _search;
         _threadHost.Visibility = Visibility.Visible;
+        Motion.SlideIn(_threadHost, new System.Numerics.Vector3(40, 0, 0));
         _members.Refresh();
         _chat?.RefreshHeader();
     }
@@ -459,6 +463,7 @@ public sealed class Shell : Grid
         _inbox = new InboxPanel(this, tab);
         _threadHost.Child = _inbox;
         _threadHost.Visibility = Visibility.Visible;
+        Motion.SlideIn(_threadHost, new System.Numerics.Vector3(40, 0, 0));
         _members.Refresh();
     }
 
@@ -512,6 +517,7 @@ public sealed class Shell : Grid
         _thread = view;
         _threadHost.Child = view;
         _threadHost.Visibility = Visibility.Visible;
+        Motion.SlideIn(_threadHost, new System.Numerics.Vector3(40, 0, 0));
         _members.Refresh();
         Toasts.ClearFor(-tid);
         var (_, starter, err) = await C.OpenThread(tid);
@@ -596,12 +602,21 @@ public sealed class Shell : Grid
         Info("Wszystko przeczytane 🎉");
     }
 
+    /// <summary>CI (--motion): przejście na następny kanał tekstowy tego serwera.</summary>
+    public void DemoMotion()
+    {
+        if (S.ServerById(ServerId) is not { } srv) return;
+        var next = S.ChannelTree(srv).SelectMany(g => g.Channels).FirstOrDefault(c => !c.IsVoice && c.Id != ChannelId);
+        if (next is not null) Go(srv.Id, next.Id);
+    }
+
     public bool MembersVisible => App.Prefs.MembersPanel;
     public void ToggleMembers()
     {
         App.Prefs.MembersPanel = !App.Prefs.MembersPanel;
         App.Prefs.Save();
         _members.Refresh();
+        if (App.Prefs.MembersPanel) Motion.SlideIn(_members, new System.Numerics.Vector3(40, 0, 0));
         _chat?.RefreshHeader();
     }
 

@@ -73,6 +73,8 @@ public static class Options
     public static bool Demo => Program.Args.Contains("--demo");
     /// <summary>--screenshot plik.png: zrzut okna po starcie i wyjście.</summary>
     public static string? Screenshot => Arg("--screenshot");
+    /// <summary>--motion: animacje także przy zrzucie (CI sprawdza, czy ruch działa).</summary>
+    public static bool ForceMotion => Program.Args.Contains("--motion");
     /// <summary>--view login|chat|friends|dm|profile|switcher</summary>
     public static string View => Arg("--view") ?? "chat";
     /// <summary>--server https://...: inny serwer (np. kopia testowa).</summary>

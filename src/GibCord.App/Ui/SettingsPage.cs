@@ -551,6 +551,7 @@ public sealed class SettingsPage : Grid
         fontSize.SelectionChanged += (_, _) => { p.MessageFontSize = sizes[Math.Max(0, fontSize.SelectedIndex)]; p.Save(); _sh.CurrentChat?.Rerender(); };
         _body.Add(Card(Label("Wygląd wiadomości"), fontSize,
             Toggle("Tryb zwarty (bez awatarów, godzina przy każdej wiadomości)", p.CompactMessages, v => { p.CompactMessages = v; p.Save(); _sh.CurrentChat?.Rerender(); }),
+            Toggle("Mniej ruchu (bez animacji; tak samo, gdy animacje są wyłączone w Windows)", p.ReduceMotion, v => { p.ReduceMotion = v; p.Save(); }),
             U.T("Zmiana działa od razu w otwartej rozmowie.", 11.5, null, Theme.Mu2)));
         _body.Add(Card(Label("Okno"),
             Toggle("Zamykanie do zasobnika (obok zegara)", p.CloseToTray, v => { p.CloseToTray = v; p.Save(); }),

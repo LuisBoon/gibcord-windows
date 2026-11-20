@@ -122,6 +122,8 @@ public sealed class Prefs
     public double MessageFontSize { get; set; } = 14.5;
     /// <summary>Tryb zwarty: bez awatarów, godzina przy każdej wiadomości, mniej odstępów.</summary>
     public bool CompactMessages { get; set; }
+    /// <summary>Mniej ruchu: bez animacji (sprężyn, wjazdów, przenikania).</summary>
+    public bool ReduceMotion { get; set; }
     /// <summary>Kiedy wyczyścić opis statusu (0 = nie czyścić).</summary>
     public long StatusClearAt { get; set; }
     /// <summary>Który opis czyścimy — jeśli w międzyczasie ustawiono inny (np. na telefonie), zostawiamy go.</summary>

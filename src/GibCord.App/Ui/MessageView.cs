@@ -35,7 +35,7 @@ public sealed partial class MessageView : Grid
     GibCordApi Api => _v.Sh.C.Api;
 
     /// <summary>Odpina treść, żeby inny widok mógł ją przejąć (lista używa widoków ponownie).</summary>
-    public void Unbind() { _row = null; ShowTools(false); _body.Children.Clear(); }
+    public void Unbind() { _row = null; ShowTools(false); _body.Children.Clear(); Motion.Reset(this); }
 
     /// <summary>Korzeń treści w trakcie budowania — kotwica dymków (profil z @wzmianki), bo treść może potem trafić do innego widoku.</summary>
     FrameworkElement? _root;
@@ -59,7 +59,10 @@ public sealed partial class MessageView : Grid
         }
         if (row.Built.Parent is Panel old) old.Children.Remove(row.Built); // na wszelki wypadek: treść jeszcze w poprzednim widoku
         _body.Children.Add(row.Built);
-        Opacity = m.Send is SendState.Pending or SendState.Queued ? .55 : 1;
+        Motion.Reset(this);
+        var op = m.Send is SendState.Pending or SendState.Queued ? .55 : 1;
+        Opacity = op;
+        if (row.Fresh) { row.Fresh = false; Motion.SlideIn(this, new System.Numerics.Vector3(0, 18, 0), 0, (float)op); }
     }
 
     // ── separatory ──

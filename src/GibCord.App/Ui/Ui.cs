@@ -190,7 +190,7 @@ public static class U
         ToolTipService.SetToolTip(b, tip);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tip); // czytniki ekranu (Narrator) mówią, co robi przycisk
         b.Click += (_, _) => click();
-        return b;
+        return Motion.Pressable(b, .88f);
     }
 
     /// <summary>Przycisk w kolorze akcentu (gradient brzoskwinia → róż).</summary>
@@ -204,7 +204,7 @@ public static class U
         b.Resources["ButtonBackgroundPointerOver"] = U.B("#ffc9a6");
         b.Resources["ButtonBackgroundPressed"] = U.B("#f0a986");
         b.Click += (_, _) => click();
-        return b;
+        return Motion.Pressable(b, .96f);
     }
 
     public static Button Ghost(string text, Action click, double height = 36)
@@ -215,13 +215,13 @@ public static class U
             BorderThickness = Th(0), CornerRadius = new CornerRadius(10),
         };
         b.Click += (_, _) => click();
-        return b;
+        return Motion.Pressable(b, .96f);
     }
 
     /// <summary>Klikalny wiersz (kanał, rozmowa, osoba): tło przy najechaniu, zaznaczenie, ręka.</summary>
-    public static Border Row(UIElement content, Action? click, bool selected = false, double radius = 9, Thickness? pad = null, Thickness? margin = null)
+    public static Border Row(UIElement content, Action? click, bool selected = false, double radius = 9, Thickness? pad = null, Thickness? margin = null, Brush? selectedBg = null)
     {
-        var bg = selected ? Theme.Active : Theme.Transparent;
+        var bg = selected ? selectedBg ?? Theme.Active : Theme.Transparent;
         var b = new Border { Child = content, Background = bg, CornerRadius = new CornerRadius(radius), Padding = pad ?? Th(10, 0), Margin = margin ?? Th(8, 1) };
         b.PointerEntered += (_, _) => { if (!selected) b.Background = Theme.Hover; };
         b.PointerExited += (_, _) => b.Background = bg;

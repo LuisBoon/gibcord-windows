@@ -16,6 +16,9 @@ public sealed class ServerRail : Grid
     readonly StackPanel _list = new() { Spacing = 9, Padding = U.Th(0, 12, 0, 12) };
 
     static long _dragId;
+    /// <summary>Który serwer był wybrany przy poprzednim rysowaniu — po zmianie pasek nowego wyrasta z odbiciem.</summary>
+    static long _shownSel = long.MinValue;
+    static bool _justSelected;
 
     /// <summary>Serwery w kolejności ustawionej przez przeciąganie (nowe na końcu).</summary>
     public static List<Server> Ordered(Store s)
@@ -50,6 +53,8 @@ public sealed class ServerRail : Grid
 
     public void Refresh()
     {
+        _justSelected = _shownSel != long.MinValue && _shownSel != _sh.ServerId;
+        _shownSel = _sh.ServerId;
         var s = _sh.S;
         _list.Children.Clear();
         var homeLogo = new Image { Source = new BitmapImage(new Uri(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "gibcord.png"))), Width = 44, Height = 44 };
@@ -114,19 +119,23 @@ public sealed class ServerRail : Grid
         };
         if (selected && content is TextBlock tb) tb.Foreground = Theme.OnAccent;
         if (selected && content is FontIcon fi) fi.Foreground = Theme.OnAccent;
+        var rest = selected ? 30 : unread ? 8 : 0;
+        var grow = selected && _justSelected; // właśnie wybrany serwer: pasek wyrasta z odbiciem
         var pill = new Border
         {
             Width = 5, CornerRadius = new CornerRadius(0, 4, 4, 0), Background = Theme.Fg, HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center, Height = selected ? 30 : unread ? 8 : 0, Margin = U.Th(-12, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center, Height = grow ? 18 : rest, Margin = U.Th(-12, 0, 0, 0),
         };
+        if (grow) pill.Loaded += (_, _) => Motion.Height(pill, 30);
+        Motion.Hoverable(box);
         var g = new Grid { Width = 44, Height = 44, HorizontalAlignment = HorizontalAlignment.Center };
         g.Add(box, pill);
         if (mentions > 0)
             g.Add(U.Badge(mentions).With(b => { b.HorizontalAlignment = HorizontalAlignment.Right; b.VerticalAlignment = VerticalAlignment.Bottom; b.Margin = U.Th(0, 0, -4, -4); b.BorderBrush = U.B("#1d1630"); b.BorderThickness = U.Th(2); b.Height = 22; b.CornerRadius = new CornerRadius(11); }));
         ToolTipService.SetToolTip(g, tip);
         ToolTipService.SetPlacement(g, Microsoft.UI.Xaml.Controls.Primitives.PlacementMode.Right);
-        g.PointerEntered += (_, _) => { if (!selected) { box.CornerRadius = new CornerRadius(home ? 0 : 12); if (!home) box.Background = U.W(.2); if (pill.Height == 0) pill.Height = 18; } };
-        g.PointerExited += (_, _) => { if (!selected) { box.CornerRadius = new CornerRadius(home ? 0 : 15); if (!home) box.Background = bg ?? U.W(.12); pill.Height = unread ? 8 : 0; } };
+        g.PointerEntered += (_, _) => { if (!selected) { box.CornerRadius = new CornerRadius(home ? 0 : 12); if (!home) box.Background = U.W(.2); Motion.Height(pill, 18); } };
+        g.PointerExited += (_, _) => { if (!selected) { box.CornerRadius = new CornerRadius(home ? 0 : 15); if (!home) box.Background = bg ?? U.W(.12); Motion.Height(pill, rest); } };
         g.Tapped += (_, e) => { e.Handled = true; click(); };
         return g;
     }
@@ -142,6 +151,12 @@ public sealed class Sidebar : Grid
     readonly Grid _me = new() { Height = Composer.BarHeight, Padding = U.Th(6, 0, 4, 0), Margin = U.Th(8, 4, 8, Composer.BottomGap), Background = Theme.Input, BorderBrush = Theme.InputLine, BorderThickness = U.Th(1), CornerRadius = new CornerRadius(14) };
     readonly Border _voice = new();
     readonly HashSet<long> _collapsed = [];
+    /// <summary>Tło zaznaczonego kanału jako osobna warstwa pod listą — przy zmianie kanału przesuwa się do nowego wiersza.</summary>
+    readonly Grid _listHost = new();
+    readonly Border _hl = new() { Background = Theme.Active, CornerRadius = new CornerRadius(9), Margin = U.Th(8, 0, 8, 0), VerticalAlignment = VerticalAlignment.Top, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+    FrameworkElement? _selRow;
+    long _hlKey, _hlServer = -1, _lastServer = -1;
+    float _hlY;
     readonly List<(long Uid, Avatar Av)> _talk = [];
 
     public Sidebar(Shell sh)
@@ -151,7 +166,9 @@ public sealed class Sidebar : Grid
         BorderBrush = Theme.Line;
         BorderThickness = U.Th(0, 0, 1, 0);
         this.Rows("48", "*", "auto", "auto");
-        _scroll = U.Scroll(_list);
+        _listHost.Children.Add(_hl);
+        _listHost.Children.Add(_list);
+        _scroll = U.Scroll(_listHost);
         this.Add(_header.At(0), _scroll.At(1), _voice.At(2), _me.At(3));
     }
 
@@ -163,12 +180,34 @@ public sealed class Sidebar : Grid
         var offset = _scroll.VerticalOffset;
         _list.Children.Clear();
         _talk.Clear();
+        _selRow = null;
         _voice.Child = VoiceUi.Panel(_sh);
         if (_sh.ServerId > 0 && S.ServerById(_sh.ServerId) is { } srv) BuildServer(srv);
         else BuildHome();
         BuildMe();
         _scroll.UpdateLayout();
         _scroll.ChangeView(null, offset, null, true);
+        PlaceHighlight();
+        if (_lastServer != -1 && _lastServer != _sh.ServerId && Motion.On)
+        {
+            var k = 0;
+            foreach (var el in _list.Children.Take(24)) Motion.SlideIn(el, new System.Numerics.Vector3(-8, 0, 0), k++ * 15);
+        }
+        _lastServer = _sh.ServerId;
+    }
+
+    void PlaceHighlight()
+    {
+        if (_selRow is null || _sh.ServerId <= 0) { _hl.Visibility = Visibility.Collapsed; _hlKey = 0; return; }
+        float y;
+        try { y = (float)_selRow.TransformToVisual(_listHost).TransformPoint(new Windows.Foundation.Point(0, 0)).Y; } catch { return; }
+        var shown = _hl.Visibility == Visibility.Visible;
+        _hl.Height = _selRow.ActualHeight;
+        _hl.Visibility = Visibility.Visible;
+        if (shown && _hlKey == _sh.ChannelId && Math.Abs(_hlY - y) < .5) return;
+        var slide = shown && _hlKey != 0 && _hlServer == _sh.ServerId;
+        Motion.MoveTo(_hl, new System.Numerics.Vector3(0, _hlY, 0), new System.Numerics.Vector3(0, y, 0), slide);
+        _hlKey = _sh.ChannelId; _hlY = y; _hlServer = _sh.ServerId;
     }
 
     // ── serwer ──
@@ -241,7 +280,8 @@ public sealed class Sidebar : Grid
             g.Add(U.T($"{S.Voice[c.Id].Count}/{c.UserLimit}", 11, null, Theme.Mu2).At(0, 2));
         if (unread && !sel && !muted)
             g.Add(new Ellipse { Width = 6, Height = 6, Fill = Theme.Fg, HorizontalAlignment = HorizontalAlignment.Left, Margin = U.Th(-14, 0, 0, 0) }.At(0, 0));
-        var row = U.Row(g, () => { if (c.IsVoice) _sh.JoinVoiceChannel(srv.Id, c.Id); else _sh.Go(srv.Id, c.Id); }, sel);
+        var row = U.Row(g, () => { if (c.IsVoice) _sh.JoinVoiceChannel(srv.Id, c.Id); else _sh.Go(srv.Id, c.Id); }, sel, selectedBg: Theme.Transparent);
+        if (sel) _selRow = row;
         if (!string.IsNullOrEmpty(c.Topic)) row.Tip(c.Topic!);
         var menu = new MenuFlyout();
         if (!c.IsVoice)

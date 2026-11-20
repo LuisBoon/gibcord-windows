@@ -83,6 +83,10 @@ jobs:
             if (-not $p.WaitForExit(45000)) { $p.Kill(); Write-Host "::warning::Zrzut ${v} - przekroczony czas" }
             if (Test-Path $out) { Write-Host "OK $v" } else { Write-Host "::warning::Brak zrzutu ${v} (kod $($p.ExitCode))" }
           }
+          # ruch (styl B): przejście na inny kanał i panel osób z włączonymi animacjami — w dzienniku liczba animacji albo błędy „Ruch:”
+          $out = Join-Path $pwd "zrzuty\ruch.png"
+          $p = Start-Process -FilePath publish\GibCord.exe -ArgumentList '--demo','--view','chat','--motion','--screenshot',"`"$out`"" -PassThru
+          if (-not $p.WaitForExit(45000)) { $p.Kill(); Write-Host "::warning::Zrzut ruch - przekroczony czas" }
           Get-ChildItem zrzuty | Format-Table Name, Length
           $log = Join-Path $env:LOCALAPPDATA 'GibCord6-dane\dziennik.txt'
           if (Test-Path $log) { Copy-Item $log zrzuty\dziennik.txt; Get-Content $log -Tail 60 }

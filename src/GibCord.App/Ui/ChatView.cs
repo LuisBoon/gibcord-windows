@@ -19,6 +19,8 @@ public sealed class Row(Message m)
     /// <summary>Gotowa treść wiersza (budowana raz) — przy przewijaniu tylko przepinana między widokami, bez budowania od nowa.</summary>
     internal FrameworkElement? Built;
     internal int BuiltGen;
+    /// <summary>Wiadomość przyszła na żywo i jest widoczna — przy pierwszym pokazaniu wjeżdża od dołu.</summary>
+    internal bool Fresh;
 }
 
 /// <summary>Tworzy i ponownie używa widoków wiadomości (lista rysuje tylko to, co widać).</summary>
@@ -93,6 +95,7 @@ public sealed partial class ChatView : Grid, IDisposable
         content.Padding = U.Th(0, 0, 0, 12);
         _sv = U.Scroll(content);
         _sv.VerticalAnchorRatio = 1;
+        Loaded += (_, _) => Motion.SlideIn(_sv, new System.Numerics.Vector3(16, 0, 0));
         _sv.ViewChanged += (_, _) => OnScrolled();
         content.SizeChanged += (_, _) => { if (_stick) { _bottomTries = 0; ScrollToBottom(); } };
         _sv.SizeChanged += (_, _) => { if (_stick) { _bottomTries = 0; ScrollToBottom(); } };
@@ -385,6 +388,7 @@ public sealed partial class ChatView : Grid, IDisposable
                 var prev = idx > 0 ? items[idx - 1] : null;
                 var r = new Row(m) { DaySep = prev is null || !Format.SameDay(prev.CreatedAt, m.CreatedAt) };
                 r.Grouped = Groups(prev, m, r.DaySep);
+                r.Fresh = !_loadingNewer && (_stick || m.AuthorId == S.Me.Id);
                 _rows.Add(r);
                 if (m.AuthorId == S.Me.Id && !_loadingNewer) { _stick = true; ScrollToBottom(); }
                 else if (!_stick && !_loadingNewer) ShowPill("Nowe wiadomości  ↓");

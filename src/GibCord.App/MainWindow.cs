@@ -561,6 +561,15 @@ public sealed class MainWindow : Window
         try
         {
             await Task.Delay(Options.View is "switcher" or "profile" or "emoji" or "overlay" or "adminmail" or "imgedit" ? 3500 : 2500);
+            if (Options.ForceMotion && _shell is { } msh)
+            {
+                // CI: przejście na inny kanał (zaznaczenie przesuwa się, lista wjeżdża) i panel osób; potem zapis, ile animacji ruszyło
+                msh.DemoMotion();
+                await Task.Delay(400);
+                msh.ToggleMembers();
+                await Task.Delay(1500);
+                App.Log($"Ruch: wystartowało animacji: {Ui.Motion.Started}");
+            }
             if (Options.View == "switcher") _shell?.OpenSwitcher();
             if (Options.View == "profile") _shell?.ShowProfileDemo();
             if (Options.View == "emoji") _shell?.ShowPickerDemo();
