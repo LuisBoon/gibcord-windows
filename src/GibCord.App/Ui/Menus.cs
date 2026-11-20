@@ -62,6 +62,8 @@ static class ServerMenu
         f.Items.Add(M.Item("Oznacz wszystko jako przeczytane", "\uE8FB", () => { foreach (var c in srv.Channels.Where(c => !c.IsVoice && s.IsUnread(c.Id))) sh.C.MarkRead(c.Id); }));
         f.Items.Add(M.Item("Wydarzenia", "\uE787", () => Events.Show(sh, srv.Id)));
         f.Items.Add(NotifyMenu.Sub(sh, "server", srv.Id, s.Notify.Servers.GetValueOrDefault(srv.Id)));
+        f.Items.Add(M.Item("Mój profil na tym serwerze", "\uE77B", () => ServerProfile.Show(sh, srv)));
+        if (srv.Roles.Any(r => r.SelfAssignable)) f.Items.Add(M.Item("Wybierz role", "\uE8EC", () => ServerProfile.PickRoles(sh, srv)));
         var canSettings = new[] { Perm.ManageServer, Perm.ManageChannels, Perm.ManageRoles, Perm.Kick, Perm.Ban, Perm.Timeout, Perm.ManageExpressions, Perm.ManageMessages, Perm.ViewAuditLog, Perm.ManageNicknames }
             .Any(p => s.CanServer(srv, p));
         if (canSettings)
@@ -219,6 +221,7 @@ static class AddServerDialog
                 var srv = await sh.C.Api.JoinInvite(k);
                 await sh.C.RefreshState();
                 sh.Go(srv.Id, 0);
+                if (sh.S.ServerById(srv.Id) is { } joined && joined.Roles.Any(r => r.SelfAssignable)) ServerProfile.PickRoles(sh, joined);
             }
             else if (r == ContentDialogResult.Secondary && name.Text.Trim() is { Length: > 0 } n)
             {

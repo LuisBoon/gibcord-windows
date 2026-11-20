@@ -76,6 +76,7 @@ static partial class Links
             await sh.C.RefreshState();
             sh.Go(srv.Id, 0);
             sh.Info($"Witaj na serwerze {srv.Name}!");
+            if (sh.S.ServerById(srv.Id) is { } joined && joined.Roles.Any(r => r.SelfAssignable)) ServerProfile.PickRoles(sh, joined);
         }
         catch (Exception ex) { sh.Info(GibCordClient.Friendly(ex), true); }
     }
