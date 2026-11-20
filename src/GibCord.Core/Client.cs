@@ -211,14 +211,18 @@ public sealed partial class GibCordClient : IAsyncDisposable
         _stateInFlight = true;
         _stateAgain = false;
         _during = [];
+        var session = _session;
         try
         {
             var (st, raw) = await Api.GetStateRaw();
+            if (session != _session) { _during = null; return; } // wylogowano w trakcie — stan starego konta nie wraca
             _ui(() =>
             {
                 var during = _during;
                 _during = null;
-                Store.Load(st);
+                if (session != _session) return;
+                var keep = during?.Where(e => e.Type == "message_create").Select(e => e.Data.Prop("message").Long("channelId") ?? 0).ToHashSet();
+                Store.Load(st, keep);
                 // zdarzenia, które przyszły w trakcie pobierania, są świeższe niż zrzut — nakładamy je jeszcze raz
                 if (during is not null)
                     foreach (var ev in during)
@@ -227,7 +231,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
                 if (ActiveChannelId != 0) _ = OpenChannel(ActiveChannelId);
                 if (ActiveThreadId != 0) _ = LoadThread(ActiveThreadId);
             });
-            _cache?.SaveState(raw);
+            if (session == _session) _cache?.SaveState(raw);
             if (_gw is not null) await _gw.Send(new { t = "visibility", visible = _visible });
         }
         catch (ApiException ex) when (ex.IsAuth) { _during = null; _ui(() => EndSession("Sesja wygasła — zaloguj się ponownie.")); }
@@ -247,7 +251,9 @@ public sealed partial class GibCordClient : IAsyncDisposable
     [
         "message_create", "message_update", "message_delete", "reaction_update", "read_state", "presence", "user_update",
         "voice_state", "dm_create", "dm_update", "dm_hidden", "dm_remove", "friend_update", "friend_remove",
-        "member_update", "channel_update", "server_update", "notify_update", "block_update", "thread_update", "watch_state",
+        "server_create", "server_update", "server_delete", "member_add", "member_update", "member_remove",
+        "channel_create", "channel_update", "channel_delete", "notify_update", "block_update",
+        "thread_update", "thread_delete", "watch_state", "event_create", "event_update", "event_delete",
     ];
 
     void OnEvent(GatewayEvent ev)
@@ -313,11 +319,15 @@ public sealed partial class GibCordClient : IAsyncDisposable
         {
             if (w.Items.Count == 0 && _cache?.LoadMessages(cid) is { Count: > 0 } cached)
                 Store.SetWindow(cid, cached, hasOlder: true, atTail: true, fromCache: true);
+            var session = _session;
+            Store.BeginFetch(cid);
             try
             {
                 var msgs = await Api.GetMessages(cid, limit: 50);
+                if (session != _session) return; // wylogowano w trakcie — nic z tego konta nie wraca
                 _ui(() =>
                 {
+                    if (session != _session) return;
                     Store.SetWindow(cid, msgs, hasOlder: msgs.Count >= 50);
                     _fresh.Add(cid);
                 });
@@ -432,10 +442,13 @@ public sealed partial class GibCordClient : IAsyncDisposable
     {
         var t = Store.ThreadById(tid);
         if (t is null) return;
+        var session = _session;
+        Store.BeginFetch(-tid);
         try
         {
             var msgs = await Api.GetMessages(t.ChannelId, limit: 50, thread: tid);
-            _ui(() => { Store.SetWindow(-tid, msgs, hasOlder: msgs.Count >= 50); _fresh.Add(-tid); });
+            if (session != _session) return;
+            _ui(() => { if (session != _session) return; Store.SetWindow(-tid, msgs, hasOlder: msgs.Count >= 50); _fresh.Add(-tid); });
             if (WindowActive && ActiveThreadId == tid) ScheduleRead(-tid, 0);
         }
         catch (Exception ex) { _ui(() => Error?.Invoke(Friendly(ex))); }

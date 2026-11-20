@@ -291,11 +291,42 @@ public class StoreTests
     public void WiadomoscZCzasuPobieraniaZostaje()
     {
         var s = Make();
-        s.Window(10); // kanał otwarty, pobieranie w toku
+        // z dysku: 4, 5 i 7 (7 usunięto, gdy aplikacja była zamknięta)
+        s.SetWindow(10, [Msg(4, 10, 2), Msg(5, 10, 2), Msg(7, 10, 2)], hasOlder: true, fromCache: true);
+        s.BeginFetch(10); // pobieranie w toku
         s.Apply(Ev("message_create", new { message = Msg(8, 10, 2, "na żywo") }));
-        // odpowiedź z serwera sprzed tej wiadomości
+        // odpowiedź z serwera sprzed wiadomości 8 (bez usuniętej 7)
         s.SetWindow(10, [Msg(4, 10, 2), Msg(5, 10, 2)], hasOlder: false);
         Assert.Equal([4L, 5, 8], s.Window(10).Items.Select(x => x.Id).ToArray());
+        // kolejne pobranie bez nowych zdarzeń — 8 jest już w odpowiedzi, nic się nie dubluje
+        s.BeginFetch(10);
+        s.SetWindow(10, [Msg(4, 10, 2), Msg(5, 10, 2), Msg(8, 10, 2)], hasOlder: false);
+        Assert.Equal([4L, 5, 8], s.Window(10).Items.Select(x => x.Id).ToArray());
+    }
+
+    [Fact]
+    public void UsunietaPodczasRozlaczeniaNieWraca()
+    {
+        var s = Make();
+        s.Window(10);
+        s.Apply(Ev("message_create", new { message = Msg(8, 10, 2, "później usunięta") })); // na żywo, przed rozłączeniem
+        s.BeginFetch(10); // ponowne połączenie
+        s.SetWindow(10, [Msg(4, 10, 2), Msg(5, 10, 2)], hasOlder: false);
+        Assert.Equal([4L, 5], s.Window(10).Items.Select(x => x.Id).ToArray());
+    }
+
+    [Fact]
+    public void WzmiankaZCzasuPobieraniaStanuZostaje()
+    {
+        var s = Make();
+        var m = Msg(6, 10, 2, "hej <@1>"); m.Mentions = [1];
+        s.Apply(Ev("message_create", new { message = m })); // przyszła w trakcie GET /state
+        var st = new StateResponse { Me = s.Me, Users = new(s.Users), Servers = [.. s.Servers], Dms = [.. s.Dms], Reads = new() { [10] = 5 } };
+        st.Servers[0].Channels.First(c => c.Id == 10).LastMessageId = 5; // zrzut sprzed wiadomości 6
+        s.Load(st, keepMentions: new HashSet<long> { 10 });
+        s.Apply(Ev("message_create", new { message = m })); // odtworzenie
+        Assert.True(s.IsUnread(10));
+        Assert.Equal(1, s.MentionsIn(10));
     }
 
     [Fact]

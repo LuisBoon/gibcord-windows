@@ -273,17 +273,29 @@ public static class Images
 {
     static readonly Dictionary<string, BitmapImage> _cache = [];
     static readonly LinkedList<string> _order = new();
+    /// <summary>Nieudane pobrania: nowa próba najwcześniej po 3 minutach (404 nie może kręcić zapytań przy każdym odświeżeniu).</summary>
+    static readonly Dictionary<string, long> _failedAt = [];
 
     public static BitmapImage? Get(Uri? uri, int decodeWidth = 0)
     {
         if (uri is null) return null;
         var key = uri.AbsoluteUri + "|" + decodeWidth;
-        if (_cache.TryGetValue(key, out var b)) return b;
+        if (_cache.TryGetValue(key, out var b))
+        {
+            // poprzednio się nie udało (np. start przed Wi-Fi) — po 3 minutach próbujemy jeszcze raz
+            if (!_failedAt.TryGetValue(key, out var t) || Environment.TickCount64 - t < 180_000) return b;
+            _failedAt.Remove(key);
+            _cache.Remove(key);
+            _order.Remove(key);
+        }
         b = new BitmapImage { UriSource = uri };
         if (decodeWidth > 0) b.DecodePixelWidth = decodeWidth;
         // nieudane pobranie (np. autostart przed Wi-Fi) nie może zostać w pamięci do końca sesji
-        var img = b;
-        b.ImageFailed += (_, _) => { if (_cache.TryGetValue(key, out var x) && ReferenceEquals(x, img)) { _cache.Remove(key); _order.Remove(key); } };
+        b.ImageFailed += (_, _) =>
+        {
+            if (_failedAt.Count > 500) _failedAt.Clear();
+            _failedAt[key] = Environment.TickCount64;
+        };
         _cache[key] = b;
         _order.AddLast(key);
         if (_order.Count > 600) { _cache.Remove(_order.First!.Value); _order.RemoveFirst(); }

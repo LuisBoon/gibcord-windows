@@ -109,6 +109,8 @@ public sealed class Prefs
     public bool CompactMessages { get; set; }
     /// <summary>Kiedy wyczyścić opis statusu (0 = nie czyścić).</summary>
     public long StatusClearAt { get; set; }
+    /// <summary>Który opis czyścimy — jeśli w międzyczasie ustawiono inny (np. na telefonie), zostawiamy go.</summary>
+    public string StatusClearText { get; set; } = "";
     /// <summary>Czyje są szkice i ostatnie kanały (po zmianie konta czyścimy je).</summary>
     public long LastUserId { get; set; }
     /// <summary>Własna kolejność serwerów na pasku (tylko na tym komputerze).</summary>

@@ -107,7 +107,9 @@ public sealed class MainWindow : Window
         _keys = new GlobalKeys(Client);
         Client.SessionEnded += why => ShowLogin(why);
         Client.EmailGateRequired += ShowEmailGate;
-        Client.Mentioned += m => Inbox.AddMention(m, Client.Store);
+        // wzmianka na kanale (albo w wątku), który właśnie czytasz w aktywnym oknie — od razu „widziana”, bez czerwonej kropki
+        Client.Mentioned += m => Inbox.AddMention(m, Client.Store,
+            seen: Client.WindowActive && (m.ThreadId is long mt ? Client.ActiveThreadId == mt : Client.ActiveChannelId == m.ChannelId));
         // skrzynka jest osobna dla każdego konta — wczytujemy ją, gdy znamy „ja”
         Client.Store.Changed += c =>
         {
@@ -128,11 +130,18 @@ public sealed class MainWindow : Window
         remindTimer.Tick += (_, _) =>
         {
             // opis statusu z terminem („wyczyść po godzinie”)
-            if (App.Prefs.StatusClearAt > 0 && Format.NowMs() >= App.Prefs.StatusClearAt && Client.Store.Loaded)
+            if (App.Prefs.StatusClearAt > 0 && Format.NowMs() >= App.Prefs.StatusClearAt && Client.Store.Loaded && Client.Status == GatewayStatus.Connected && !_clearingStatus)
             {
-                App.Prefs.StatusClearAt = 0;
-                App.Prefs.Save();
-                _ = Client.SetStatus(Client.Store.Me.Status, "");
+                if ((Client.Store.Me.CustomStatus ?? "") != App.Prefs.StatusClearText)
+                {
+                    // opis zmieniono w międzyczasie (np. na telefonie) — nie ruszamy go
+                    App.Prefs.StatusClearAt = 0; App.Prefs.StatusClearText = ""; App.Prefs.Save();
+                }
+                else
+                {
+                    _clearingStatus = true;
+                    _ = ClearStatus();
+                }
             }
             foreach (var r in Inbox.TakeDue())
             {
@@ -338,6 +347,18 @@ public sealed class MainWindow : Window
     }
 
     /// <summary>Po wczytaniu stanu (zimny start z dymka) — najwyżej ~20 s czekania.</summary>
+    bool _clearingStatus;
+
+    async Task ClearStatus()
+    {
+        try
+        {
+            // termin kasujemy dopiero po udanym zapisie (po wybudzeniu sieci może jeszcze nie być — spróbujemy za 20 s)
+            if (await Client.SetStatus(Client.Store.Me.Status, "") is null) { App.Prefs.StatusClearAt = 0; App.Prefs.StatusClearText = ""; App.Prefs.Save(); }
+        }
+        finally { _clearingStatus = false; }
+    }
+
     void AfterLoad(Func<Task> a) => Dq.TryEnqueue(async () =>
     {
         for (var i = 0; i < 100 && (Client is null || !Client.Store.Loaded || Client.Status != GatewayStatus.Connected); i++) await Task.Delay(200);

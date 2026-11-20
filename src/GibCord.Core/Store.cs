@@ -19,6 +19,10 @@ public sealed class MessageWindow
     /// <summary>Okno kończy się na najnowszej wiadomości — nowe można dopisywać na końcu.</summary>
     public bool AtTail { get; set; } = true;
     public bool FromCache { get; set; }
+    /// <summary>Trwa pobieranie najnowszych z serwera — wiadomości przychodzące w tym czasie są notowane w <see cref="Live"/>.</summary>
+    public bool Fetching { get; set; }
+    /// <summary>Wiadomości dodane na żywo od początku pobierania (tylko one przeżywają podmianę okna).</summary>
+    public HashSet<long> Live { get; } = [];
 }
 
 public sealed record ChannelGroup(Category? Category, List<Channel> Channels);
@@ -59,7 +63,7 @@ public sealed class Store
 
     // ───────────────────────── wczytanie stanu ─────────────────────────
 
-    public void Load(StateResponse st)
+    public void Load(StateResponse st, IReadOnlySet<long>? keepMentions = null)
     {
         Me = st.Me;
         Users.Clear();
@@ -79,7 +83,8 @@ public sealed class Store
         // po ponownym połączeniu odtwarzacz ma dogonić to, co się zmieniło, gdy nas nie było
         foreach (var k in oldWatch.Union(Watches.Keys).ToList()) Raise(ChangeKind.Watch, k, k);
         // wzmianki: liczymy tylko na żywo; po ponownym wczytaniu zostają tam, gdzie kanał dalej jest nieprzeczytany
-        foreach (var cid in Mentions.Keys.ToList()) if (!IsUnread(cid)) Mentions.Remove(cid);
+        // (kanały z wiadomościami, które przyszły w trakcie pobierania stanu, zostają — odtworzenie zdarzeń przywróci im „nieprzeczytane”)
+        foreach (var cid in Mentions.Keys.ToList()) if (!IsUnread(cid) && keepMentions?.Contains(cid) != true) Mentions.Remove(cid);
         Reindex();
         // okna wiadomości ze starego stanu mogą mieć dziury — kanał przeładuje się przy otwarciu
         foreach (var w in Windows.Values) w.FromCache = true;
@@ -327,9 +332,11 @@ public sealed class Store
     {
         var w = Window(cid);
         var pending = w.Items.Where(x => x.Send != SendState.Sent).ToList();
-        // wiadomości, które przyszły na żywo w trakcie pobierania (nowsze niż najnowsza w odpowiedzi) — zostają
+        // wiadomości, które przyszły na żywo w trakcie pobierania (nowsze niż najnowsza w odpowiedzi) — zostają.
+        // Tylko te z bieżącego pobierania: stare z dysku albo sprzed rozłączenia mogły zostać w międzyczasie usunięte.
         var newest = msgs.Count > 0 ? msgs.Max(x => x.Id) : 0;
-        var live = atTail ? w.Items.Where(x => x.Send == SendState.Sent && x.Id > newest && x.Key == cid).ToList() : [];
+        var live = atTail && !fromCache ? w.Items.Where(x => x.Send == SendState.Sent && x.Id > newest && x.Key == cid && w.Live.Contains(x.Id)).ToList() : [];
+        if (!fromCache) { w.Live.Clear(); w.Fetching = false; }
         w.Items.Clear();
         w.Items.AddRange(msgs.Where(x => x.Key == cid).OrderBy(x => x.Id));
         w.Items.AddRange(live.OrderBy(x => x.Id));
@@ -338,6 +345,14 @@ public sealed class Store
         w.AtTail = atTail;
         w.FromCache = fromCache;
         Raise(ChangeKind.MessagesReset, cid, cid);
+    }
+
+    /// <summary>Początek pobierania najnowszych wiadomości okna (patrz <see cref="MessageWindow.Live"/>).</summary>
+    public void BeginFetch(long key)
+    {
+        var w = Window(key);
+        w.Live.Clear();
+        w.Fetching = true;
     }
 
     public void PrependOlder(long cid, List<Message> older, bool hasOlder)
@@ -413,6 +428,7 @@ public sealed class Store
         {
             var old = w.Items[i];
             w.Items[i] = m;
+            if (w.Fetching && m.Send == SendState.Sent && old.Send != SendState.Sent) w.Live.Add(m.Id);
             if (old.Id != m.Id) { Raise(ChangeKind.MessageRemoved, old.Id, key, old); Raise(ChangeKind.MessageAdded, m.Id, key, m); }
             else Raise(ChangeKind.MessageUpdated, m.Id, key, m);
             return;
@@ -422,6 +438,7 @@ public sealed class Store
         var at = w.Items.Count;
         while (at > 0 && (w.Items[at - 1].Send != SendState.Sent || w.Items[at - 1].Id > m.Id)) at--;
         w.Items.Insert(at, m);
+        if (w.Fetching && m.Send == SendState.Sent) w.Live.Add(m.Id);
         Raise(ChangeKind.MessageAdded, m.Id, key, m);
     }
 

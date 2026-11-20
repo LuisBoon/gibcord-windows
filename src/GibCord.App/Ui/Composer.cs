@@ -279,7 +279,7 @@ public sealed partial class Composer : StackPanel
         {
             var pt = _frame.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0));
             _suggest.HorizontalOffset = pt.X + 8;
-            _suggest.VerticalOffset = pt.Y - 12 - Math.Min(7, _sugg.Count) * 36 - 12;
+            _suggest.VerticalOffset = pt.Y - 12 - _sugg.Count * 36 - 12;
             _suggest.IsOpen = true;
         }
     }

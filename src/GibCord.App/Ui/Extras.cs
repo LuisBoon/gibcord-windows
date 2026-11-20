@@ -14,12 +14,20 @@ public static class Lightbox
 
     public static void Show(Shell sh, Uri url, string name)
     {
-        var img = new Image { Source = Images.Get(url), Stretch = Stretch.Uniform, MaxWidth = 1600 };
+        var img = new Image { Source = Images.Get(url), Stretch = Stretch.Uniform, MaxWidth = 1600, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var zoom = new ScrollViewer
         {
             Content = img, ZoomMode = ZoomMode.Enabled, MinZoomFactor = 1, MaxZoomFactor = 8,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollMode = ScrollMode.Auto, VerticalScrollMode = ScrollMode.Auto,
+            HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        // przy powiększeniu 1 obraz ma się mieścić w oknie (ScrollViewer sam w sobie nie ogranicza zawartości)
+        zoom.SizeChanged += (_, e) =>
+        {
+            if (e.NewSize.Width <= 0 || e.NewSize.Height <= 0) return;
+            img.MaxWidth = Math.Min(1600, e.NewSize.Width);
+            img.MaxHeight = e.NewSize.Height;
         };
         img.DoubleTapped += (_, e) => { zoom.ChangeView(null, null, zoom.ZoomFactor > 1.1f ? 1 : 2.5f); e.Handled = true; };
         var save = U.Ghost("Zapisz…", async () =>

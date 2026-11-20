@@ -43,13 +43,15 @@ public static class Inbox
     /// <summary>Czyja skrzynka jest wczytana (0 = żadna).</summary>
     public static long For { get; private set; }
 
-    public static void Unload() { For = 0; _path = null; _d = new(); Changed?.Invoke(); }
+    public static void Unload() { For = 0; _path = null; _d = new(); _early.Clear(); Changed?.Invoke(); }
 
     public static void Load(long userId)
     {
         For = userId;
         _path = Path.Combine(App.DataDir, $"skrzynka-{userId}.json");
         _d = SafeFile.Read<InboxData>(_path) ?? new();
+        foreach (var it in _early) if (!_d.Mentions.Any(x => x.MessageId == it.MessageId)) _d.Mentions.Insert(0, it);
+        if (_early.Count > 0) { _early.Clear(); _d.Mentions.Sort((a, b) => b.At.CompareTo(a.At)); Save(); }
         Changed?.Invoke();
     }
 
@@ -67,10 +69,16 @@ public static class Inbox
         return new InboxItem { ChannelId = m.ChannelId, MessageId = m.Id, ThreadId = m.ThreadId, AuthorId = m.AuthorId, Text = s.PlainText(m, 300), Where = where, At = m.CreatedAt, Added = Format.NowMs() };
     }
 
-    public static void AddMention(Message m, Store s)
+    /// <summary>Wzmianki sprzed wczytania skrzynki (pierwsze logowanie, trwa pobieranie stanu) — dołączane po Load.</summary>
+    static readonly List<InboxItem> _early = [];
+
+    public static void AddMention(Message m, Store s, bool seen = false)
     {
+        var it = From(m, s);
+        it.Seen = seen;
+        if (For == 0 || For != s.Me.Id) { if (_early.Count < 50 && !_early.Any(x => x.MessageId == m.Id)) _early.Add(it); return; }
         if (_d.Mentions.Any(x => x.MessageId == m.Id)) return;
-        _d.Mentions.Insert(0, From(m, s));
+        _d.Mentions.Insert(0, it);
         if (_d.Mentions.Count > 200) _d.Mentions.RemoveRange(200, _d.Mentions.Count - 200);
         Save();
     }

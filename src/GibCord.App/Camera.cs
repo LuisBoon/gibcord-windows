@@ -90,6 +90,7 @@ public sealed class Camera : IDisposable
         try
         {
             var push = await _c.Voice.StartCamera(640, 360);
+            if (!Active) { _ = _c.Voice.StopCamera(); return; } // wyłączono kamerę w trakcie — nie zostawiamy opublikowanej ścieżki
             if (push is null) { Stop(); return; }
             _push = push;
             StartedAt = Environment.TickCount64;

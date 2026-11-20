@@ -170,10 +170,11 @@ static class StatusMenu
             if (r == ContentDialogResult.None) return;
             var text = r == ContentDialogResult.Secondary ? "" : box.Text.Trim();
             var mins = vals[Math.Max(0, clear.SelectedIndex)];
-            App.Prefs.StatusClearAt = text.Length == 0 || mins == 0 ? 0 : mins < 0 ? new DateTimeOffset(DateTime.Today.AddDays(1)).ToUnixTimeMilliseconds() : Format.NowMs() + mins * 60_000;
-            App.Prefs.Save();
             var err = await sh.C.SetStatus(sh.S.Me.Status, text);
-            if (err is not null) sh.Info(err, true);
+            if (err is not null) { sh.Info(err, true); return; }
+            App.Prefs.StatusClearAt = text.Length == 0 || mins == 0 ? 0 : mins < 0 ? new DateTimeOffset(DateTime.Today.AddDays(1)).ToUnixTimeMilliseconds() : Format.NowMs() + mins * 60_000;
+            App.Prefs.StatusClearText = App.Prefs.StatusClearAt > 0 ? text : "";
+            App.Prefs.Save();
         }));
         f.Items.Add(M.Item("Edytuj profil", "\uE77B", () => sh.ShowSettings("profile")));
         f.Items.Add(M.Item("Kopiuj nazwę użytkownika", "\uE8C8", () => { Sidebar.Copy(sh.S.Me.Username); sh.Info("Skopiowano @" + sh.S.Me.Username); }));
