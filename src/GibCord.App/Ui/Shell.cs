@@ -556,6 +556,26 @@ public sealed class Shell : Grid
         t.Start();
     }
 
+    // ── ustawienia na całe okno ──
+    SettingsPage? _settings;
+
+    public void ShowSettings(string section = "profile")
+    {
+        if (_settings is not null) CloseSettings();
+        _settings = new SettingsPage(this, section);
+        _settings.At(0, 0, colSpan: 5);
+        Children.Add(_settings);
+        _settings.Loaded += (_, _) => _settings?.Focus(FocusState.Programmatic);
+    }
+
+    public void CloseSettings()
+    {
+        if (_settings is null) return;
+        Children.Remove(_settings);
+        _settings = null;
+        _chat?.FocusComposer();
+    }
+
     // ── pełny ekran transmisji: chowa kolumny, okno na cały ekran ──
     public bool FocusMode { get; private set; }
 

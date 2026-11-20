@@ -136,7 +136,8 @@ static class StatusMenu
             var err = await sh.C.SetStatus(sh.S.Me.Status, r == ContentDialogResult.Secondary ? "" : box.Text.Trim());
             if (err is not null) sh.Info(err, true);
         }));
-        f.Items.Add(M.Item("Kopiuj nazwę użytkownika", "", () => { Sidebar.Copy(sh.S.Me.Username); sh.Info("Skopiowano @" + sh.S.Me.Username); }));
+        f.Items.Add(M.Item("Edytuj profil", "\uE77B", () => sh.ShowSettings("profile")));
+        f.Items.Add(M.Item("Kopiuj nazwę użytkownika", "\uE8C8", () => { Sidebar.Copy(sh.S.Me.Username); sh.Info("Skopiowano @" + sh.S.Me.Username); }));
         return f;
     }
 }
@@ -171,7 +172,7 @@ static class SettingsMenu
             sh.Info(err ?? "Szukam nowej wersji… jeśli jest, pojawi się pasek u góry.", err is not null);
         }));
         f.Items.Add(M.Item("Otwórz GibCorda w przeglądarce", "", () => _ = Launcher.LaunchUriAsync(sh.C.Api.BaseUri)));
-        f.Items.Add(M.Item("Pełne ustawienia konta (strona)", "", () => _ = Launcher.LaunchUriAsync(new Uri(sh.C.Api.BaseUri, "ustawienia"))));
+        f.Items.Add(M.Item("Wszystkie ustawienia…", "\uE713", () => sh.ShowSettings()));
         f.Items.Add(M.Item($"GibCord {Updater.Version} · Co nowego", "", () => sh.OpenChannelByKind("changelog")));
         f.Items.Add(new MenuFlyoutSeparator());
         f.Items.Add(M.Item("Wyloguj się", "", async () =>

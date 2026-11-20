@@ -66,6 +66,13 @@ public sealed class User
     public string? Email { get; set; }
     public bool EmailVerified { get; set; }
     public bool Mfa { get; set; }
+    public int MfaBackupLeft { get; set; }
+    public string? PendingEmail { get; set; }
+    public bool BirthdayShowAge { get; set; }
+    public bool ShowActivity { get; set; }
+    public bool ShowGames { get; set; }
+    public bool SpotifyConnected { get; set; }
+    public string? PasswordIssue { get; set; }
     public JsonElement Settings { get; set; }
 
     [JsonIgnore] public string Name => string.IsNullOrWhiteSpace(DisplayName) ? Username : DisplayName!;

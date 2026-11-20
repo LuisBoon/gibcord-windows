@@ -315,8 +315,8 @@ public sealed class Sidebar : Grid
         leftBtn.ContextFlyout = StatusMenu.Build(_sh);
         leftBtn.Tapped += (_, _) => leftBtn.ContextFlyout.ShowAt(leftBtn);
         var (mic, hp) = VoiceUi.MuteButtons(_sh);
-        var cog = U.IconButton("", "Ustawienia", () => { }, 15, 30);
-        cog.Flyout = SettingsMenu.Build(_sh);
+        var cog = U.IconButton(G.Settings, "Ustawienia (prawy przycisk: szybkie przełączniki)", () => _sh.ShowSettings(), 15, 30);
+        cog.ContextFlyout = SettingsMenu.Build(_sh);
         _me.Add(leftBtn.At(0, 0, colSpan: 2), U.H(0, mic, hp, cog).At(0, 2));
     }
 

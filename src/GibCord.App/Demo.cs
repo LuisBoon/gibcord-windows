@@ -41,6 +41,7 @@ public static class Demo
             case "voice": sh.C.DemoSpeaker = OlaId; sh.JoinVoiceChannel(Eg, Pogaduchy); break;
             case "thread": sh.Go(Eg, Ogolne); sh.OpenThread(1); break;
             case "search": sh.Go(Eg, Ogolne); sh.OpenSearch("sobot"); break;
+            case "settings": sh.Go(Eg, Ogolne); sh.ShowSettings("profile"); break;
             case "dmcall":
                 sh.C.Store.Voice[DmOla] = [new VoiceMember { UserId = OlaId, Video = true }];
                 sh.C.DemoSpeaker = OlaId;
