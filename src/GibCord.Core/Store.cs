@@ -5,7 +5,7 @@ namespace GibCord.Core;
 public enum ChangeKind
 {
     All, Me, Servers, Server, Members, Dms, User, Presence, Reads, Friends, Voice, Typing,
-    MessageAdded, MessageUpdated, MessageRemoved, MessagesReset, Notify, Blocked, Announcement, Thread,
+    MessageAdded, MessageUpdated, MessageRemoved, MessagesReset, Notify, Blocked, Announcement, Thread, Watch,
 }
 
 /// <summary>Co się zmieniło. <c>Id</c> = serwer / użytkownik / kanał, zależnie od rodzaju.</summary>
@@ -43,6 +43,8 @@ public sealed class Store
     public Dictionary<long, MessageWindow> Windows { get; } = [];
     /// <summary>Znane wątki (z wiadomości, list i zdarzeń). Okno wiadomości wątku: <c>Windows[-id]</c>.</summary>
     public Dictionary<long, ThreadInfo> Threads { get; } = [];
+    /// <summary>Wspólne oglądanie w pokojach (kanał głosowy / rozmowa) → stan.</summary>
+    public Dictionary<long, WatchState> Watches { get; } = [];
     readonly Dictionary<long, Dictionary<long, long>> _typing = [];
     readonly Dictionary<long, (Channel C, Server S)> _chan = [];
     public bool Loaded { get; private set; }
@@ -66,6 +68,8 @@ public sealed class Store
         Blocked.Clear(); Blocked.UnionWith(st.Blocked);
         Notify = st.Notify ?? new();
         Announcement = st.Announcement;
+        Watches.Clear();
+        foreach (var (k, v) in st.Watch) if (v is not null) Watches[k] = v;
         // wzmianki: liczymy tylko na żywo; po ponownym wczytaniu zostają tam, gdzie kanał dalej jest nieprzeczytany
         foreach (var cid in Mentions.Keys.ToList()) if (!IsUnread(cid)) Mentions.Remove(cid);
         Reindex();
@@ -657,6 +661,14 @@ public sealed class Store
                 var ev3 = e.Prop("event").To<ServerEvent>();
                 var id3 = ev3?.Id ?? e.Long("eventId") ?? e.Long("id") ?? 0;
                 foreach (var s3 in Servers) if (s3.Events.RemoveAll(x => x.Id == id3) > 0) Raise(ChangeKind.Server, s3.Id);
+                break;
+            }
+            case "watch_state":
+            {
+                if (e.Long("channelId") is not long wc) break;
+                var w = e.Prop("watch").To<WatchState>();
+                if (w is null) Watches.Remove(wc); else Watches[wc] = w;
+                Raise(ChangeKind.Watch, wc, wc);
                 break;
             }
             case "thread_update":

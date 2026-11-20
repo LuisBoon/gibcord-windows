@@ -285,6 +285,41 @@ public sealed record SearchQuery(string Text, long? AuthorId = null, string? Has
     public bool IsEmpty => string.IsNullOrWhiteSpace(Text) && AuthorId is null && Has is null;
 }
 
+/// <summary>Wspólne oglądanie w pokoju (YouTube albo film MP4/WebM z czatu), z kolejką.</summary>
+public sealed class WatchItem
+{
+    public string Kind { get; set; } = "yt";      // yt | file
+    public string? VideoId { get; set; }
+    public string? Url { get; set; }
+    public long? UploadId { get; set; }
+    public string? Title { get; set; }
+    public string? Qid { get; set; }
+    public long By { get; set; }
+}
+
+public sealed class WatchState
+{
+    public string Kind { get; set; } = "yt";
+    public string? VideoId { get; set; }
+    public string? Url { get; set; }
+    public long? UploadId { get; set; }
+    public string? Title { get; set; }
+    public string State { get; set; } = "paused"; // playing | paused
+    public double Position { get; set; }
+    public long UpdatedAt { get; set; }
+    public long By { get; set; }
+    public long AddedBy { get; set; }
+    public string? Key { get; set; }
+    public List<long> Skip { get; set; } = [];
+    public bool Ended { get; set; }
+    public List<WatchItem> Queue { get; set; } = [];
+
+    [JsonIgnore] public bool Playing => State == "playing" && !Ended;
+    /// <summary>Gdzie teraz jesteśmy w filmie (pozycja + czas od ostatniej zmiany, gdy gra).</summary>
+    public double Now(long nowMs) => Playing ? Position + Math.Max(0, nowMs - UpdatedAt) / 1000.0 : Position;
+    [JsonIgnore] public string Ident => Kind == "file" ? "f:" + (Url ?? "") : "y:" + (VideoId ?? "");
+}
+
 public sealed record SoundPlay(long ChannelId, long UserId, string Url, double Volume, string Label);
 
 /// <summary>GIF z wyszukiwarki (GIPHY przez serwer) albo z ulubionych.</summary>
@@ -474,6 +509,7 @@ public sealed class StateResponse
     public NotifyState? Notify { get; set; }
     public List<long> Blocked { get; set; } = [];
     public Announcement? Announcement { get; set; }
+    public Dictionary<long, WatchState?> Watch { get; set; } = [];
 }
 
 public sealed class Limits

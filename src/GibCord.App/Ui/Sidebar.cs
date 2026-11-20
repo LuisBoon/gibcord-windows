@@ -179,6 +179,8 @@ public sealed class Sidebar : Grid
         var name = U.T(c.Name, 14, unread && !muted ? U.Bold : U.Semi, fg);
         var g = new Grid { Height = 32 }.Cols("22", "*", "auto").Add(glyph.At(0, 0), name.At(0, 1));
         if (mentions > 0) g.Add(U.Badge(mentions).At(0, 2));
+        else if (c.IsVoice && S.Watches.ContainsKey(c.Id))
+            g.Add(U.Box(U.T("📺 OGLĄDAJĄ", 9.5, U.Bold, U.B("#ffffff")), U.B("#6b2d7c"), 5, U.Th(5, 1)).At(0, 2));
         else if (c.IsVoice && (S.Voice.GetValueOrDefault(c.Id) ?? []).Any(v => v.Streaming))
             g.Add(U.Box(U.T("NA ŻYWO", 9.5, U.Bold, U.B("#ffffff")), Theme.Red2, 5, U.Th(5, 1)).At(0, 2));
         else if (c.IsVoice && (S.Voice.GetValueOrDefault(c.Id)?.Count ?? 0) > 0 && c.UserLimit > 0)

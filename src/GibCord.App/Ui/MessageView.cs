@@ -241,7 +241,14 @@ public sealed partial class MessageView : Grid
             b.Tip(a.Name);
             return b;
         }
-        if (url is not null && a.Mime.StartsWith("video/") && a.Mime is "video/mp4" or "video/webm" or "video/quicktime" or "video/x-matroska") return MediaViews.Video(url, a);
+        if (url is not null && a.Mime.StartsWith("video/") && a.Mime is "video/mp4" or "video/webm" or "video/quicktime" or "video/x-matroska")
+        {
+            var player = MediaViews.Video(url, a);
+            if (_v.Sh.C.VoiceChannelId == 0 || _v.Sh.C.Offline || a.Mime is not ("video/mp4" or "video/webm")) return player;
+            var together = new HyperlinkButton { Content = U.T("📺 Oglądajcie razem w rozmowie", 12, U.Bold, Theme.Accent), Padding = U.Th(0) };
+            together.Click += (_, _) => WatchUi.StartFile(_v.Sh, a.Id, _v.S.Watches.ContainsKey(_v.Sh.C.VoiceChannelId));
+            return U.V(2, player, together);
+        }
         if (url is not null && a.Mime.StartsWith("audio/")) return MediaViews.Audio(url, a);
         var icon = a.Mime.StartsWith("video/") ? "\uE714" : a.Mime.StartsWith("audio/") ? "\uE8D6" : a.Mime == "application/pdf" ? "\uEA90" : "\uE8A5";
         var card = new Grid { Width = 360, HorizontalAlignment = HorizontalAlignment.Left }.Cols("auto", "*", "auto").Add(
@@ -256,7 +263,7 @@ public sealed partial class MessageView : Grid
         return box;
     }
 
-    static FrameworkElement YouTube(string id)
+    FrameworkElement YouTube(string id)
     {
         var img = new Image { Source = Images.Get(new Uri($"https://i.ytimg.com/vi/{id}/hqdefault.jpg"), 640), Width = 320, Height = 180, Stretch = Stretch.UniformToFill };
         var play = new Border { Width = 56, Height = 40, CornerRadius = new CornerRadius(10), Background = U.B("#E6ff0033"), Child = U.I("", 18, U.B("#ffffff")).With(i => i.HorizontalAlignment = HorizontalAlignment.Center) };
@@ -264,7 +271,10 @@ public sealed partial class MessageView : Grid
         var b = new Border { CornerRadius = new CornerRadius(10), Child = g, HorizontalAlignment = HorizontalAlignment.Left, Margin = U.Th(0, 3, 0, 2) };
         b.Tapped += (_, _) => _ = Launcher.LaunchUriAsync(new Uri("https://www.youtube.com/watch?v=" + id));
         b.Tip("Otwórz w YouTube");
-        return b;
+        if (_v.Sh.C.VoiceChannelId == 0 || _v.Sh.C.Offline) return b;
+        var together = new HyperlinkButton { Content = U.T("📺 Oglądajcie razem w rozmowie", 12, U.Bold, Theme.Accent), Padding = U.Th(0) };
+        together.Click += (_, _) => WatchUi.Start(_v.Sh, id, null, _v.S.Watches.ContainsKey(_v.Sh.C.VoiceChannelId));
+        return U.V(2, b, together);
     }
 
     FrameworkElement Reactions(Message m)

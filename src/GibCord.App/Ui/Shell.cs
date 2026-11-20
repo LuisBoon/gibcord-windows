@@ -244,6 +244,9 @@ public sealed class Shell : Grid
             case ChangeKind.Friends:
                 Dirty(side: ServerId == 0, main: ServerId == 0 && ChannelId == 0, rail: true);
                 return;
+            case ChangeKind.Watch:
+                Dirty(side: true, voice: true);
+                return;
             case ChangeKind.Voice:
                 Dirty(side: S.ServerOfChannel(c.Id)?.Id == ServerId || c.Id == C.VoiceChannelId, voice: c.Id == ChannelId);
                 return;

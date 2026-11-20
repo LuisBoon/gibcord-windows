@@ -39,6 +39,12 @@ public static class Demo
             case "friends": sh.Go(0, 0); break;
             case "dm": sh.Go(0, DmOla); break;
             case "voice": sh.C.DemoSpeaker = OlaId; sh.JoinVoiceChannel(Eg, Pogaduchy); break;
+            case "watch":
+                sh.C.Store.Watches[Pogaduchy] = new WatchState { Kind = "yt", VideoId = "jNQXAC9IVRw", Title = "Me at the zoo", State = "playing", Position = 3, UpdatedAt = Format.NowMs(), AddedBy = OlaId, By = OlaId, Key = "demo",
+                    Queue = [new WatchItem { VideoId = "aqz-KE-bpKQ", Title = "Big Buck Bunny", By = KubaId, Qid = "q1" }] };
+                sh.C.DemoSpeaker = OlaId;
+                sh.JoinVoiceChannel(Eg, Pogaduchy);
+                break;
             case "thread": sh.Go(Eg, Ogolne); sh.OpenThread(1); break;
             case "search": sh.Go(Eg, Ogolne); sh.OpenSearch("sobot"); break;
             case "settings": sh.Go(Eg, Ogolne); sh.ShowSettings("profile"); break;

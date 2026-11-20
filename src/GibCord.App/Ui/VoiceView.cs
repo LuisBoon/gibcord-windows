@@ -281,6 +281,7 @@ public sealed class VoiceView : Grid, IDisposable
     readonly List<VoiceTile> _gridTiles = [];
     readonly Dictionary<string, (Image Img, WriteableBitmap? Bmp, long Seen)> _video = [];
     bool _disposed;
+    WatchPanel? _watch;
 
     /// <summary>Kompaktowy: bez nagłówka — scena rozmowy nad czatem w rozmowie prywatnej (kamery, transmisje).</summary>
     public VoiceView(Shell sh, long cid, bool compact = false)
@@ -325,6 +326,8 @@ public sealed class VoiceView : Grid, IDisposable
     {
         _disposed = true;
         _tick.Stop();
+        _watch?.Dispose();
+        _watch = null;
     }
 
     public void Refresh()
@@ -348,7 +351,21 @@ public sealed class VoiceView : Grid, IDisposable
         _gridTiles.Clear();
         var watched = Here ? C.Voice.Feeds.FirstOrDefault(f => f.Screen) : null;
         var me = s.Me.Id;
-        if (watched is not null)
+        // wspólne oglądanie: odtwarzacz na dużo (jeden na cały czas — bez przeładowania przy odświeżeniu)
+        if (Here && s.Watches.ContainsKey(_cid))
+        {
+            _watch ??= new WatchPanel(_sh, _cid);
+            if (_watch.Parent is Panel wp) wp.Children.Remove(_watch);
+            _stage.Rows("*", "auto");
+            _stage.Add(_watch.At(0));
+            var strip0 = U.H(10);
+            strip0.Padding = U.Th(16, 0, 16, 8);
+            foreach (var vm in members) strip0.Add(Tile(vm, srv, 140, 86, vm.UserId == me));
+            _stage.Add(new ScrollViewer { Content = strip0, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollMode = ScrollMode.Disabled }.At(1));
+        }
+        else if (_watch is not null) { _watch.Dispose(); _watch = null; }
+        if (Here && s.Watches.ContainsKey(_cid)) { }
+        else if (watched is not null)
         {
             _stage.Rows("*", "auto");
             var img = VideoImage("screen:" + watched.TrackSid);
@@ -405,7 +422,11 @@ public sealed class VoiceView : Grid, IDisposable
             if (C.Offline || _sh.W.Cam is null) cam.Visibility = Visibility.Collapsed;
             var sb = VoiceUi.SoundboardButton(_sh, 44);
             sb.Background = U.W(.1); sb.CornerRadius = new CornerRadius(22);
-            _controls.Child = U.H(12, mic, deaf, cam, screen, sb, settings, leave).With(p => p.HorizontalAlignment = HorizontalAlignment.Center);
+            var watching = s.Watches.ContainsKey(_cid);
+            var tv = U.IconButton("\uE8B2", watching ? "Dodaj film do kolejki" : "Oglądajcie razem (YouTube)", () => WatchUi.AskVideo(_sh, watching), 16, 44, watching ? U.B("#ffffff") : null);
+            tv.Background = watching ? U.B("#6b2d7c") : U.W(.1); tv.CornerRadius = new CornerRadius(22);
+            if (C.Offline) tv.Visibility = Visibility.Collapsed;
+            _controls.Child = U.H(12, mic, deaf, cam, screen, sb, tv, settings, leave).With(p => p.HorizontalAlignment = HorizontalAlignment.Center);
         }
         else
         {

@@ -133,6 +133,19 @@ public sealed partial class GibCordClient
 
     int BitrateOf(long cid) => Store.ChannelById(cid) is { Bitrate: > 0 } c ? c.Bitrate : 64;
 
+    // ── wspólne oglądanie ──
+
+    /// <summary>Reakcja na wspólnym oglądaniu (latające emoji): pokój, osoba, emoji.</summary>
+    public event Action<long, long, string>? WatchReacted;
+    public static readonly string[] WatchReactions = ["😂", "🔥", "😮", "👏", "❤️", "😢", "👍", "💀"];
+
+    /// <summary>Ramka wspólnego oglądania (watch_set, watch_ctl, watch_queue, watch_unqueue, watch_skip, watch_stop, watch_ended, watch_react).</summary>
+    public void Watch(object frame)
+    {
+        if (VoiceChannelId == 0) { VoiceInfo?.Invoke("Najpierw wejdź na kanał głosowy", true); return; }
+        if (!Offline) _ = _gw?.Send(frame);
+    }
+
     // ── soundboard ──
 
     /// <summary>Dźwięk z soundboardu w moim pokoju (do odtworzenia przez aplikację). Url względny (/sounds/… albo /uploads/…).</summary>
@@ -190,6 +203,12 @@ public sealed partial class GibCordClient
                 VoiceChanged?.Invoke();
                 return;
             }
+            case "watch_react":
+                if (d.Long("channelId") is long rc2 && d.Long("userId") is long ru && d.Str("emoji") is { } emo) WatchReacted?.Invoke(rc2, ru, emo);
+                return;
+            case "error" when d.Str("op") is { } op && op.StartsWith("watch_"):
+                VoiceInfo?.Invoke(d.Str("error") ?? "Nie udało się", true);
+                return;
             case "error" when d.Str("op") == "sound_play":
                 VoiceInfo?.Invoke(d.Str("error") ?? "Nie udało się puścić dźwięku", true);
                 return;
