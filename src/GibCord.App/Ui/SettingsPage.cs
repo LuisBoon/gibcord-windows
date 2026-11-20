@@ -446,6 +446,31 @@ public sealed class SettingsPage : Grid
             Toggle("Pokazuj innym, w co grasz", p.GameDetection, v => { p.GameDetection = v; p.Save(); }),
             Toggle("Pokazuj, czego słuchasz w Spotify", p.MusicDetection, v => { p.MusicDetection = v; p.Save(); }),
             U.T("Gry i muzykę wykrywa ta aplikacja na Twoim komputerze. Po wyłączeniu nikt ich nie zobaczy.", 12, null, Theme.Mu2, wrap: true)));
+        var me = S.Me;
+        var spotify = U.V(8);
+        if (me.SpotifyConnected)
+        {
+            spotify.Add(U.H(8, U.T("🎵 Konto Spotify połączone", 14, U.Semi, Theme.Green)));
+            spotify.Add(Toggle("Pokazuj innym, czego słuchasz (z konta Spotify)", me.ShowActivity, async v =>
+            {
+                try { var u = await Api.PatchMe(new { showActivity = v }); S.Apply(new GatewayEvent("user_update", System.Text.Json.JsonSerializer.SerializeToElement(new { user = u }, Json.Options))); }
+                catch (Exception ex) { Err(ex); }
+            }));
+            spotify.Add(U.Ghost("Rozłącz Spotify", async () =>
+            {
+                try { await Api.DeleteJson("spotify"); Ok("Spotify rozłączone"); Draw(); } catch (Exception ex) { Err(ex); }
+            }, 32).With(b => b.HorizontalAlignment = HorizontalAlignment.Left));
+        }
+        else
+        {
+            spotify.Add(U.T("Połącz konto Spotify, żeby muzyka była widoczna też wtedy, gdy słuchasz na telefonie albo w przeglądarce.", 12.5, null, Theme.Mu, wrap: true));
+            spotify.Add(U.Ghost("Połącz ze Spotify", async () =>
+            {
+                try { var r = await Api.GetJson("spotify/connect"); if (r.Str("url") is { } url) { _ = Launcher.LaunchUriAsync(new Uri(url)); Ok("Dokończ w przeglądarce — potem wróć tutaj"); } }
+                catch (Exception ex) { Err(ex); }
+            }, 32).With(b => b.HorizontalAlignment = HorizontalAlignment.Left));
+        }
+        _body.Add(Card(Label("Spotify"), spotify));
         var blocked = new StackPanel { Spacing = 4 };
         foreach (var uid in S.Blocked)
         {

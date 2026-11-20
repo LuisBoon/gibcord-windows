@@ -194,7 +194,8 @@ public sealed partial class MessageView : Grid
             if (S.U(m.AuthorId) is { Staff: true }) head.Add(U.Box(U.T("GC", 9, U.Bold, Theme.OnAccent), U.B("#f2a93b"), 5, U.Th(4, 1)).With(b => b.Tip("Właściciel GibCorda")));
             if (S.RolesOf(Srv, m.AuthorId).FirstOrDefault(x => !string.IsNullOrEmpty(x.Icon) && !x.Icon!.StartsWith('/') && !x.Icon.StartsWith("http")) is { } ri)
                 head.Add(U.T(ri.Icon!, 13).With(t => t.Tip(ri.Name)));
-            if (m.PinnedAt is not null) head.Add(U.I("", 11, Theme.Mu2).With(i => i.Tip("Przypięta")));
+            if (S.U(m.AuthorId) is { BirthdayToday: true }) head.Add(U.T("🎂", 12).With(t => t.Tip("Dziś ma urodziny!")));
+            if (m.PinnedAt is not null) head.Add(U.I("\uE718", 11, Theme.Mu2).With(i => i.Tip("Przypięta")));
             var time = U.T(Format.When(m.CreatedAt), 11, null, Theme.Mu2);
             time.Tip(Format.Full(m.CreatedAt));
             head.Add(time);
