@@ -16,6 +16,9 @@ public sealed class Row(Message m)
     public bool Grouped { get; set; }
     public bool DaySep { get; set; }
     public bool NewMarker { get; set; }
+    /// <summary>Gotowa treść wiersza (budowana raz) — przy przewijaniu tylko przepinana między widokami, bez budowania od nowa.</summary>
+    internal FrameworkElement? Built;
+    internal int BuiltGen;
 }
 
 /// <summary>Tworzy i ponownie używa widoków wiadomości (lista rysuje tylko to, co widać).</summary>
@@ -84,7 +87,8 @@ public sealed partial class ChatView : Grid, IDisposable
         _lastReadAtOpen = tid != 0 ? S.ThreadById(tid)?.LastRead ?? 0 : S.Reads.GetValueOrDefault(cid);
         this.Rows("48", "*", "20", "auto");
 
-        _rep = new ItemsRepeater { ItemsSource = _rows, ItemTemplate = new MessageFactory(this), Layout = new StackLayout { Spacing = 0 } };
+        // VerticalCacheLength: lista w wolnej chwili przygotowuje ~5 ekranów nad i pod widokiem, więc przewijanie nie czeka na budowanie wiadomości.
+        _rep = new ItemsRepeater { ItemsSource = _rows, ItemTemplate = new MessageFactory(this), Layout = new StackLayout { Spacing = 0 }, VerticalCacheLength = 10 };
         var content = U.V(0, _top, _rep);
         content.Padding = U.Th(0, 0, 0, 12);
         _sv = U.Scroll(content);
@@ -360,9 +364,13 @@ public sealed partial class ChatView : Grid, IDisposable
         }
     }
 
+    /// <summary>Rośnie, gdy zmieniły się dane, z których buduje się treść wiadomości (nicki, awatary, role) — gotowe treści są wtedy budowane od nowa przy następnym pokazaniu.</summary>
+    public int ContentGen { get; private set; }
+
     public void OnChange(StoreChange c)
     {
         if (_disposed) return;
+        if (c.Kind is ChangeKind.All or ChangeKind.User or ChangeKind.Members or ChangeKind.Server or ChangeKind.Me) ContentGen++;
         switch (c.Kind)
         {
             case ChangeKind.MessagesReset:

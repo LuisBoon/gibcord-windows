@@ -34,7 +34,11 @@ public sealed partial class MessageView : Grid
     Server? Srv => _v.Srv;
     GibCordApi Api => _v.Sh.C.Api;
 
-    public void Unbind() { _row = null; ShowTools(false); }
+    /// <summary>Odpina treść, żeby inny widok mógł ją przejąć (lista używa widoków ponownie).</summary>
+    public void Unbind() { _row = null; ShowTools(false); _body.Children.Clear(); }
+
+    /// <summary>Korzeń treści w trakcie budowania — kotwica dymków (profil z @wzmianki), bo treść może potem trafić do innego widoku.</summary>
+    FrameworkElement? _root;
 
     public void Bind(Row row)
     {
@@ -42,12 +46,19 @@ public sealed partial class MessageView : Grid
         var m = row.M;
         _body.Children.Clear();
         _body.RowDefinitions.Clear();
-        Background = Theme.Transparent;
-        var stack = new StackPanel();
-        if (row.DaySep) stack.Children.Add(DaySeparator(m.CreatedAt));
-        if (row.NewMarker) stack.Children.Add(NewSeparator());
-        stack.Children.Add(m.Type == "automod" && m.Automod.ValueKind == System.Text.Json.JsonValueKind.Object ? AutomodCard(m) : m.IsSystem ? SystemLine(m) : S.Blocked.Contains(m.AuthorId) && !_v.Revealed.Contains(m.Id) ? BlockedLine(m, row) : Normal(m, row));
-        _body.Children.Add(stack);
+        Background = !m.IsSystem && m.AuthorId != S.Me.Id && S.MentionsMe(m) ? Theme.MentionedRow : Theme.Transparent;
+        if (row.Built is null || row.BuiltGen != _v.ContentGen || IsStarter)
+        {
+            var stack = new StackPanel();
+            _root = stack;
+            if (row.DaySep) stack.Children.Add(DaySeparator(m.CreatedAt));
+            if (row.NewMarker) stack.Children.Add(NewSeparator());
+            stack.Children.Add(m.Type == "automod" && m.Automod.ValueKind == System.Text.Json.JsonValueKind.Object ? AutomodCard(m) : m.IsSystem ? SystemLine(m) : S.Blocked.Contains(m.AuthorId) && !_v.Revealed.Contains(m.Id) ? BlockedLine(m, row) : Normal(m, row));
+            _root = null;
+            row.Built = stack; row.BuiltGen = _v.ContentGen;
+        }
+        if (row.Built.Parent is Panel old) old.Children.Remove(row.Built); // na wszelki wypadek: treść jeszcze w poprzednim widoku
+        _body.Children.Add(row.Built);
         Opacity = m.Send is SendState.Pending or SendState.Queued ? .55 : 1;
     }
 
@@ -155,7 +166,6 @@ public sealed partial class MessageView : Grid
         var compact = App.Prefs.CompactMessages;
         var grid = new Grid { Padding = U.Th(16, row.Grouped ? (compact ? 0 : 1) : (compact ? 3 : 8), 16, compact ? 0 : 2) }.Cols(compact ? "48" : "56", "*");
         var mentioned = m.AuthorId != S.Me.Id && S.MentionsMe(m);
-        if (mentioned) Background = Theme.MentionedRow;
         var body = new StackPanel { Spacing = 3 };
         var r = 0;
         if (m.ReplyTo is { } rep)
@@ -215,7 +225,10 @@ public sealed partial class MessageView : Grid
         else if (_v.Ch is { IsCardChannel: true } && Markup.ParseAnnouncement(m.Content) is { } ann) { body.Children.Add(AnnouncementCard(ann)); cardDone = true; }
         if (!cardDone && GifOnly(m.Content) is { } gif) body.Children.Add(GifImage(gif));
         else if (!cardDone && !string.IsNullOrEmpty(m.Content))
-            body.Children.Add(RichText.Build(m.Content, new RichText.Ctx(S, Api, Srv, uid => _v.Sh.ShowProfile(uid, this), App.Prefs.MessageFontSize), m.EditedAt is not null));
+        {
+            var anchor = (FrameworkElement?)_root ?? this;
+            body.Children.Add(RichText.Build(m.Content, new RichText.Ctx(S, Api, Srv, uid => _v.Sh.ShowProfile(uid, anchor), App.Prefs.MessageFontSize), m.EditedAt is not null));
+        }
         if (m.Sticker is { } st)
             body.Children.Add(new Image { Source = Images.Get(Api.Abs(st.Url), 320), Width = 160, Height = 160, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left }.With(i => i.Tip(st.Name)));
         if (m.Poll.ValueKind == JsonValueKind.Object) body.Children.Add(Poll(m));
@@ -438,7 +451,8 @@ public sealed partial class MessageView : Grid
 
     FrameworkElement AnnouncementCard(AnnCard c)
     {
-        var ctx = new RichText.Ctx(S, Api, Srv, uid => _v.Sh.ShowProfile(uid, this));
+        var anchor = (FrameworkElement?)_root ?? this;
+        var ctx = new RichText.Ctx(S, Api, Srv, uid => _v.Sh.ShowProfile(uid, anchor));
         var banner = new Grid { Height = 54, Background = Theme.AccentGradient(), Padding = U.Th(14, 0) }.Cols("auto", "*").Add(
             new Image { Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "gibcord.png"))), Width = 34, Height = 34 }.At(0, 0));
         if (c.Chip is { } chip) banner.Add(U.Box(U.T(chip, 11, U.Bold, Theme.Fg), U.B("#2a1630"), 7, U.Th(8, 3)).With(b => { b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = U.Th(12, 0); }).At(0, 1));
