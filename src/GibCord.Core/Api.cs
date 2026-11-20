@@ -144,6 +144,16 @@ public sealed class GibCordApi : IDisposable
         return e.To<Attachment>()!;
     }
 
+    // ── GIF-y ──
+    public Task<GifPage> GifsTrending(string? pos = null, int limit = 24, CancellationToken ct = default) =>
+        Send<GifPage>(HttpMethod.Get, $"gifs/trending?limit={limit}" + (pos is null ? "" : "&pos=" + Uri.EscapeDataString(pos)), ct: ct);
+    public Task<GifPage> GifsSearch(string q, string? pos = null, int limit = 24, CancellationToken ct = default) =>
+        Send<GifPage>(HttpMethod.Get, $"gifs/search?limit={limit}&q={Uri.EscapeDataString(q)}" + (pos is null ? "" : "&pos=" + Uri.EscapeDataString(pos)), ct: ct);
+    public Task<List<GifItem>> GifFavorites(CancellationToken ct = default) => Send<List<GifItem>>(HttpMethod.Get, "gifs/favorites", ct: ct);
+    public Task AddGifFavorite(GifItem g, CancellationToken ct = default) =>
+        Send(HttpMethod.Put, "gifs/favorites", new { url = g.Url, preview = g.Preview ?? g.Url, width = g.Width ?? 0, height = g.Height ?? 0 }, ct);
+    public Task RemoveGifFavorite(string url, CancellationToken ct = default) => Send(HttpMethod.Delete, "gifs/favorites", new { url }, ct);
+
     // ── wątki (serwer 5.10) ──
     public async Task<(ThreadInfo Thread, Message? Starter)> GetThread(long id, CancellationToken ct = default)
     {

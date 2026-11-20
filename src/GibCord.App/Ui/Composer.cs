@@ -58,10 +58,19 @@ public sealed partial class Composer : StackPanel
         _box.Paste += OnPaste;
 
         _attach = U.IconButton("", "Dodaj plik (albo przeciągnij go na czat)", () => _ = PickFiles(), 16, 34);
-        var emoji = U.IconButton("", "Emoji", () => { }, 17, 34);
-        emoji.Click += (_, _) => EmojiPicker.Show(emoji, _v, Insert);
+        var emoji = U.IconButton("\uE76E", "Emoji i naklejki", () => { }, 17, 34);
+        emoji.Click += (_, _) => Picker.Show(emoji, _v, Picker.Tab.Emoji, Insert, SendGif, SendSticker);
+        var gif = new Button
+        {
+            Content = new Border { BorderBrush = Theme.Mu, BorderThickness = U.Th(1.5), CornerRadius = new CornerRadius(4), Padding = U.Th(3, 0), Child = U.T("GIF", 10, U.Bold, Theme.Mu) },
+            Width = 34, Height = 34, Padding = U.Th(0), Background = Theme.Transparent, BorderThickness = U.Th(0), CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Bottom,
+        };
+        gif.Tip("GIF-y");
+        gif.Click += (_, _) => Picker.Show(gif, _v, Picker.Tab.Gif, Insert, SendGif, SendSticker);
+        var right = U.H(0, gif, emoji);
+        right.VerticalAlignment = VerticalAlignment.Bottom;
         var row = new Grid().Cols("auto", "*", "auto").Add(_attach.At(0, 0).With(b => b.VerticalAlignment = VerticalAlignment.Bottom), _box.At(0, 1),
-            emoji.At(0, 2).With(b => b.VerticalAlignment = VerticalAlignment.Bottom));
+            right.At(0, 2));
         row.Margin = U.Th(6, 0, 6, 4);
         var inner = U.V(0, _files, row);
         _frame = new Border { Child = inner, CornerRadius = new CornerRadius(14), Background = Theme.Input, BorderBrush = Theme.InputLine, BorderThickness = U.Th(1) };
@@ -308,6 +317,23 @@ public sealed partial class Composer : StackPanel
         _v.Sh.C.StoppedTyping(_v.Key);
         var error = await _v.Sh.C.Send(_v.Key, text, reply, atts);
         if (error is not null) _v.Sh.Info(error, true);
+    }
+
+    /// <summary>GIF z okienka: wiadomość z adresem (i rozmiarem) — tak samo jak na stronie.</summary>
+    async void SendGif(GifItem g)
+    {
+        var reply = _reply;
+        if (_reply is not null) CancelBar();
+        var err = await _v.Sh.C.Send(_v.Key, g.MessageText, reply);
+        if (err is not null) _v.Sh.Info(err, true);
+    }
+
+    async void SendSticker(Sticker st)
+    {
+        var reply = _reply;
+        if (_reply is not null) CancelBar();
+        var err = await _v.Sh.C.Send(_v.Key, "", reply, null, st);
+        if (err is not null) _v.Sh.Info(err, true);
     }
 
     // ───────────────────────── pliki ─────────────────────────

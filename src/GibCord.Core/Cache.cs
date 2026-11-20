@@ -100,6 +100,18 @@ public sealed class Prefs
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)
     /// <summary>Ustawienia głosu: urządzenia, czułość, „naciśnij, aby mówić”, głośność osób.</summary>
     public Voice.VoiceOptions Voice { get; set; } = new();
+    /// <summary>Ostatnio użyte emoji (najnowsze pierwsze; zwykłe albo &lt;:nazwa:id&gt;).</summary>
+    public List<string> RecentEmoji { get; set; } = [];
+    /// <summary>Szkice wiadomości na kanałach (klucz listy → tekst).</summary>
+    public Dictionary<long, string> Drafts { get; set; } = [];
+
+    public void UseEmoji(string e)
+    {
+        RecentEmoji.Remove(e);
+        RecentEmoji.Insert(0, e);
+        if (RecentEmoji.Count > 24) RecentEmoji.RemoveRange(24, RecentEmoji.Count - 24);
+        Save();
+    }
 
     static string? _path;
     public static Prefs Load(string dir)

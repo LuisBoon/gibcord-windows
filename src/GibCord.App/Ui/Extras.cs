@@ -7,44 +7,6 @@ using Windows.System;
 
 namespace GibCord.App.Ui;
 
-/// <summary>Wybór emoji: najczęstsze + emoji serwerów. (Pełna lista systemowa: Win + kropka.)</summary>
-public static class EmojiPicker
-{
-    static readonly (string Name, string[] Items)[] Groups =
-    [
-        ("Buźki", ["😀", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤩", "🥳", "😏", "😅", "😭", "😢", "😡", "🤯", "😱", "🥺", "😴", "🤔", "🤨", "🙄", "😬", "🤫", "🤡", "💀", "👻", "🤖"]),
-        ("Gesty", ["👍", "👎", "👏", "🙌", "🙏", "🤝", "👋", "✌️", "🤞", "👌", "🤌", "💪", "👀", "🫡", "🫶", "✊"]),
-        ("Serca i znaki", ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "💔", "🔥", "✨", "⭐", "💯", "✅", "❌", "⚠️", "❓", "‼️", "🎉", "🎊"]),
-        ("Inne", ["🎮", "🕹️", "🎧", "🎵", "📺", "📷", "💻", "📱", "⚽", "🏀", "🍕", "🍔", "🍟", "🍿", "☕", "🍺", "🎂", "🌙", "☀️", "🌈", "🐶", "🐱", "🦊", "🐸"]),
-    ];
-
-    public static void Show(FrameworkElement anchor, ChatView v, Action<string> pick)
-    {
-        var panel = new StackPanel { Spacing = 6, Width = 344 };
-        Flyout? fly = null;
-        void Add(string group, IEnumerable<FrameworkElement> items)
-        {
-            panel.Children.Add(U.T(group.ToUpperInvariant(), 10.5, U.Bold, Theme.Mu2).With(t => t.Margin = U.Th(2, 6, 0, 0)));
-            var wrap = new WrapPanel { Spacing = 2 };
-            foreach (var i in items) wrap.Children.Add(i);
-            panel.Children.Add(wrap);
-        }
-        Button Btn(UIElement content, string tip, string value)
-        {
-            var b = new Button { Content = content, Width = 40, Height = 40, Padding = U.Th(0), Background = Theme.Transparent, BorderThickness = U.Th(0), CornerRadius = new CornerRadius(8) };
-            b.Tip(tip);
-            b.Click += (_, _) => { fly?.Hide(); pick(value); };
-            return b;
-        }
-        foreach (var srv in v.S.Servers.Where(s => s.Emojis.Count > 0).OrderByDescending(s => s.Id == v.Srv?.Id))
-            Add(srv.Name, srv.Emojis.Take(40).Select(e => (FrameworkElement)Btn(new Image { Source = Images.Get(v.Sh.C.Api.Abs(e.Url), 56), Width = 26, Height = 26 }, ":" + e.Name + ":", $"<{(e.Animated ? "a" : "")}:{e.Name}:{e.Id}>")));
-        foreach (var (name, items) in Groups) Add(name, items.Select(e => (FrameworkElement)Btn(U.T(e, 20).With(t => t.TextTrimming = TextTrimming.None), e, e)));
-        panel.Children.Add(U.T("Więcej emoji: Win + . (kropka)", 11, null, Theme.Mu2).With(t => t.Margin = U.Th(2, 6, 0, 0)));
-        fly = new Flyout { Content = U.Scroll(panel).With(s => s.MaxHeight = 380), Placement = FlyoutPlacementMode.TopEdgeAlignedRight };
-        fly.ShowAt(anchor);
-    }
-}
-
 /// <summary>Obrazek na cały ekran (klik obok albo Esc zamyka).</summary>
 public static class Lightbox
 {

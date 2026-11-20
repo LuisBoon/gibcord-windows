@@ -56,6 +56,8 @@ public sealed class Shell : Grid
         _updateBar = new Border { Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Top };
         var center = new Grid().Rows("auto", "auto", "*").Add(_connBar.At(0), _updateBar.At(1), _main.At(2));
         _threadHost.KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape && !e.Handled) { e.Handled = true; CloseThread(); } };
+        // panel wątku: szeroki w dużym oknie, węższy w małym (kanał obok ma zostać czytelny)
+        SizeChanged += (_, e) => _threadHost.Width = Math.Clamp(e.NewSize.Width - 68 - 240 - 440, 320, 480);
         this.Add(_rail.At(0, 0), _side.At(0, 1), center.At(0, 2), _threadHost.At(0, 3), _members.At(0, 4));
         _overlay.Add(_toasts);
         _overlay.At(0, 0, colSpan: 5);

@@ -105,6 +105,9 @@ public sealed class Role
     public bool Hoist { get; set; }
     public bool Mentionable { get; set; }
     public string? Icon { get; set; }
+    public bool SelfAssignable { get; set; }
+    public string? Group { get; set; }
+    public string? Description { get; set; }
 }
 
 public sealed class Member
@@ -175,7 +178,49 @@ public sealed class Server
     public List<Channel> Channels { get; set; } = [];
     public List<Member> Members { get; set; } = [];
     public List<Emoji> Emojis { get; set; } = [];
+    public List<Sticker> Stickers { get; set; } = [];
+    public List<Sound> Sounds { get; set; } = [];
     public MyPerms? MyPerms { get; set; }
+    public long CreatedAt { get; set; }
+    public bool Levels { get; set; }
+    public bool LevelMessages { get; set; }
+    public List<long> AutoRoleIds { get; set; } = [];
+    public long? LevelChannelId { get; set; }
+    public string? Banner { get; set; }
+}
+
+public sealed class Sound
+{
+    public long Id { get; set; }
+    public long ServerId { get; set; }
+    public string Name { get; set; } = "";
+    public string? Emoji { get; set; }
+    public string Url { get; set; } = "";
+    public double Volume { get; set; } = 1;
+}
+
+/// <summary>GIF z wyszukiwarki (GIPHY przez serwer) albo z ulubionych.</summary>
+public sealed class GifItem
+{
+    public string? Id { get; set; }
+    public string? Title { get; set; }
+    public string Url { get; set; } = "";
+    public string? Mp4 { get; set; }
+    public string? Preview { get; set; }
+    public int? Width { get; set; }
+    public int? Height { get; set; }
+    public long CreatedAt { get; set; }
+
+    /// <summary>Treść wiadomości z GIF-em: adres + rozmiar (#SZERxWYS), żeby czat od razu zostawił miejsce.</summary>
+    [JsonIgnore] public string MessageText => Url + (Width > 0 && Height > 0 ? $"#{Width}x{Height}" : "");
+}
+
+public sealed class GifPage
+{
+    public bool Enabled { get; set; } = true;
+    public string? Provider { get; set; }
+    public string? Next { get; set; }
+    public List<GifItem> Results { get; set; } = [];
 }
 
 public sealed class Dm
@@ -359,6 +404,17 @@ public sealed class Info
     public string? Registration { get; set; }
     public Limits Limits { get; set; } = new();
     public Dictionary<string, JsonElement> Features { get; set; } = [];
+    public string? GifProvider { get; set; }
+    public List<BuiltinSound> BuiltinSounds { get; set; } = [];
+    public int[]? PollHours { get; set; }
+
+    public bool Has(string feature) => Features.TryGetValue(feature, out var v) && v.ValueKind == JsonValueKind.True;
+}
+
+public sealed class BuiltinSound
+{
+    public string Key { get; set; } = "";
+    public string Url { get; set; } = "";
 }
 
 public sealed class LoginResult

@@ -10,7 +10,7 @@ using Windows.System;
 namespace GibCord.App.Ui;
 
 /// <summary>Jedna wiadomość na liście (z awatarem albo sklejona z poprzednią, z paskiem akcji po najechaniu).</summary>
-public sealed class MessageView : Grid
+public sealed partial class MessageView : Grid
 {
     readonly ChatView _v;
     Row? _row;
@@ -180,20 +180,38 @@ public sealed class MessageView : Grid
         };
     }
 
-    static string? GifOnly(string? content)
+    [System.Text.RegularExpressions.GeneratedRegex(@"^((?:https://(?:media\d*\.giphy\.com|i\.giphy\.com|media\.tenor\.com)|/uploads)/[^\s#]+)(?:#(\d+)x(\d+))?$")]
+    private static partial System.Text.RegularExpressions.Regex GifRe();
+
+    /// <summary>Wiadomość z samym GIF-em (jak na stronie: adres giphy/tenor albo nasz /uploads, opcjonalnie #SZERxWYS).</summary>
+    static (string Url, int W, int H)? GifOnly(string? content)
     {
         var t = content?.Trim();
-        if (string.IsNullOrEmpty(t) || t.Contains(' ') || t.Contains('\n') || !Uri.TryCreate(t, UriKind.Absolute, out var u) || u.Scheme != "https") return null;
-        var host = u.Host;
-        if (host.EndsWith("giphy.com") || host == "media.tenor.com" || u.AbsolutePath.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)) return t;
-        return null;
+        if (string.IsNullOrEmpty(t)) return null;
+        var m = GifRe().Match(t);
+        if (m.Success)
+        {
+            var url = m.Groups[1].Value;
+            if (url.StartsWith("/uploads/") && !System.Text.RegularExpressions.Regex.IsMatch(url, @"\.(gif|webp|png|jpe?g)(\?|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) return null;
+            if (url.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)) return null;
+            return (url, m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : 0, m.Groups[3].Success ? int.Parse(m.Groups[3].Value) : 0);
+        }
+        if (t.Contains(' ') || t.Contains('\n') || !Uri.TryCreate(t, UriKind.Absolute, out var u) || u.Scheme != "https") return null;
+        return u.AbsolutePath.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) ? (t, 0, 0) : null;
     }
 
-    FrameworkElement GifImage(string url) => new Border
+    FrameworkElement GifImage((string Url, int W, int H) g)
     {
-        CornerRadius = new CornerRadius(10), HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 320, MaxHeight = 260, Margin = U.Th(0, 2, 0, 2),
-        Child = new Image { Source = Images.Get(new Uri(url)), Stretch = Stretch.Uniform },
-    };
+        double w = g.W > 0 ? g.W : 300, h = g.H > 0 ? g.H : 220;
+        var k = Math.Min(1, Math.Min(320 / w, 300 / h));
+        w = Math.Round(w * k); h = Math.Round(h * k);
+        var url = Api.Abs(g.Url);
+        var img = new Image { Source = Images.Get(url), Stretch = Stretch.UniformToFill };
+        var b = new Border { CornerRadius = new CornerRadius(10), HorizontalAlignment = HorizontalAlignment.Left, Margin = U.Th(0, 2, 0, 2), Background = U.W(.05), Child = img };
+        if (g.W > 0 && g.H > 0) { b.Width = w; b.Height = h; } else { b.MaxWidth = 320; b.MaxHeight = 300; img.Stretch = Stretch.Uniform; }
+        if (url is not null) b.Tapped += (_, e) => { e.Handled = true; Lightbox.Show(_v.Sh, url, "GIF"); };
+        return b;
+    }
 
     FrameworkElement AttachmentView(Attachment a)
     {
