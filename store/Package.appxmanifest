@@ -37,6 +37,11 @@
         <uap5:Extension Category="windows.startupTask">
           <uap5:StartupTask TaskId="GibCordStartup" Enabled="false" DisplayName="GibCord" />
         </uap5:Extension>
+        <uap5:Extension Category="windows.appExecutionAlias">
+          <uap5:AppExecutionAlias>
+            <uap5:ExecutionAlias Alias="gibcord.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
         <uap:Extension Category="windows.protocol">
           <uap:Protocol Name="gibcord"><uap:DisplayName>GibCord</uap:DisplayName></uap:Protocol>
         </uap:Extension>

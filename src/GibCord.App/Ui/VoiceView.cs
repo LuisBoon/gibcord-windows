@@ -59,11 +59,26 @@ static class VoiceUi
         go.PointerExited += (_, _) => go.Background = Theme.Transparent;
         go.Tapped += (_, _) => sh.OpenChannel(c.VoiceChannelId);
         var leave = U.IconButton(G.HangUp, "Rozłącz", () => _ = c.LeaveVoice(), 15, 32, Theme.Red);
-        var row = new Grid().Cols("*", "auto").Add(go.At(0, 0), leave.At(0, 1));
+        var right = U.H(0);
+        if (!c.Offline && sh.W.Screen is not null)
+            right.Add(U.IconButton(G.Screen, c.Voice.ScreenSharing ? "Zakończ transmisję" : "Udostępnij ekran", () => ToggleScreen(sh), 15, 32, c.Voice.ScreenSharing ? Theme.Red : null));
+        right.Add(leave);
+        var row = new Grid().Cols("*", "auto").Add(go.At(0, 0), right.At(0, 1));
         var box = new Border { Child = row, Padding = U.Th(8, 6, 6, 6), Background = Theme.Rail, BorderBrush = Theme.Line, BorderThickness = U.Th(0, 1, 0, 0) };
         if (c.Voice.ScreenSharing)
             return U.V(0, box, new Border { Background = U.Alpha("#ff4d6a", .18), Padding = U.Th(12, 4), Child = U.T("Nadajesz ekran", 11.5, U.Bold, Theme.Red) });
         return box;
+    }
+
+    /// <summary>Start / koniec transmisji ekranu (systemowe okienko wyboru ekranu albo okna).</summary>
+    public static async void ToggleScreen(Shell sh)
+    {
+        var ss = sh.W.Screen;
+        if (ss is null) return;
+        if (ss.Active || sh.C.Voice.ScreenSharing) { ss.Stop(); sh.RefreshVoice(); return; }
+        var err = await ss.Start(sh.W.Hwnd);
+        if (err is not null) sh.Info(err, true);
+        sh.RefreshVoice();
     }
 
     /// <summary>Przyciski mikrofon / słuchawki w panelu „ja” — działają też poza rozmową (jak na stronie).</summary>
@@ -285,7 +300,11 @@ public sealed class VoiceView : Grid, IDisposable
             ToolTipService.SetToolTip(leave, "Rozłącz");
             var settings = U.IconButton(G.Settings, "Ustawienia głosu", () => VoiceSettings.Show(_sh), 16, 44);
             settings.Background = U.W(.1); settings.CornerRadius = new CornerRadius(22);
-            _controls.Child = U.H(12, mic, deaf, settings, leave).With(p => p.HorizontalAlignment = HorizontalAlignment.Center);
+            var sharing = C.Voice.ScreenSharing;
+            var screen = U.IconButton(G.Screen, sharing ? "Zakończ transmisję" : "Udostępnij ekran", () => VoiceUi.ToggleScreen(_sh), 16, 44, sharing ? U.B("#ffffff") : null);
+            screen.Background = sharing ? Theme.Red2 : U.W(.1); screen.CornerRadius = new CornerRadius(22);
+            if (C.Offline || _sh.W.Screen is null) screen.Visibility = Visibility.Collapsed;
+            _controls.Child = U.H(12, mic, deaf, screen, settings, leave).With(p => p.HorizontalAlignment = HorizontalAlignment.Center);
         }
         else
         {

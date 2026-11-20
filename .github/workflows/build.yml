@@ -186,9 +186,17 @@ jobs:
           Write-Host "Zainstalowano: $($pkg.PackageFullName)"
           New-Item -ItemType Directory -Force zrzuty-sklep | Out-Null
           $out = Join-Path $pwd 'zrzuty-sklep\chat.png'
-          $p = Start-Process -FilePath (Join-Path $pkg.InstallLocation 'GibCord.exe') -ArgumentList '--demo','--view','voice','--screenshot',"`"$out`"" -PassThru
-          if (-not $p.WaitForExit(60000)) { $p.Kill(); Write-Host '::warning::Zrzut z paczki — przekroczony czas' }
+          # alias z manifestu uruchamia aplikację z tożsamością paczki (tak jak ze Sklepu) i przekazuje argumenty
+          $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\gibcord.exe'
+          $p = Start-Process -FilePath $alias -ArgumentList '--demo','--view','voice','--screenshot',"`"$out`"" -PassThru
+          for ($i = 0; $i -lt 60 -and -not (Test-Path $out); $i++) { Start-Sleep 1 }
+          Start-Sleep 2
+          Get-Process GibCord -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           if (Test-Path $out) { Write-Host 'Aplikacja z paczki uruchamia się' } else { Write-Host '::warning::Brak zrzutu z paczki' }
+          $log = Get-ChildItem (Join-Path $env:LOCALAPPDATA "Packages\$($pkg.PackageFamilyName)") -Recurse -Filter dziennik.txt -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($log) { Copy-Item $log.FullName zrzuty-sklep\dziennik.txt; Get-Content $log.FullName -Tail 30 }
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = (Get-Date).AddMinutes(-5) } -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -in 'Application Error','.NET Runtime' } | Select-Object -First 3 | ForEach-Object { Write-Host "[$($_.ProviderName)] $($_.Message)" }
 
       - uses: actions/upload-artifact@v4
         with:

@@ -80,6 +80,9 @@ public sealed class GibCordApi : IDisposable
         return SendRaw(method, path, content, ct);
     }
 
+    /// <summary>Surowy JSON z GET (np. lista gier do wykrywania).</summary>
+    public Task<JsonElement> GetJson(string path, CancellationToken ct = default) => Send(HttpMethod.Get, path, ct: ct);
+
     async Task<T> Send<T>(HttpMethod method, string path, object? body = null, CancellationToken ct = default)
     {
         var e = await Send(method, path, body, ct).ConfigureAwait(false);

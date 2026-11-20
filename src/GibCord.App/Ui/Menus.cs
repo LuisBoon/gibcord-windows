@@ -150,6 +150,8 @@ static class SettingsMenu
         var p = App.Prefs;
         f.Items.Add(M.Item("Głos i dźwięk…", "\uE720", () => VoiceSettings.Show(sh)));
         f.Items.Add(M.Toggle("Dźwięki rozmów", p.Sounds, v => { p.Sounds = v; p.Save(); }));
+        f.Items.Add(M.Toggle("Pokazuj, w co grasz", p.GameDetection, v => { p.GameDetection = v; p.Save(); }));
+        f.Items.Add(M.Toggle("Pokazuj, czego słuchasz w Spotify", p.MusicDetection, v => { p.MusicDetection = v; p.Save(); }));
         f.Items.Add(new MenuFlyoutSeparator());
         f.Items.Add(M.Toggle("Powiadomienia na pulpicie", p.Notifications, v => { p.Notifications = v; p.Save(); }));
         f.Items.Add(M.Toggle("Zamykanie do zasobnika (obok zegara)", p.CloseToTray, v => { p.CloseToTray = v; p.Save(); }));

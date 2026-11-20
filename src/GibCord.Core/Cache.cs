@@ -89,6 +89,9 @@ public sealed class Prefs
     public long LastDm { get; set; }
     public bool Notifications { get; set; } = true;
     public bool Sounds { get; set; } = true;
+    /// <summary>Pokazuj innym, w co grasz (wykrywanie po procesach) i czego słuchasz w Spotify.</summary>
+    public bool GameDetection { get; set; } = true;
+    public bool MusicDetection { get; set; } = true;
     public bool MembersPanel { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)
