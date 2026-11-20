@@ -417,6 +417,8 @@ public sealed class Message
     public JsonElement Game { get; set; }
     public Sticker? Sticker { get; set; }
     public JsonElement Card { get; set; }
+    /// <summary>Karta automoderacji (wiadomość typu „automod” na kanale powiadomień).</summary>
+    public JsonElement Automod { get; set; }
     public string? Nonce { get; set; }
     public string Type { get; set; } = "default";
 

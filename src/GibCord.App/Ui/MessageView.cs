@@ -46,7 +46,7 @@ public sealed partial class MessageView : Grid
         var stack = new StackPanel();
         if (row.DaySep) stack.Children.Add(DaySeparator(m.CreatedAt));
         if (row.NewMarker) stack.Children.Add(NewSeparator());
-        stack.Children.Add(m.IsSystem ? SystemLine(m) : S.Blocked.Contains(m.AuthorId) && !_v.Revealed.Contains(m.Id) ? BlockedLine(m, row) : Normal(m, row));
+        stack.Children.Add(m.Type == "automod" && m.Automod.ValueKind == System.Text.Json.JsonValueKind.Object ? AutomodCard(m) : m.IsSystem ? SystemLine(m) : S.Blocked.Contains(m.AuthorId) && !_v.Revealed.Contains(m.Id) ? BlockedLine(m, row) : Normal(m, row));
         _body.Children.Add(stack);
         Opacity = m.Send == SendState.Pending ? .55 : 1;
     }
@@ -59,6 +59,57 @@ public sealed partial class MessageView : Grid
     static FrameworkElement NewSeparator() => new Grid { Margin = U.Th(16, 6, 16, 2) }.Cols("*", "auto").Add(
         new Rectangle { Height = 1, Fill = Theme.Red, VerticalAlignment = VerticalAlignment.Center }.At(0, 0),
         U.Box(U.T("NOWE", 9.5, U.Bold, U.B("#ffffff")), Theme.Red, 4, U.Th(5, 1)).At(0, 1));
+
+    // ── karta automoderacji: co zatrzymano, reguła, przyciski dla moderatorów ──
+
+    static readonly Dictionary<string, string> AmRule = new()
+    {
+        ["spam"] = "Spam", ["dup"] = "Powtórki", ["mentions"] = "Masowe wzmianki", ["words"] = "Zakazane słowa", ["scam"] = "Oszustwo",
+        ["newlink"] = "Linki od nowych osób", ["profanity"] = "Wulgaryzmy", ["caps"] = "Krzyk",
+    };
+
+    FrameworkElement AutomodCard(Message m)
+    {
+        var a = m.Automod;
+        var open = a.Str("status") == "open";
+        var reportId = a.Long("reportId") ?? 0;
+        var author = a.Long("authorId") ?? 0;
+        var srv = Srv;
+        var head = U.H(8, U.Box(U.H(4, U.I("\uE83D", 11, Theme.OnAccent), U.T("Automoderacja", 10.5, U.Bold, Theme.OnAccent)), Theme.Teal, 6, U.Th(6, 2)),
+            U.T(AmRule.GetValueOrDefault(a.Str("rule") ?? "", a.Str("rule") ?? ""), 13.5, U.Bold), U.T(Format.When(m.CreatedAt), 11, null, Theme.Mu2));
+        var body = U.V(6, head,
+            U.H(8, new Avatar(22).Set(S, Api, author, srv), U.T(S.NameOf(author, srv), 13, U.Bold), U.T("w #" + (a.Str("channelName") ?? ""), 12, null, Theme.Mu)),
+            U.Box(U.T(string.IsNullOrWhiteSpace(a.Str("content")) ? "(bez tekstu)" : a.Str("content")!, 13, null, Theme.Fg, wrap: true), U.W(.05), 8, U.Th(10, 6)),
+            a.Str("match") is { Length: > 0 } match ? U.T("Złapane: " + match, 11.5, null, Theme.Mu2) : null);
+        if (open && srv is not null && _v.CanManage)
+        {
+            async void Act(string k)
+            {
+                try
+                {
+                    Task Resolve(string note) => Api.PatchJson($"reports/{reportId}", new { status = "resolved", handlerNote = note });
+                    switch (k)
+                    {
+                        case "oops": await Api.PostJson($"reports/{reportId}/restore"); _v.Sh.Info("Wiadomość wróciła na kanał"); break;
+                        case "mute": await Api.Timeout(srv.Id, author, 60); await Resolve("Wyciszono na godzinę"); _v.Sh.Info("Wyciszono na godzinę"); break;
+                        case "kick":
+                            if (!await M.Confirm(_v.Sh, "Wyrzucić?", "Osoba zniknie z serwera, ale może wrócić z zaproszeniem.", "Wyrzuć")) return;
+                            await Api.Kick(srv.Id, author); await Resolve("Wyrzucono"); break;
+                        case "ban":
+                            if (!await M.Confirm(_v.Sh, "Zbanować?", "Osoba zniknie z serwera i nie wróci, dopóki nie zdejmiesz bana.", "Zbanuj")) return;
+                            await Api.Ban(srv.Id, author, "Automoderacja: " + AmRule.GetValueOrDefault(a.Str("rule") ?? "", ""), 0); await Resolve("Zbanowano"); break;
+                        default: await Resolve("Załatwione"); break;
+                    }
+                }
+                catch (Exception ex) { _v.Sh.Info(GibCordClient.Friendly(ex), true); }
+            }
+            body.Add(U.H(6, U.Ghost("To pomyłka — przywróć", () => Act("oops"), 28), U.Ghost("Wycisz na 1 h", () => Act("mute"), 28),
+                U.Ghost("Wyrzuć", () => Act("kick"), 28), U.Ghost("Zbanuj", () => Act("ban"), 28), U.Ghost("Załatwione", () => Act("done"), 28)));
+        }
+        else if (!open) body.Add(U.T("✓ " + (a.Str("handlerNote") ?? "Załatwione") + (a.Long("handledBy") is long hb and > 0 ? " · " + S.NameOf(hb, srv) : ""), 12, U.Semi, Theme.Green));
+        var card = new Border { Child = body, Background = U.Alpha("#7fd6cc", .07), BorderBrush = U.Alpha("#7fd6cc", .35), BorderThickness = U.Th(1), CornerRadius = new CornerRadius(12), Padding = U.Th(14, 10), MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left, Opacity = open ? 1 : .7 };
+        return new Grid { Padding = U.Th(16, 6, 16, 6) }.Cols("56", "*").Add(card.At(0, 1));
+    }
 
     // ── wiadomość od zablokowanej osoby: schowana, „Pokaż” odsłania ──
 
