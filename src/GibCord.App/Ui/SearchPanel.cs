@@ -151,9 +151,9 @@ public sealed class SearchPanel : Grid
         long lastChan = -1;
         foreach (var m in r.Messages)
         {
-            if (m.ChannelId != lastChan && _scope != "channel")
+            if (m.Key != lastChan && (_scope != "channel" || m.ThreadId is not null))
             {
-                lastChan = m.ChannelId;
+                lastChan = m.Key;
                 _list.Add(U.T(Where(m, r), 11.5, U.Bold, Theme.Mu2).With(t => t.Margin = U.Th(4, 8, 0, 0)));
             }
             _list.Add(Card(m));

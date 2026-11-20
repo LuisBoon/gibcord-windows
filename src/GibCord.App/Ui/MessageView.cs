@@ -160,7 +160,7 @@ public sealed partial class MessageView : Grid
         if (m.Sticker is { } st)
             body.Children.Add(new Image { Source = Images.Get(Api.Abs(st.Url), 320), Width = 160, Height = 160, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left }.With(i => i.Tip(st.Name)));
         if (m.Poll.ValueKind == JsonValueKind.Object) body.Children.Add(Poll(m));
-        if (m.Game.ValueKind == JsonValueKind.Object && m.Type == "default") body.Children.Add(U.T(GameText(m), 14, U.Semi, Theme.Fg, wrap: true));
+        if (m.Game.ValueKind == JsonValueKind.Object && m.Type == "default") body.Children.Add(Fun.GameView(_v, m));
         foreach (var a in m.Attachments) body.Children.Add(AttachmentView(a));
         foreach (var yt in Markup.YouTubeIds(m.Content)) body.Children.Add(YouTube(yt));
         if (m.Reactions.Count > 0) body.Children.Add(Reactions(m));

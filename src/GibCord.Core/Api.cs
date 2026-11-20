@@ -143,6 +143,12 @@ public sealed class GibCordApi : IDisposable
     public Task UnpinMessage(long id, CancellationToken ct = default) => Send(HttpMethod.Delete, $"messages/{id}/pin", ct: ct);
     public Task VotePoll(long id, IReadOnlyList<long> optionIds, CancellationToken ct = default) => Send(HttpMethod.Put, $"messages/{id}/poll", new { optionIds }, ct);
     public Task ClosePoll(long id, CancellationToken ct = default) => Send(HttpMethod.Post, $"messages/{id}/poll/close", ct: ct);
+    public Task<Message> SendPoll(long channelId, string question, IReadOnlyList<string> options, bool multi, int hours, CancellationToken ct = default) =>
+        Send<Message>(HttpMethod.Post, $"channels/{channelId}/messages", new { content = "", poll = new { question, options, multi, hours } }, ct);
+    /// <summary>Mini-gra: {kind:"dice", count, sides} | {kind:"coin"} | {kind:"pick", options} | {kind:"ttt"|"rps", opponentId}.</summary>
+    public Task<Message> CreateGame(long channelId, object body, CancellationToken ct = default) => Send<Message>(HttpMethod.Post, $"channels/{channelId}/games", body, ct);
+    /// <summary>Ruch: {cell} (kółko i krzyżyk) albo {choice: kamien|papier|nozyce}.</summary>
+    public Task<Message> GameMove(long messageId, object body, CancellationToken ct = default) => Send<Message>(HttpMethod.Post, $"messages/{messageId}/game", body, ct);
     public Task<List<Message>> GetPins(long channelId, CancellationToken ct = default) => Send<List<Message>>(HttpMethod.Get, $"channels/{channelId}/pins", ct: ct);
 
     /// <summary>Wysyła plik (surowe bajty). Zwraca załącznik do dołączenia do wiadomości.</summary>

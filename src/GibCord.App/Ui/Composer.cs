@@ -59,7 +59,8 @@ public sealed partial class Composer : StackPanel
         _box.TextChanged += (_, _) => OnText();
         _box.Paste += OnPaste;
 
-        _attach = U.IconButton("", "Dodaj plik (albo przeciągnij go na czat)", () => _ = PickFiles(), 16, 34);
+        _attach = U.IconButton("\uE710", "Plik, ankieta, mini-gry", () => { }, 16, 34);
+        _attach.Click += (_, _) => Fun.PlusMenu(_v, () => _ = PickFiles(), CanAttach).ShowAt(_attach);
         var emoji = U.IconButton("\uE76E", "Emoji i naklejki", () => { }, 17, 34);
         emoji.Click += (_, _) => Picker.Show(emoji, _v, Picker.Tab.Emoji, Insert, SendGif, SendSticker);
         var gif = new Button
@@ -123,7 +124,7 @@ public sealed partial class Composer : StackPanel
         _blocked.Visibility = why is null ? Visibility.Collapsed : Visibility.Visible;
         ((FrameworkElement)Children[0]).Visibility = why is null ? Visibility.Visible : Visibility.Collapsed;
         _hint.Visibility = why is null ? Visibility.Visible : Visibility.Collapsed;
-        _attach.Visibility = CanAttach ? Visibility.Visible : Visibility.Collapsed;
+        _attach.Visibility = CanAttach || !_v.IsThread ? Visibility.Visible : Visibility.Collapsed;
         _box.PlaceholderText = _v.IsThread ? "Napisz w wątku" : ch is not null ? $"Napisz na #{ch.Name}" : _v.DmObj is { } dm ? $"Napisz do {(dm.IsGroup ? S.DmTitle(dm) : "@" + S.DmOther(dm)?.Name)}" : "Napisz wiadomość";
         _hint.Text = ch is { Slowmode: > 0 } && !S.Can(_v.Cid, Perm.ManageMessages) ? $"Tryb powolny: jedna wiadomość co {ch.Slowmode} s" : "";
     }

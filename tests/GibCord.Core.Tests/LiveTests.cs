@@ -209,6 +209,32 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
     }
 
     [LiveFact]
+    public async Task AnkietyIMiniGry()
+    {
+        var (a, b) = (p.A, p.B);
+        var chan = a.Store.Servers.SelectMany(s => s.Channels).First(x => x.Name == "pogaduchy");
+        // ankieta wielokrotnego wyboru: dwa głosy jednej osoby, potem zamknięcie
+        var poll = await a.Api.SendPoll(chan.Id, "Co w sobotę?", ["kino", "gry", "spacer"], true, 24);
+        var ids = poll.Poll.Prop("options").EnumerateArray().Select(o => o.Long("id")!.Value).ToList();
+        await b.Api.VotePoll(poll.Id, [ids[0], ids[1]]);
+        await a.Api.ClosePoll(poll.Id);
+        var after = (await a.Api.GetMessages(chan.Id, around: poll.Id, limit: 5)).First(m => m.Id == poll.Id);
+        Assert.True(after.Poll.Bool("closed"));
+        Assert.Equal(2, after.Poll.Prop("options").EnumerateArray().Count(o => o.Prop("userIds").EnumerateArray().Any(x => x.GetInt64() == b.Store.Me.Id)));
+
+        // kości i kółko i krzyżyk z ruchem
+        var dice = await a.Api.CreateGame(chan.Id, new { kind = "dice", count = 2, sides = 6 });
+        Assert.Equal(2, dice.Game.Prop("rolls").GetArrayLength());
+        var ttt = await a.Api.CreateGame(chan.Id, new { kind = "ttt", opponentId = b.Store.Me.Id });
+        var turn = ttt.Game.Long("turn")!.Value;
+        var mover = turn == a.Store.Me.Id ? a : b;
+        var moved = await mover.Api.GameMove(ttt.Id, new { cell = 4 });
+        Assert.NotEqual('.', moved.Game.Str("board")![4]);
+        var ex = await Assert.ThrowsAsync<ApiException>(() => mover.Api.GameMove(ttt.Id, new { cell = 0 }));
+        Assert.False(string.IsNullOrEmpty(ex.Message));
+    }
+
+    [LiveFact]
     public async Task PisanieZalacznikIStarszeWiadomosci()
     {
         var (a, b) = (p.A, p.B);
