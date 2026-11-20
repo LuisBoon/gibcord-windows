@@ -29,6 +29,11 @@ public sealed partial class Composer : StackPanel
     readonly Dictionary<string, long> _mentions = [];
     readonly Dictionary<string, long> _roleMentions = [];
     bool _restoring, _draftDirty;
+    Button _mic = null!;
+    VoiceRecorder? _rec;
+    readonly Border _recBar = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(14), Background = U.Alpha("#ff4d6a", .14), BorderBrush = U.Alpha("#ff4d6a", .5), BorderThickness = U.Th(1), Padding = U.Th(14, 8), MinHeight = 50 };
+    readonly TextBlock _recTime = U.T("0:00", 14, U.Bold);
+    Microsoft.UI.Dispatching.DispatcherQueueTimer? _recTimer;
     ReplyRef? _reply;
     Message? _editing;
     List<(string Label, string Insert)> _sugg = [];
@@ -70,7 +75,9 @@ public sealed partial class Composer : StackPanel
         };
         gif.Tip("GIF-y");
         gif.Click += (_, _) => Picker.Show(gif, _v, Picker.Tab.Gif, Insert, SendGif, SendSticker);
-        var right = U.H(0, gif, emoji);
+        _mic = U.IconButton("\uE720", "Wiadomość głosowa (nagraj i wyślij)", () => _ = StartRecording(), 16, 34);
+        _mic.VerticalAlignment = VerticalAlignment.Bottom;
+        var right = U.H(0, _mic, gif, emoji);
         right.VerticalAlignment = VerticalAlignment.Bottom;
         var row = new Grid().Cols("auto", "*", "auto").Add(_attach.At(0, 0).With(b => b.VerticalAlignment = VerticalAlignment.Bottom), _box.At(0, 1),
             right.At(0, 2));
@@ -80,7 +87,13 @@ public sealed partial class Composer : StackPanel
         _box.GotFocus += (_, _) => _frame.BorderBrush = U.Alpha("#ffb98f", .45);
         _box.LostFocus += (_, _) => { _frame.BorderBrush = Theme.InputLine; HideSuggest(); };
 
-        var wrap = U.V(0, _bar, _frame);
+        var cancelRec = U.Ghost("Anuluj", () => _ = StopRecording(false), 32);
+        var sendRec = U.Primary("Wyślij", () => _ = StopRecording(true), 32).With(b => { b.HorizontalAlignment = HorizontalAlignment.Right; b.Width = 110; });
+        _recBar.Child = new Grid().Cols("auto", "auto", "*", "auto", "auto").Add(
+            new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 12, Height = 12, Fill = Theme.Red2, Margin = U.Th(0, 0, 10, 0) }.At(0, 0),
+            U.H(8, U.T("Nagrywanie", 14, U.Semi), _recTime).At(0, 1),
+            cancelRec.With(b => b.Margin = U.Th(0, 0, 8, 0)).At(0, 3), sendRec.At(0, 4));
+        var wrap = U.V(0, _bar, _frame, _recBar);
         wrap.Margin = U.Th(16, 2, 16, 0);
         this.Add(wrap, _hint.With(h => h.Margin = U.Th(20, 3, 16, 8)), _blocked);
         _suggest.Child = new Border { Child = _suggestList, Background = U.B("#F5281f40"), CornerRadius = new CornerRadius(12), BorderBrush = U.W(.14), BorderThickness = U.Th(1), Width = 320 };
@@ -125,6 +138,7 @@ public sealed partial class Composer : StackPanel
         ((FrameworkElement)Children[0]).Visibility = why is null ? Visibility.Visible : Visibility.Collapsed;
         _hint.Visibility = why is null ? Visibility.Visible : Visibility.Collapsed;
         _attach.Visibility = CanAttach || !_v.IsThread ? Visibility.Visible : Visibility.Collapsed;
+        _mic.Visibility = CanAttach && !_v.Sh.C.Offline ? Visibility.Visible : Visibility.Collapsed;
         _box.PlaceholderText = _v.IsThread ? "Napisz w wątku" : ch is not null ? $"Napisz na #{ch.Name}" : _v.DmObj is { } dm ? $"Napisz do {(dm.IsGroup ? S.DmTitle(dm) : "@" + S.DmOther(dm)?.Name)}" : "Napisz wiadomość";
         _hint.Text = ch is { Slowmode: > 0 } && !S.Can(_v.Cid, Perm.ManageMessages) ? $"Tryb powolny: jedna wiadomość co {ch.Slowmode} s" : "";
     }
@@ -372,6 +386,50 @@ public sealed partial class Composer : StackPanel
         _v.Sh.C.StoppedTyping(_v.Key);
         var error = await _v.Sh.C.Send(_v.Key, text, reply, atts);
         if (error is not null) _v.Sh.Info(error, true);
+    }
+
+    // ───────────────────────── wiadomość głosowa ─────────────────────────
+
+    async Task StartRecording()
+    {
+        if (_rec is not null) return;
+        if (!CanAttach) { _v.Sh.Info("Na tym kanale nie można wysyłać plików ani nagrań.", true); return; }
+        if (_v.Sh.C.VoiceChannelId != 0) { _v.Sh.Info("Najpierw wyjdź z rozmowy — mikrofon jest teraz zajęty przez rozmowę.", true); return; }
+        _rec = new VoiceRecorder();
+        var err = await _rec.Start();
+        if (err is not null) { _rec = null; _v.Sh.Info(err, true); return; }
+        _frame.Visibility = Visibility.Collapsed;
+        _recBar.Visibility = Visibility.Visible;
+        _recTime.Text = "0:00";
+        _recTimer = DispatcherQueue.CreateTimer();
+        _recTimer.Interval = TimeSpan.FromMilliseconds(250);
+        _recTimer.Tick += (_, _) =>
+        {
+            if (_rec is null) return;
+            var t = _rec.Elapsed;
+            _recTime.Text = $"{(int)t.TotalMinutes}:{t.Seconds:00}";
+            if (t.TotalMinutes >= 5) _ = StopRecording(true); // najwyżej 5 minut
+        };
+        _recTimer.Start();
+    }
+
+    async Task StopRecording(bool send)
+    {
+        var rec = _rec;
+        if (rec is null) return;
+        _rec = null;
+        _recTimer?.Stop();
+        _recBar.Visibility = Visibility.Collapsed;
+        _frame.Visibility = Visibility.Visible;
+        var r = await rec.Stop(send);
+        if (!send || r is not { } got) return;
+        if (got.Seconds < 1 || got.Data.Length < 1000) { _v.Sh.Info("Nagranie jest za krótkie.", true); return; }
+        var reply = _reply;
+        if (_reply is not null) CancelBar();
+        var (att, err) = await _v.Sh.C.Upload(new MemoryStream(got.Data), $"wiadomosc-glosowa-{got.Seconds}s.m4a", "audio/mp4", got.Data.Length);
+        if (err is not null || att is null) { _v.Sh.Info(err ?? "Nie udało się wysłać nagrania", true); return; }
+        var e2 = await _v.Sh.C.Send(_v.Key, "", reply, [att]);
+        if (e2 is not null) _v.Sh.Info(e2, true);
     }
 
     /// <summary>GIF z okienka: wiadomość z adresem (i rozmiarem) — tak samo jak na stronie.</summary>

@@ -240,7 +240,9 @@ public sealed partial class MessageView : Grid
             b.Tip(a.Name);
             return b;
         }
-        var icon = a.Mime.StartsWith("video/") ? "" : a.Mime.StartsWith("audio/") ? "" : a.Mime == "application/pdf" ? "" : "";
+        if (url is not null && a.Mime.StartsWith("video/") && a.Mime is "video/mp4" or "video/webm" or "video/quicktime" or "video/x-matroska") return MediaViews.Video(url, a);
+        if (url is not null && a.Mime.StartsWith("audio/")) return MediaViews.Audio(url, a);
+        var icon = a.Mime.StartsWith("video/") ? "\uE714" : a.Mime.StartsWith("audio/") ? "\uE8D6" : a.Mime == "application/pdf" ? "\uEA90" : "\uE8A5";
         var card = new Grid { Width = 360, HorizontalAlignment = HorizontalAlignment.Left }.Cols("auto", "*", "auto").Add(
             U.I(icon, 26, Theme.Accent).At(0, 0),
             U.V(1, U.T(a.Name, 13.5, U.Semi, RichText.LinkBrush), U.T(Format.Size(a.Size), 11.5, null, Theme.Mu2)).With(p => p.Margin = U.Th(12, 0)).At(0, 1),
