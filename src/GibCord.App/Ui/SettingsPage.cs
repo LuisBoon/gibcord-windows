@@ -581,6 +581,7 @@ public sealed class SettingsPage : Grid
             Shortcut("Ctrl+F", "Szukaj wiadomości"),
             Shortcut("Ctrl+I", "Skrzynka: wzmianki, zapisane, przypomnienia"),
             Shortcut("Alt+↑ / Alt+↓", "Poprzedni / następny kanał"),
+            Shortcut("Alt+Shift+↑ / ↓", "Poprzedni / następny nieprzeczytany kanał"),
             Shortcut("Alt+← / Alt+→", "Wstecz / dalej"),
             Shortcut("↑ w pustym polu", "Edytuj ostatnią wiadomość"),
             Shortcut("Ctrl+Shift+O", "Nakładka w grze"),

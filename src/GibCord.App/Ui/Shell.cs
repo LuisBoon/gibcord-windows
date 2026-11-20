@@ -98,6 +98,8 @@ public sealed class Shell : Grid
         Accel(VirtualKey.Right, VirtualKeyModifiers.Menu, Forward);
         Accel(VirtualKey.Up, VirtualKeyModifiers.Menu, () => Step(-1));
         Accel(VirtualKey.Down, VirtualKeyModifiers.Menu, () => Step(1));
+        Accel(VirtualKey.Up, VirtualKeyModifiers.Menu | VirtualKeyModifiers.Shift, () => StepUnread(-1));
+        Accel(VirtualKey.Down, VirtualKeyModifiers.Menu | VirtualKeyModifiers.Shift, () => StepUnread(1));
 
         if (S.Loaded) Loaded += (_, _) => NavigateInitial();
         else ShowLoading();
@@ -553,6 +555,23 @@ public sealed class Shell : Grid
         var i = ids.IndexOf(ChannelId);
         var j = Math.Clamp(i < 0 ? 0 : i + dir, 0, ids.Count - 1);
         if (ids[j] != ChannelId) Go(ServerId, ids[j]);
+    }
+
+    /// <summary>Alt+Shift+↑/↓: poprzedni / następny nieprzeczytany kanał (wszystkie serwery po kolei, potem rozmowy prywatne).</summary>
+    void StepUnread(int dir)
+    {
+        var all = new List<(long S, long C)>();
+        foreach (var srv in S.Servers)
+            foreach (var c in S.ChannelTree(srv).SelectMany(g => g.Channels).Where(c => !c.IsVoice)) all.Add((srv.Id, c.Id));
+        foreach (var d in S.DmsSorted()) all.Add((0, d.Id));
+        var i = all.FindIndex(x => x.C == ChannelId);
+        for (var k = 1; k <= all.Count; k++)
+        {
+            var j = ((i < 0 ? (dir > 0 ? -1 : 0) : i) + dir * k % all.Count + all.Count * 2) % all.Count;
+            var (sid, cid) = all[j];
+            if (cid != ChannelId && S.IsUnread(cid) && !S.ChannelMuted(cid)) { Go(sid, cid); return; }
+        }
+        Info("Wszystko przeczytane 🎉");
     }
 
     public bool MembersVisible => App.Prefs.MembersPanel;
