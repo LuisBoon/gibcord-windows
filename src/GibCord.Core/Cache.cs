@@ -99,6 +99,8 @@ public sealed class Prefs
     public string OverlayCorner { get; set; } = "tl";
     /// <summary>Rozmiar nakładki: s (mała), m (zwykła), l (duża).</summary>
     public string OverlaySize { get; set; } = "m";
+    /// <summary>Motyw kolorów (zapamiętany lokalnie, żeby działał od pierwszej klatki; źródło prawdy: me.settings.theme).</summary>
+    public string Theme { get; set; } = "glass";
     public bool MembersPanel { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)

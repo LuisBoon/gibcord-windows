@@ -52,6 +52,7 @@ public static class Demo
             case "srvroles": sh.Go(Eg, Ogolne); sh.ShowServerSettings(Eg, "roles", selectRole: 1); break;
             case "srvmembers": sh.Go(Eg, Ogolne); sh.ShowServerSettings(Eg, "members"); break;
             case "setapp": sh.Go(Eg, Ogolne); sh.ShowSettings("app"); break;
+            case "forest": sh.W.ApplyTheme("forest"); break;
             case "dmcall":
                 sh.C.Store.Voice[DmOla] = [new VoiceMember { UserId = OlaId, Video = true }];
                 sh.C.DemoSpeaker = OlaId;

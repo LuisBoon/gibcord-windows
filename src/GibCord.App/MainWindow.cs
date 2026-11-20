@@ -56,7 +56,8 @@ public sealed class MainWindow : Window
 
         TitleBar = new TitleBarView(this);
         _root = new Grid().Rows("32", "*");
-        _root.Add(Theme.Backdrop().At(0, 0, rowSpan: 2), TitleBar.At(0), _host.At(1));
+        _backdrop = Theme.Backdrop().At(0, 0, rowSpan: 2);
+        _root.Add(_backdrop, TitleBar.At(0), _host.At(1));
         Content = _root;
         SetTitleBar(TitleBar.DragArea);
         TitleBar.SizeChanged += (_, _) => UpdateTitleBarRegions();
@@ -130,6 +131,7 @@ public sealed class MainWindow : Window
         };
         Client.Notify += OnNotify;
         Client.FriendRequest += u => { if (App.Prefs.Notifications) Toasts.Show("Zaproszenie do znajomych", $"{u.Name} chce dodać Cię do znajomych", 0, "fr" + u.Id); };
+        Client.Store.Changed += c => { if (c.Kind is ChangeKind.All or ChangeKind.Me) Dq.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, SyncThemeFromAccount); };
         Client.Store.Changed += c => { if (c.Kind is ChangeKind.All or ChangeKind.Reads or ChangeKind.Dms or ChangeKind.MessageAdded or ChangeKind.Notify or ChangeKind.Servers) UpdateUnread(); };
 
         Toasts.Init(OpenFromNotification);
@@ -185,6 +187,34 @@ public sealed class MainWindow : Window
         }
         catch (Exception ex) { App.Log("Pełny ekran: " + ex.Message); }
         TitleBar.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    Grid _backdrop;
+
+    /// <summary>Zmiana motywu: nowe kolory, nowe tło i przebudowa widoków (stan i rozmowa zostają).</summary>
+    public void ApplyTheme(string name)
+    {
+        if (Theme.Name == name && App.Prefs.Theme == name) return;
+        Theme.Apply(name);
+        App.Prefs.Theme = Theme.Name;
+        App.Prefs.Save();
+        var nb = Theme.Backdrop().At(0, 0, rowSpan: 2);
+        var i = _root.Children.IndexOf(_backdrop);
+        if (i >= 0) _root.Children[i] = nb; else _root.Children.Insert(0, nb);
+        _backdrop = nb;
+        if (_shell is not null)
+        {
+            var reopen = _shell.SettingsOpen;
+            ShowShell();
+            if (reopen) Dq.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => _shell?.ShowSettings("app"));
+        }
+    }
+
+    /// <summary>Motyw z konta (ustawiony na stronie albo na innym urządzeniu).</summary>
+    void SyncThemeFromAccount()
+    {
+        var t = Client.Store.Me.Settings.Str("theme");
+        if (t is not null && t != Theme.Name && t != "light") ApplyTheme(t);
     }
 
     public void ShowEmailGate()

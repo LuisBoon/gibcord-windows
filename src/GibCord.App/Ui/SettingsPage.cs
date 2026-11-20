@@ -515,6 +515,35 @@ public sealed class SettingsPage : Grid
         _body.MaxWidth = 720;
         Title("Aplikacja", $"GibCord {Updater.Version} dla Windows.");
         var p = App.Prefs;
+        // motyw (wspólny ze stroną — zapisany na koncie)
+        var themes = new WrapPanel { Spacing = 10 };
+        foreach (var (key, name, desc) in Theme.All)
+        {
+            var on = Theme.Name == key;
+            var (c1, c2, bg) = key switch { "midnight" => ("#ffb98f", "#e8708f", "#000000"), "forest" => ("#d9ed92", "#76c893", "#0f1a14"), "cherry" => ("#ffb3c6", "#ff4d6d", "#1a0a14"), _ => ("#ffb98f", "#e8708f", "#1b1531") };
+            var sw = new Grid { Width = 120, Height = 64 }.Add(new Border { Background = U.B(bg), CornerRadius = new CornerRadius(10) },
+                new Border { Width = 46, Height = 14, CornerRadius = new CornerRadius(7), Margin = U.Th(10), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom,
+                    Background = new LinearGradientBrush { StartPoint = new(0, 0), EndPoint = new(1, 1), GradientStops = { new GradientStop { Color = U.C(c1), Offset = 0 }, new GradientStop { Color = U.C(c2), Offset = 1 } } } });
+            var card = new Border { Child = U.V(6, sw, U.T(name, 13, U.Bold), U.T(desc, 11, null, Theme.Mu2, wrap: true).With(t => t.MaxWidth = 120)), Padding = U.Th(8), CornerRadius = new CornerRadius(12),
+                BorderBrush = on ? Theme.Accent : U.W(.08), BorderThickness = U.Th(2), Background = U.W(.03) };
+            var k = key;
+            card.Tapped += async (_, _) =>
+            {
+                try
+                {
+                    var settings = new Dictionary<string, object?>();
+                    if (S.Me.Settings.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        foreach (var pr in S.Me.Settings.EnumerateObject()) settings[pr.Name] = pr.Value;
+                    settings["theme"] = k;
+                    var u = await Api.PatchMe(new { settings });
+                    S.Apply(new GatewayEvent("user_update", System.Text.Json.JsonSerializer.SerializeToElement(new { user = u }, Json.Options)));
+                }
+                catch (Exception ex) { Err(ex); }
+                _sh.W.ApplyTheme(k);
+            };
+            themes.Children.Add(card);
+        }
+        _body.Add(Card(Label("Motyw"), themes, U.T("Motyw zapisuje się na koncie — strona i telefon też go dostaną.", 11.5, null, Theme.Mu2, wrap: true)));
         _body.Add(Card(Label("Okno"),
             Toggle("Zamykanie do zasobnika (obok zegara)", p.CloseToTray, v => { p.CloseToTray = v; p.Save(); }),
             Toggle("Uruchamiaj razem z Windowsem", AutoStart.Enabled, AutoStart.Set),

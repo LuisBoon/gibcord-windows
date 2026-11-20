@@ -572,6 +572,8 @@ public sealed class Shell : Grid
     // ── ustawienia na całe okno ──
     SettingsPage? _settings;
 
+    public bool SettingsOpen => _settings is not null;
+
     public void ShowSettings(string section = "profile")
     {
         if (_settings is not null) CloseSettings();

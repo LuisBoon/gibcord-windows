@@ -25,8 +25,28 @@ public static class Theme
     public static readonly Brush Fg = U.B("#f6f2fb");
     public static readonly Brush Mu = U.W(.62);
     public static readonly Brush Mu2 = U.W(.42);
-    public static readonly Brush Accent = U.B("#ffb98f");
-    public static readonly Brush OnAccent = U.B("#2a1630");
+    public static Brush Accent { get; private set; } = U.B("#ffb98f");
+    public static Brush OnAccent { get; private set; } = U.B("#2a1630");
+
+    /// <summary>Motyw (jak na stronie): glass, midnight, forest, cherry. Jasnego w aplikacji nie ma.</summary>
+    public static string Name { get; private set; } = "glass";
+    static (string A, string G1, string G2, string On, string Base, string B1, string B2, string B3) _p = ("#ffb98f", "#ffb98f", "#e8708f", "#2a1630", "#1b1531", "#1d6b74", "#6b2d7c", "#c6653f");
+    public static readonly (string Key, string Name, string Desc)[] All = [("glass", "Szkło", "morski, śliwka, pomarańcz"), ("midnight", "Północ", "czysta czerń (OLED)"), ("forest", "Las", "zielenie i złoto"), ("cherry", "Wiśnia", "róże i czerwienie")];
+
+    /// <summary>Ustawia kolory motywu. Działa dla nowo budowanych widoków — okno przebudowuje się po zmianie.</summary>
+    public static void Apply(string? name)
+    {
+        Name = name is "midnight" or "forest" or "cherry" ? name : "glass";
+        _p = Name switch
+        {
+            "midnight" => ("#ffb98f", "#ffb98f", "#e8708f", "#2a1630", "#000000", "#0b0b10", "#0b0b10", "#0b0b10"),
+            "forest" => ("#b5e48c", "#d9ed92", "#76c893", "#13240f", "#0f1a14", "#2d6a4f", "#40513b", "#b08a3a"),
+            "cherry" => ("#ff8fab", "#ffb3c6", "#ff4d6d", "#33000f", "#1a0a14", "#7a1238", "#3c1053", "#ff6b6b"),
+            _ => ("#ffb98f", "#ffb98f", "#e8708f", "#2a1630", "#1b1531", "#1d6b74", "#6b2d7c", "#c6653f"),
+        };
+        Accent = U.B(_p.A);
+        OnAccent = U.B(_p.On);
+    }
     public static readonly Brush Green = U.B("#6fe3a5");
     public static readonly Brush Red = U.B("#ff6b81");
     public static readonly Brush Red2 = U.B("#ff4d6a");
@@ -54,7 +74,7 @@ public static class Theme
     public static LinearGradientBrush AccentGradient() => new()
     {
         StartPoint = new(0, 0), EndPoint = new(1, 1),
-        GradientStops = { new GradientStop { Color = U.C("#ffb98f"), Offset = 0 }, new GradientStop { Color = U.C("#e8708f"), Offset = 1 } },
+        GradientStops = { new GradientStop { Color = U.C(_p.G1), Offset = 0 }, new GradientStop { Color = U.C(_p.G2), Offset = 1 } },
     };
 
     /// <summary>Tło okna: trzy miękkie plamy (morski, śliwkowy, pomarańczowy) na granacie — rysowane raz, bez rozmycia na żywo.</summary>
@@ -68,10 +88,11 @@ public static class Theme
                 GradientStops = { new GradientStop { Color = U.C(color), Offset = 0 }, new GradientStop { Color = U.C("#00" + color[1..]), Offset = 1 } },
             },
         };
-        var g = new Grid { Background = U.B("#1b1531"), IsHitTestVisible = false };
-        g.Children.Add(Blob("#1d6b74", .08, .08, .62, .75));
-        g.Children.Add(Blob("#6b2d7c", .92, .14, .58, .70));
-        g.Children.Add(Blob("#c6653f", .70, 1.05, .60, .60));
+        var g = new Grid { Background = U.B(_p.Base), IsHitTestVisible = false };
+        if (Name == "midnight") return g; // OLED: czysta czerń
+        g.Children.Add(Blob(_p.B1, .08, .08, .62, .75));
+        g.Children.Add(Blob(_p.B2, .92, .14, .58, .70));
+        g.Children.Add(Blob(_p.B3, .70, 1.05, .60, .60));
         return g;
     }
 

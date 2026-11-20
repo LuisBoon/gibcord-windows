@@ -39,6 +39,7 @@ public sealed class App : Application, IXamlMetadataProvider
             Resources.MergedDictionaries.Add(new XamlControlsResources());
             Directory.CreateDirectory(DataDir);
             Prefs = Prefs.Load(DataDir);
+            Ui.Theme.Apply(Prefs.Theme);
             Log("OnLaunched: okno");
             Window = new MainWindow();
             Log("OnLaunched: start");
