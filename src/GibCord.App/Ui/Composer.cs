@@ -31,6 +31,8 @@ public sealed partial class Composer : StackPanel
     bool _restoring, _draftDirty, _submitting;
     string? _restoredText;
     Button _mic = null!;
+    Button _later = null!;
+    readonly Later.Bar _schedBar;
     VoiceRecorder? _rec;
     readonly Border _recBar = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(14), Background = U.Alpha("#ff4d6a", .14), BorderBrush = U.Alpha("#ff4d6a", .5), BorderThickness = U.Th(1), Padding = U.Th(14, 8), MinHeight = 50 };
     readonly TextBlock _recTime = U.T("0:00", 14, U.Bold);
@@ -79,7 +81,12 @@ public sealed partial class Composer : StackPanel
         gif.Click += (_, _) => Picker.Show(gif, _v, Picker.Tab.Gif, Insert, SendGif, SendSticker);
         _mic = U.IconButton("\uE720", "Wiadomość głosowa (nagraj i wyślij)", () => _ = StartRecording(), 16, 34);
         _mic.VerticalAlignment = VerticalAlignment.Bottom;
-        var right = U.H(0, _mic, gif, emoji);
+        // „Wyślij później” — tylko gdy serwer to obsługuje (nowy serwer)
+        _later = U.IconButton("\uE823", "Wyślij później", () => { }, 16, 34);
+        _later.VerticalAlignment = VerticalAlignment.Bottom;
+        _later.Click += (_, _) => OpenLater();
+        _schedBar = new Later.Bar(_v);
+        var right = U.H(0, _later, _mic, gif, emoji);
         right.VerticalAlignment = VerticalAlignment.Bottom;
         var row = new Grid().Cols("auto", "*", "auto").Add(_attach.At(0, 0).With(b => b.VerticalAlignment = VerticalAlignment.Bottom), _box.At(0, 1),
             right.At(0, 2));
@@ -95,11 +102,12 @@ public sealed partial class Composer : StackPanel
             new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 12, Height = 12, Fill = Theme.Red2, Margin = U.Th(0, 0, 10, 0) }.At(0, 0),
             U.H(8, U.T("Nagrywanie", 14, U.Semi), _recTime).At(0, 1),
             cancelRec.With(b => b.Margin = U.Th(0, 0, 8, 0)).At(0, 3), sendRec.At(0, 4));
-        var wrap = U.V(0, _bar, _frame, _recBar);
+        var wrap = U.V(0, _schedBar.Root, _bar, _frame, _recBar);
         wrap.Margin = U.Th(16, 2, 16, 0);
         this.Add(wrap, _hint.With(h => h.Margin = U.Th(20, 3, 16, 8)), _blocked);
         _suggest.Child = new Border { Child = _suggestList, Background = U.B("#F5281f40"), CornerRadius = new CornerRadius(12), BorderBrush = U.W(.14), BorderThickness = U.Th(1), Width = 320 };
-        Loaded += (_, _) => _suggest.XamlRoot = XamlRoot;
+        Loaded += (_, _) => { _suggest.XamlRoot = XamlRoot; _v.Sh.S.Changed += OnStoreChanged; RefreshLater(); };
+        Unloaded += (_, _) => _v.Sh.S.Changed -= OnStoreChanged;
         RefreshState();
         // szkic z poprzedniej wizyty na tym kanale
         if (App.Prefs.Drafts.TryGetValue(_v.Key, out var draft) && !string.IsNullOrEmpty(draft))
@@ -393,7 +401,7 @@ public sealed partial class Composer : StackPanel
             U.T(text, 12.5, U.Semi, Theme.Mu).With(t => t.Margin = U.Th(8, 0)).At(0, 1),
             U.IconButton("", "Anuluj (Esc)", CancelBar, 11, 24).At(0, 2));
         _bar.Visibility = Visibility.Visible;
-        _frame.CornerRadius = new CornerRadius(0, 0, 14, 14);
+        RefreshLater();
     }
 
     void CancelBar()
@@ -402,7 +410,63 @@ public sealed partial class Composer : StackPanel
         _editing = null;
         _reply = null;
         _bar.Visibility = Visibility.Collapsed;
-        _frame.CornerRadius = new CornerRadius(14);
+        RefreshLater();
+    }
+
+    // ───────────────────────── wyślij później ─────────────────────────
+
+    void OnStoreChanged(StoreChange ch) { if (ch.Kind is ChangeKind.Scheduled or ChangeKind.All) RefreshLater(); }
+
+    void RefreshLater()
+    {
+        _later.Visibility = _v.Sh.C.CanSchedule && _editing is null && _rec is null ? Visibility.Visible : Visibility.Collapsed;
+        _schedBar.Refresh();
+        // zaokrąglenia: pasek zaplanowanych / odpowiedzi nad polem pisania łączą się z nim
+        var sched = _schedBar.Visible;
+        var bar = _bar.Visibility == Visibility.Visible;
+        _bar.CornerRadius = sched ? new CornerRadius(0) : new CornerRadius(12, 12, 0, 0);
+        _frame.CornerRadius = sched || bar ? new CornerRadius(0, 0, 14, 14) : new CornerRadius(14);
+    }
+
+    void OpenLater()
+    {
+        if (Encode(_box.Text).Trim().Length == 0 && !_pending.Any(p => p.Att is not null || p.Upload is { IsCompleted: false }))
+        {
+            _v.Sh.Info("Najpierw napisz wiadomość, a potem wybierz, kiedy ma wyjść.");
+            FocusBox();
+            return;
+        }
+        Later.Menu(_v.Sh, w => _ = SubmitLater(w), "Wyślij później").ShowAt(_later);
+    }
+
+    async Task SubmitLater(DateTimeOffset when)
+    {
+        if (_submitting) return;
+        _submitting = true;
+        try
+        {
+            HideSuggest();
+            if (_pending.Any(p => p.Upload is { IsCompleted: false }))
+            {
+                _v.Sh.Info("Poczekaj, aż pliki się wyślą…");
+                await Task.WhenAll(_pending.Where(p => p.Upload is not null).Select(p => p.Upload!));
+            }
+            var text = Encode(_box.Text).Trim();
+            var atts = _pending.Where(p => p.Att is not null).Select(p => p.Att!).ToList();
+            if (text.Length == 0 && atts.Count == 0) return;
+            var err = await _v.Sh.C.Schedule(_v.Key, text, atts, _reply, when);
+            if (err is not null) { _v.Sh.Info(err, true); return; }
+            _box.Text = "";
+            _mentions.Clear();
+            _roleMentions.Clear();
+            App.Prefs.Drafts.Remove(_v.Key);
+            _draftDirty = true;
+            CancelBar();
+            ClearFiles();
+            _v.Sh.C.StoppedTyping(_v.Key);
+            _v.Sh.Info("Zaplanowano: " + Later.When(when.ToUnixTimeMilliseconds()));
+        }
+        finally { _submitting = false; }
     }
 
     // ───────────────────────── wysyłanie ─────────────────────────

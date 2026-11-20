@@ -5,7 +5,7 @@ namespace GibCord.Core;
 public enum ChangeKind
 {
     All, Me, Servers, Server, Members, Dms, User, Presence, Reads, Friends, Voice, Typing,
-    MessageAdded, MessageUpdated, MessageRemoved, MessagesReset, Notify, Blocked, Announcement, Thread, Watch,
+    MessageAdded, MessageUpdated, MessageRemoved, MessagesReset, Notify, Blocked, Announcement, Thread, Watch, Scheduled, Notes,
 }
 
 /// <summary>Co się zmieniło. <c>Id</c> = serwer / użytkownik / kanał, zależnie od rodzaju.</summary>
@@ -47,6 +47,16 @@ public sealed class Store
     public Dictionary<long, MessageWindow> Windows { get; } = [];
     /// <summary>Znane wątki (z wiadomości, list i zdarzeń). Okno wiadomości wątku: <c>Windows[-id]</c>.</summary>
     public Dictionary<long, ThreadInfo> Threads { get; } = [];
+    /// <summary>Moje zaplanowane wiadomości (id → wiadomość).</summary>
+    public Dictionary<long, ScheduledMessage> Scheduled { get; } = [];
+    /// <summary>Moje notatki o osobach (id osoby → treść).</summary>
+    public Dictionary<long, string> Notes { get; } = [];
+    public IEnumerable<ScheduledMessage> ScheduledFor(long key) => Scheduled.Values.Where(s => s.Key == key).OrderBy(s => s.SendAt);
+    public void LoadScheduled(IEnumerable<ScheduledMessage> list) { Scheduled.Clear(); foreach (var s in list) Scheduled[s.Id] = s; Raise(ChangeKind.Scheduled); }
+    public void UpsertScheduled(ScheduledMessage s) { Scheduled[s.Id] = s; Raise(ChangeKind.Scheduled, s.Id, s.ChannelId); }
+    public void RemoveScheduled(long id) { if (Scheduled.Remove(id, out var g)) Raise(ChangeKind.Scheduled, id, g.ChannelId); }
+    public void LoadNotes(IReadOnlyDictionary<long, string> notes) { Notes.Clear(); foreach (var (k, v) in notes) Notes[k] = v; Raise(ChangeKind.Notes); }
+    public void SetNoteLocal(long uid, string? note) { if (string.IsNullOrEmpty(note)) Notes.Remove(uid); else Notes[uid] = note; Raise(ChangeKind.Notes, uid); }
     /// <summary>Ile wzmianek z danego wątku siedzi w liczniku kanału-rodzica (gasną po przeczytaniu wątku).</summary>
     readonly Dictionary<long, int> _threadMentions = [];
     /// <summary>Wiadomości już policzone jako wzmianki — to samo zdarzenie drugi raz (odtworzenie po wczytaniu stanu) nie podbija licznika.</summary>
@@ -97,7 +107,7 @@ public sealed class Store
     {
         Me = new();
         Users.Clear(); Servers.Clear(); Dms.Clear(); Reads.Clear(); Voice.Clear(); Friends.Clear(); Blocked.Clear();
-        Mentions.Clear(); Windows.Clear(); Threads.Clear(); Watches.Clear();
+        Mentions.Clear(); Windows.Clear(); Threads.Clear(); Watches.Clear(); Scheduled.Clear(); Notes.Clear();
         _threadMentions.Clear(); _typing.Clear(); _chan.Clear(); _counted.Clear();
         Notify = new();
         Announcement = null;
@@ -777,6 +787,15 @@ public sealed class Store
             case "announcement":
                 Announcement = e.Str("text") is null ? null : e.To<Announcement>();
                 Raise(ChangeKind.Announcement);
+                break;
+            case "scheduled_update":
+                if (e.Prop("scheduled").To<ScheduledMessage>() is { } sm) { Scheduled[sm.Id] = sm; Raise(ChangeKind.Scheduled, sm.Id, sm.ChannelId); }
+                break;
+            case "scheduled_delete":
+                if (e.Long("id") is long schId && Scheduled.Remove(schId, out var gone)) Raise(ChangeKind.Scheduled, schId, gone.ChannelId);
+                break;
+            case "note_update":
+                if (e.Long("userId") is long nu) SetNoteLocal(nu, e.Str("note"));
                 break;
         }
     }

@@ -98,7 +98,7 @@ public sealed class MainWindow : Window
             if (Options.Screenshot is { } path) _ = Screenshot(path);
             return;
         }
-        Client = new GibCordClient(new Uri(Options.Server), new DpapiTokenStore(Path.Combine(App.DataDir, "sesja.bin")), new DiskCache(Path.Combine(App.DataDir, "pamiec")), UiRun);
+        Client = new GibCordClient(new Uri(Options.Server), new DpapiTokenStore(Path.Combine(App.DataDir, "sesja.bin")), new DiskCache(Path.Combine(App.DataDir, "pamiec")), UiRun) { Prefs = App.Prefs };
         Client.Voice.Options = App.Prefs.Voice;
         Screen = new ScreenShare(Client);
         Cam = new Camera(Client);

@@ -115,6 +115,8 @@ public sealed class Prefs
     public string StatusClearText { get; set; } = "";
     /// <summary>Czyje są szkice i ostatnie kanały (po zmianie konta czyścimy je).</summary>
     public long LastUserId { get; set; }
+    /// <summary>Notatki o osobach zapisane na tym komputerze (konto → osoba → treść), gdy serwer ich jeszcze nie obsługuje.</summary>
+    public Dictionary<long, Dictionary<long, string>> Notes { get; set; } = [];
     /// <summary>Własna kolejność serwerów na pasku (tylko na tym komputerze).</summary>
     public List<long> ServerOrder { get; set; } = [];
     public bool MembersPanel { get; set; } = true;

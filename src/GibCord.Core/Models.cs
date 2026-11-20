@@ -367,6 +367,24 @@ public sealed class ReplyRef
     public string? Content { get; set; }
 }
 
+/// <summary>Wiadomość zaplanowana („Wyślij później”) — wysyła serwer o czasie (serwer C#, funkcja „scheduled”).</summary>
+public sealed class ScheduledMessage
+{
+    public long Id { get; set; }
+    public long ChannelId { get; set; }
+    public long? ThreadId { get; set; }
+    public long? ReplyTo { get; set; }
+    public string Content { get; set; } = "";
+    public List<Attachment> Attachments { get; set; } = [];
+    public long SendAt { get; set; }
+    public long CreatedAt { get; set; }
+    public string Status { get; set; } = "pending";
+    public string? Error { get; set; }
+    public bool Failed => Status == "failed";
+    /// <summary>Klucz okna czatu: kanał albo -wątek (jak ChatView.Key).</summary>
+    public long Key => ThreadId is long t and > 0 ? -t : ChannelId;
+}
+
 public sealed class Attachment
 {
     public long Id { get; set; }

@@ -97,6 +97,38 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
         }
     }
 
+    /// <summary>Nowy serwer: „Wyślij później” (zaplanuj, zmień czas, wyślij teraz) i notatki o osobach.</summary>
+    [LiveFact]
+    public async Task WyslijPozniejINotatki()
+    {
+        var (a, b) = (p.A, p.B);
+        await p.Until(() => a.Info is not null && a.Store.Loaded, "informacje o serwerze");
+        if (Environment.GetEnvironmentVariable("GC_TEST_V2") == "1") Assert.True(a.CanSchedule && a.NotesSynced, "serwer powinien mieć zaplanowane i notatki");
+        if (!a.CanSchedule) return;
+        var chan = a.Store.Servers.SelectMany(s => s.Channels).First(c => c.Name == "pogaduchy");
+        await b.OpenChannel(chan.Id);
+        var text = $"zaplanowana {Guid.NewGuid():N}";
+        Assert.Null(await a.Schedule(chan.Id, text, [], null, DateTimeOffset.Now.AddMinutes(5)));
+        await p.Until(() => a.Store.ScheduledFor(chan.Id).Any(s => s.Content == text), "zaplanowana u A");
+        ScheduledMessage sm;
+        lock (p.Lock) sm = a.Store.ScheduledFor(chan.Id).First(x => x.Content == text);
+        var later = DateTimeOffset.Now.AddMinutes(10);
+        Assert.Null(await a.RescheduleMessage(sm.Id, later));
+        await p.Until(() => a.Store.Scheduled.TryGetValue(sm.Id, out var x) && Math.Abs(x.SendAt - later.ToUnixTimeMilliseconds()) < 1000, "nowy czas");
+        Assert.NotNull(await a.Schedule(chan.Id, "za wcześnie", [], null, DateTimeOffset.Now.AddSeconds(5))); // błąd po polsku, nic nie zapisane
+        Assert.Null(await a.SendScheduledNow(sm.Id));
+        await p.Until(() => !a.Store.Scheduled.ContainsKey(sm.Id), "zniknęła z zaplanowanych");
+        await p.Until(() => b.Store.Window(chan.Id).Items.Any(m => m.Content == text), "wiadomość u B");
+
+        var bid = b.Store.Me.Id;
+        Assert.Null(await a.SetNote(bid, "  kolega z klasy  "));
+        await p.Until(() => a.Store.Notes.GetValueOrDefault(bid) == "kolega z klasy", "notatka u A");
+        Assert.Equal("kolega z klasy", (await a.Api.GetNotes())[bid]);
+        Assert.Empty(await b.Api.GetNotes()); // druga osoba nie widzi
+        Assert.Null(await a.SetNote(bid, ""));
+        await p.Until(() => !a.Store.Notes.ContainsKey(bid), "notatka usunięta");
+    }
+
     [LiveFact]
     public async Task RozmowaNaKanaleIWDm()
     {

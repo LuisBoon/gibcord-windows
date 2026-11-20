@@ -278,6 +278,9 @@ public sealed class Shell : Grid
             case ChangeKind.Announcement:
                 DrawAnnouncement();
                 return;
+            case ChangeKind.Notes:
+                Dirty(members: true);
+                return;
         }
     }
 

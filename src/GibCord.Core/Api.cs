@@ -127,6 +127,24 @@ public sealed class GibCordApi : IDisposable
         (await Send(HttpMethod.Patch, "me", changes, ct).ConfigureAwait(false)).Prop("me").To<User>()!;
     public Task<User> GetUser(long id, CancellationToken ct = default) => Send<User>(HttpMethod.Get, $"users/{id}", ct: ct);
 
+    // ── zaplanowane wiadomości i notatki (serwer C#: features.scheduled / features.notes) ──
+    public async Task<List<ScheduledMessage>> GetScheduled(CancellationToken ct = default) =>
+        (await Send(HttpMethod.Get, "scheduled", ct: ct).ConfigureAwait(false)).Prop("scheduled").To<List<ScheduledMessage>>() ?? [];
+    public Task<ScheduledMessage> CreateScheduled(long channelId, string content, long sendAt, IEnumerable<long>? attachments, long? replyTo, long? threadId, CancellationToken ct = default) =>
+        Send<ScheduledMessage>(HttpMethod.Post, $"channels/{channelId}/scheduled", new { content, sendAt, attachments = attachments?.ToArray() ?? [], replyTo, threadId }, ct);
+    public Task<ScheduledMessage> PatchScheduled(long id, object changes, CancellationToken ct = default) => Send<ScheduledMessage>(HttpMethod.Patch, $"scheduled/{id}", changes, ct);
+    public Task DeleteScheduled(long id, CancellationToken ct = default) => Send(HttpMethod.Delete, $"scheduled/{id}", ct: ct);
+    public Task SendScheduledNow(long id, CancellationToken ct = default) => Send(HttpMethod.Post, $"scheduled/{id}/send", ct: ct);
+    public async Task<Dictionary<long, string>> GetNotes(CancellationToken ct = default)
+    {
+        var e = await Send(HttpMethod.Get, "notes", ct: ct).ConfigureAwait(false);
+        var d = new Dictionary<long, string>();
+        if (e.Prop("notes") is { ValueKind: JsonValueKind.Object } o)
+            foreach (var p in o.EnumerateObject()) if (long.TryParse(p.Name, out var id) && p.Value.Str("note") is { } n) d[id] = n;
+        return d;
+    }
+    public Task PutNote(long userId, string note, CancellationToken ct = default) => Send(HttpMethod.Put, $"users/{userId}/note", new { note }, ct);
+
     // ── wiadomości ──
     public Task<List<Message>> GetMessages(long channelId, long? before = null, long? around = null, int limit = 50, long? thread = null, CancellationToken ct = default)
     {

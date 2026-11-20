@@ -40,6 +40,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
     public Store Store { get; } = new();
     public GibCordApi Api { get; }
     public Info? Info { get; private set; }
+    /// <summary>Ustawienia tego komputera (lokalne notatki do czasu, aż serwer je obsłuży).</summary>
+    public Prefs? Prefs { get; set; }
     public GatewayStatus Status { get; private set; } = GatewayStatus.Offline;
     public TimeSpan? Rtt => _gw?.Rtt;
 
@@ -203,6 +205,94 @@ public sealed partial class GibCordClient : IAsyncDisposable
         SessionEnded?.Invoke(why);
     }
 
+    // ───────────────────────── zaplanowane wiadomości i notatki o osobach ─────────────────────────
+
+    /// <summary>Serwer wysyła wiadomości o czasie (nowy serwer C#).</summary>
+    public bool CanSchedule => Info?.Has("scheduled") == true && !Offline;
+    /// <summary>Notatki są na serwerze (wszystkie urządzenia); inaczej tylko na tym komputerze.</summary>
+    public bool NotesSynced => Info?.Has("notes") == true;
+
+    async Task LoadExtras(int session)
+    {
+        if (Offline) return;
+        if (Info is null) await LoadInfo();
+        if (session != _session || Info is null) return;
+        if (Info.Has("scheduled"))
+            try { var l = await Api.GetScheduled(); _ui(() => { if (session == _session) Store.LoadScheduled(l); }); } catch { }
+        var me = Store.Me.Id;
+        if (Info.Has("notes"))
+        {
+            try
+            {
+                // pierwszy raz na serwerze z notatkami: te zapisane na komputerze idą na serwer
+                if (Prefs is { } pf && pf.Notes.TryGetValue(me, out var local) && local.Count > 0)
+                {
+                    foreach (var (uid, n) in local.ToList()) { try { await Api.PutNote(uid, n); local.Remove(uid); } catch (ApiException ex) when (ex.Status is 400 or 404) { local.Remove(uid); } }
+                    if (local.Count == 0) pf.Notes.Remove(me);
+                    pf.Save();
+                }
+                var d = await Api.GetNotes();
+                _ui(() => { if (session == _session) Store.LoadNotes(d); });
+            }
+            catch { }
+        }
+        else if (Prefs is { } pf2 && pf2.Notes.TryGetValue(me, out var l2)) _ui(() => { if (session == _session) Store.LoadNotes(l2); });
+    }
+
+    /// <summary>„Wyślij później”: zwraca błąd albo null.</summary>
+    public async Task<string?> Schedule(long key, string content, IReadOnlyList<Attachment> attachments, ReplyRef? reply, DateTimeOffset when)
+    {
+        var (ch, th) = Where(key);
+        try
+        {
+            var s = await Api.CreateScheduled(ch, content.Trim(), when.ToUnixTimeMilliseconds(), attachments.Select(a => a.Id), reply?.Id, th);
+            _ui(() => Store.UpsertScheduled(s));
+            return null;
+        }
+        catch (Exception ex) { return Friendly(ex); }
+    }
+    public async Task<string?> RescheduleMessage(long id, DateTimeOffset when)
+    {
+        try { var s = await Api.PatchScheduled(id, new { sendAt = when.ToUnixTimeMilliseconds() }); _ui(() => Store.UpsertScheduled(s)); return null; }
+        catch (Exception ex) { return Friendly(ex); }
+    }
+    public async Task<string?> EditScheduled(long id, string content)
+    {
+        try { var s = await Api.PatchScheduled(id, new { content }); _ui(() => Store.UpsertScheduled(s)); return null; }
+        catch (Exception ex) { return Friendly(ex); }
+    }
+    public async Task<string?> DeleteScheduled(long id)
+    {
+        try { await Api.DeleteScheduled(id); _ui(() => Store.RemoveScheduled(id)); return null; }
+        catch (Exception ex) { return Friendly(ex); }
+    }
+    public async Task<string?> SendScheduledNow(long id)
+    {
+        try { await Api.SendScheduledNow(id); return null; }
+        catch (Exception ex) { return Friendly(ex); }
+    }
+
+    /// <summary>Prywatna notatka o osobie (pusta = usuń). Na serwerze, gdy go obsługuje; inaczej na tym komputerze.</summary>
+    public async Task<string?> SetNote(long userId, string note)
+    {
+        note = note.Trim();
+        if (note.Length > 500) return "Notatka może mieć maks. 500 znaków.";
+        _ui(() => Store.SetNoteLocal(userId, note));
+        if (NotesSynced && !Offline)
+        {
+            try { await Api.PutNote(userId, note); return null; }
+            catch (Exception ex) { return Friendly(ex); }
+        }
+        if (Prefs is { } pf)
+        {
+            var me = Store.Me.Id;
+            if (!pf.Notes.TryGetValue(me, out var d)) pf.Notes[me] = d = [];
+            if (note.Length == 0) d.Remove(userId); else d[userId] = note;
+            pf.Save();
+        }
+        return null;
+    }
+
     /// <summary>Ile razy pobrano cały stan (diagnostyka; przy API v2 wznowienie po zerwaniu go nie pobiera).</summary>
     public int StateLoads { get; private set; }
     /// <summary>Połączenie z serwerem API v2 (zdarzenia z numerami, wznawianie).</summary>
@@ -244,6 +334,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
                 if (ActiveThreadId != 0) _ = LoadThread(ActiveThreadId);
             });
             if (session == _session) _cache?.SaveState(raw);
+            _ = LoadExtras(session);
             if (_gw is not null) await _gw.Send(new { t = "visibility", visible = _visible });
         }
         catch (ApiException ex) when (ex.IsAuth) { _during = null; _ui(() => EndSession("Sesja wygasła — zaloguj się ponownie.")); }

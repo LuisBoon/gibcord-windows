@@ -194,6 +194,31 @@ public static class ProfileCard
         "talker" => "🎙️ Gawędziarz", "streamer" => "📺 Nadawca", "social" => "🤝 Towarzyski", "gifs" => "🎞️ GIF-omaniak", _ => "🏅 " + b,
     };
 
+    /// <summary>Prywatna notatka o osobie: zapis po wyjściu z pola (na serwerze, gdy go obsługuje; inaczej na tym komputerze).</summary>
+    static Border NoteCard(Shell sh, long uid)
+    {
+        var cur = sh.S.Notes.GetValueOrDefault(uid) ?? "";
+        var box = new TextBox
+        {
+            Text = cur, PlaceholderText = "Kliknij, żeby dodać notatkę: skąd ją znasz, nick w grze…", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap,
+            MaxLength = 500, MinHeight = 34, MaxHeight = 140, FontSize = 13, BorderThickness = U.Th(0), Background = Theme.Transparent, Padding = U.Th(0, 4),
+        };
+        foreach (var k in new[] { "TextControlBackground", "TextControlBackgroundPointerOver", "TextControlBackgroundFocused", "TextControlBorderBrush", "TextControlBorderBrushPointerOver", "TextControlBorderBrushFocused" })
+            box.Resources[k] = Theme.Transparent;
+        var where = U.T(sh.C.NotesSynced ? "" : "zapisana na tym komputerze", 10.5, null, Theme.Mu2);
+        where.Visibility = sh.C.NotesSynced ? Visibility.Collapsed : Visibility.Visible;
+        box.LostFocus += async (_, _) =>
+        {
+            var t = box.Text.Trim();
+            if (t == cur) return;
+            cur = t;
+            var err = await sh.C.SetNote(uid, t);
+            if (err is not null) sh.Info(err, true);
+        };
+        var head = new Grid().Cols("*", "auto").Add(U.T("NOTATKA · WIDZISZ TYLKO TY", 10.5, U.Bold, Theme.Mu2).At(0, 0), where.At(0, 1));
+        return U.Box(U.V(4, head, box), U.B("#4D0A0618"), 12, U.Th(12, 8, 12, 6), U.Alpha("#ffb98f", .35), 1);
+    }
+
     public static FrameworkElement? Build(Shell sh, long uid, Action close)
     {
         var s = sh.S;
@@ -246,6 +271,7 @@ public static class ProfileCard
             foreach (var b in u.Badges) badges.Children.Add(U.Box(U.T(BadgeName(b), 11.5, U.Semi), U.W(.08), 8, U.Th(8, 3)));
             body.Add(Card("Odznaki", badges));
         }
+        if (uid != s.Me.Id) body.Add(NoteCard(sh, uid));
         if (uid != s.Me.Id)
         {
             var btns = new Grid { ColumnSpacing = 8 }.Cols("*", "*");
