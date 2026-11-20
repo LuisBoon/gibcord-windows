@@ -30,6 +30,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
     readonly Dictionary<long, CancellationTokenSource> _readTimers = [];
     /// <summary>Wiadomości, które nie poszły przez brak internetu — wyślą się same po powrocie połączenia (ten sam nonce = bez duplikatów).</summary>
     readonly List<Message> _outbox = [];
+    readonly HashSet<string> _cancelled = [];
+    Timer? _outboxTimer;
     Gateway? _gw;
     bool _stateInFlight;
     bool _visible = true;
@@ -277,7 +279,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
             catch (ApiException ex) when (ex.IsAuth) { _ui(() => EndSession("Sesja wygasła — zaloguj się ponownie.")); return; }
             catch (Exception ex) { _ui(() => Error?.Invoke(Friendly(ex))); }
         }
-        if (WindowActive) ScheduleRead(cid, 0);
+        if (WindowActive && ActiveChannelId == cid) ScheduleRead(cid, 0); // w międzyczasie mógł się otworzyć inny kanał
     }
 
     public void CloseChannel() => ActiveChannelId = 0;
@@ -380,7 +382,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
         {
             var msgs = await Api.GetMessages(t.ChannelId, limit: 50, thread: tid);
             _ui(() => { Store.SetWindow(-tid, msgs, hasOlder: msgs.Count >= 50); _fresh.Add(-tid); });
-            if (WindowActive) ScheduleRead(-tid, 0);
+            if (WindowActive && ActiveThreadId == tid) ScheduleRead(-tid, 0);
         }
         catch (Exception ex) { _ui(() => Error?.Invoke(Friendly(ex))); }
     }
@@ -423,6 +425,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
         if (WindowActive == active) return;
         WindowActive = active;
         if (active && ActiveChannelId != 0) ScheduleRead(ActiveChannelId, 0);
+        if (active && ActiveThreadId != 0) ScheduleRead(-ActiveThreadId, 0);
     }
 
     /// <summary>Okno widoczne / schowane — serwer wysyła push na telefon tylko, gdy żadne okno nie jest widoczne.</summary>
@@ -515,6 +518,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
             // brak sieci: zostaje szara z „czeka na internet” i pójdzie sama po powrocie połączenia
             lock (_outbox) if (!_outbox.Contains(local)) _outbox.Add(local);
             _ui(() => Store.FailPending(local.Key, local.Nonce!, queued: true));
+            // ponowna próba co 10 s (gdy WebSocket przetrwał krótką awarię, „hello” nie przyjdzie)
+            _outboxTimer ??= new Timer(_ => _ = FlushOutbox(), null, 10_000, 10_000);
             return null;
         }
         catch (Exception ex)
@@ -528,9 +533,15 @@ public sealed partial class GibCordClient : IAsyncDisposable
     async Task FlushOutbox()
     {
         List<Message> items;
-        lock (_outbox) { items = [.. _outbox]; _outbox.Clear(); }
+        lock (_outbox)
+        {
+            items = [.. _outbox];
+            _outbox.Clear();
+            if (items.Count == 0) { _outboxTimer?.Dispose(); _outboxTimer = null; return; }
+        }
         foreach (var m in items)
         {
+            lock (_outbox) if (m.Nonce is not null && _cancelled.Remove(m.Nonce)) continue; // „Anuluj” w trakcie
             m.Send = SendState.Pending;
             _ui(() => Store.Upsert(m, live: false));
             await Deliver(m);
@@ -552,7 +563,12 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     public async Task<string?> Delete(Message m)
     {
-        if (m.Send != SendState.Sent) { lock (_outbox) _outbox.Remove(m); Store.RemoveLocal(m.Key, m.Id); return null; }
+        if (m.Send != SendState.Sent)
+        {
+            lock (_outbox) { _outbox.Remove(m); if (m.Nonce is not null && m.Send is SendState.Queued or SendState.Pending) _cancelled.Add(m.Nonce); }
+            Store.RemoveLocal(m.Key, m.Id);
+            return null;
+        }
         try { await Api.DeleteMessage(m.Id); _ui(() => Store.RemoveLocal(m.Key, m.Id)); return null; }
         catch (Exception ex) { return Friendly(ex); }
     }

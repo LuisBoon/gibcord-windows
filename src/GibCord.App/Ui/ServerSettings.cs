@@ -51,6 +51,8 @@ public sealed partial class ServerSettingsPage : Grid
     {
         if (c.Kind is ChangeKind.Servers && Srv is null) { _sh.CloseServerSettings(); return; }
         // zmiany serwera z innych miejsc (albo potwierdzenie naszej) — przerysuj listy, ale nie formularze w trakcie pisania
+        // edytor roli z niezapisanymi zmianami nie przerysowuje się sam (zapis i tak odświeża widok)
+        if (_section == "roles" && _role is not null) return;
         if (c.Kind is ChangeKind.Server or ChangeKind.Members && c.Id == _sid && _section is "channels" or "roles" or "members" or "emoji" && !_redrawPending)
         {
             _redrawPending = true;

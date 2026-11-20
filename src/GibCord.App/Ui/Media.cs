@@ -27,6 +27,7 @@ static class MediaViews
             Source = MediaSource.CreateFromUri(url), Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
         };
         player.TransportControls.IsCompact = true;
+        player.Unloaded += (_, _) => { try { player.MediaPlayer?.Pause(); } catch { } }; // przewinięcie / inny kanał — film nie gra dalej w tle
         player.TransportControls.IsZoomButtonVisible = false;
         return new Border { CornerRadius = new CornerRadius(10), Child = player, HorizontalAlignment = HorizontalAlignment.Left, Margin = U.Th(0, 3, 0, 2), Background = U.B("#cc08040f") };
     }
@@ -36,6 +37,7 @@ static class MediaViews
     {
         var voice = IsVoiceMessage(a);
         MediaPlayer? mp = null;
+        long playAt = 0;
         var play = new Button { Width = 36, Height = 36, CornerRadius = new CornerRadius(18), Padding = U.Th(0), Background = Theme.Accent, BorderThickness = U.Th(0), Content = U.I("", 14, Theme.OnAccent) };
         var bar = new ProgressBar { Minimum = 0, Maximum = 1, Value = 0, Height = 6, Width = voice ? 180 : 220, VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.Accent, Background = U.W(.12) };
         var time = U.T(voice ? "🎤" : "", 12, U.Semi, Theme.Mu);
@@ -51,7 +53,7 @@ static class MediaViews
             time.Text = dur.TotalSeconds > 0 ? $"{Fmt(s.Position)} / {Fmt(dur)}" : Fmt(s.Position);
             var playing = s.PlaybackState == MediaPlaybackState.Playing;
             ((FontIcon)play.Content).Glyph = playing ? "" : "";
-            if (!playing && s.PlaybackState != MediaPlaybackState.Opening && s.PlaybackState != MediaPlaybackState.Buffering) timer.Stop();
+            if (!playing && s.PlaybackState != MediaPlaybackState.Opening && s.PlaybackState != MediaPlaybackState.Buffering && Environment.TickCount64 - playAt > 1500) timer.Stop();
         }
         timer.Tick += (_, _) => Tick();
         play.Click += (_, _) =>
@@ -67,6 +69,7 @@ static class MediaViews
             {
                 if (_current is not null && _current != mp) _current.Pause();
                 _current = mp;
+                playAt = Environment.TickCount64;
                 mp.Play();
             }
             timer.Start();

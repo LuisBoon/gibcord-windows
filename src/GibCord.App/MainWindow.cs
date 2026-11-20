@@ -226,6 +226,7 @@ public sealed class MainWindow : Window
     }
 
     GlobalKeys? _keys;
+    public GlobalKeys? Keys => _keys;
 
     public void ShowEmailGate()
     {
@@ -279,7 +280,17 @@ public sealed class MainWindow : Window
         try
         {
             if (a.Kind == ExtendedActivationKind.AppNotification && a.Data is AppNotificationActivatedEventArgs n && n.Arguments.TryGetValue("c", out var c) && long.TryParse(c, out var cid))
-                OpenFromNotification(cid);
+            {
+                // aplikacja była zamknięta: odpowiedź z dymka / „Przeczytane” wykonujemy po starcie, bez pokazywania okna
+                n.Arguments.TryGetValue("a", out var act);
+                if (act == "reply" && n.UserInput.TryGetValue("odp", out var text) && !string.IsNullOrWhiteSpace(text)) AfterLoad(async () =>
+                {
+                    var err = await Client.Send(cid, text);
+                    if (err is not null) Toasts.Show("Nie wysłano odpowiedzi", err, cid, "err" + cid); else Client.MarkRead(cid);
+                });
+                else if (act == "read") AfterLoad(() => { Client.MarkRead(cid); return Task.CompletedTask; });
+                else if (act != "reply") OpenFromNotification(cid);
+            }
             else if (a.Kind == ExtendedActivationKind.Launch && a.Data is Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs la && DeepLink.Find(la.Arguments) is { } path)
                 OpenPath(path);
             else if (a.Kind == ExtendedActivationKind.Protocol && a.Data is Windows.ApplicationModel.Activation.IProtocolActivatedEventArgs pa && DeepLink.Parse(pa.Uri.AbsoluteUri) is { } path2)
@@ -287,6 +298,13 @@ public sealed class MainWindow : Window
         }
         catch { }
     }
+
+    /// <summary>Po wczytaniu stanu (zimny start z dymka) — najwyżej ~20 s czekania.</summary>
+    void AfterLoad(Func<Task> a) => Dq.TryEnqueue(async () =>
+    {
+        for (var i = 0; i < 100 && (Client is null || !Client.Store.Loaded || Client.Status != GatewayStatus.Connected); i++) await Task.Delay(200);
+        try { await a(); } catch (Exception ex) { App.Log("Akcja z powiadomienia: " + ex.Message); }
+    });
 
     /// <summary>Ścieżka z linku gibcord:// (np. /kanal/1/2, /i/KOD) — otwierana jak link do GibCorda w czacie.</summary>
     void OpenPath(string path) => Dq.TryEnqueue(async () =>

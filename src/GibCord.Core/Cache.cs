@@ -101,6 +101,8 @@ public sealed class Prefs
     public string OverlaySize { get; set; } = "m";
     /// <summary>Motyw kolorów (zapamiętany lokalnie, żeby działał od pierwszej klatki; źródło prawdy: me.settings.theme).</summary>
     public string Theme { get; set; } = "glass";
+    /// <summary>Skróty Ctrl+Shift+M / Ctrl+Shift+D działające w całym systemie (tylko w trakcie rozmowy).</summary>
+    public bool GlobalShortcuts { get; set; } = true;
     public bool MembersPanel { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)

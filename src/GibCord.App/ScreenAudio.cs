@@ -16,7 +16,8 @@ public sealed class ScreenAudio : IDisposable
 
     public ScreenAudio(GibCordClient c) { _c = c; }
 
-    public bool Active => _thread is not null;
+    volatile bool _running;
+    public bool Active => _thread is not null && _running;
 
     /// <summary>Startuje przechwytywanie (wątek MTA tworzy i używa obiektów audio). Zwraca komunikat błędu albo null.</summary>
     public string? Start()
@@ -35,7 +36,7 @@ public sealed class ScreenAudio : IDisposable
         }) { IsBackground = true, Name = "GibCord dźwięk ekranu", Priority = ThreadPriority.AboveNormal };
         _thread.SetApartmentState(ApartmentState.MTA);
         _thread.Start();
-        var err = ready.Task.Wait(6000) ? ready.Task.Result : "Windows nie odpowiedział przy włączaniu dźwięku z komputera.";
+        var err = ready.Task.Wait(2500) ? ready.Task.Result : "Windows nie odpowiedział przy włączaniu dźwięku z komputera.";
         if (err is not null) { _stop = true; _thread = null; }
         return err;
     }
@@ -57,12 +58,16 @@ public sealed class ScreenAudio : IDisposable
             var iid = typeof(IAudioCaptureClient).GUID;
             Marshal.ThrowExceptionForHR(client.GetService(ref iid, out var o));
             cap = (IAudioCaptureClient)o;
+            // tryb zdarzeń (jak w przykładzie Microsoftu „ApplicationLoopback”): Windows budzi nas, gdy są nowe próbki
+            using var evt = new AutoResetEvent(false);
+            Marshal.ThrowExceptionForHR(client.SetEventHandle(evt.SafeWaitHandle.DangerousGetHandle()));
             Marshal.ThrowExceptionForHR(client.Start());
+            _running = true;
             var chunk = new short[960 * 2]; // 10 ms stereo
             var filled = 0;
             while (!_stop)
             {
-                Thread.Sleep(5);
+                evt.WaitOne(100);
                 while (cap.GetNextPacketSize(out var packet) == 0 && packet > 0)
                 {
                     if (cap.GetBuffer(out var data, out var frames, out var flags, out _, out _) != 0) break;
@@ -91,6 +96,7 @@ public sealed class ScreenAudio : IDisposable
         catch (Exception ex) { App.Log("Dźwięk z komputera (pętla): " + ex.Message); }
         finally
         {
+            _running = false;
             if (cap is not null) Marshal.ReleaseComObject(cap);
             Marshal.ReleaseComObject(client);
         }
@@ -122,8 +128,9 @@ public sealed class ScreenAudio : IDisposable
             var client = (IAudioClient)unk;
             var fmt = new WAVEFORMATEX { wFormatTag = 1, nChannels = 2, nSamplesPerSec = 48000, wBitsPerSample = 16, nBlockAlign = 4, nAvgBytesPerSec = 48000 * 4, cbSize = 0 };
             const uint Loopback = 0x00020000, AutoConvert = 0x80000000, SrcDefaultQuality = 0x08000000;
-            var hr2 = client.Initialize(0, Loopback, 2_000_000, 0, ref fmt, IntPtr.Zero);
-            if (hr2 < 0) hr2 = client.Initialize(0, Loopback | AutoConvert | SrcDefaultQuality, 2_000_000, 0, ref fmt, IntPtr.Zero);
+            const uint EventCallback = 0x00040000;
+            var hr2 = client.Initialize(0, Loopback | EventCallback | AutoConvert | SrcDefaultQuality, 2_000_000, 0, ref fmt, IntPtr.Zero);
+            if (hr2 < 0) hr2 = client.Initialize(0, Loopback | EventCallback, 2_000_000, 0, ref fmt, IntPtr.Zero);
             Marshal.ThrowExceptionForHR(hr2);
             return client;
         }

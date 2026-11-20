@@ -70,6 +70,7 @@ public sealed class ScreenShare : IDisposable
 
     public ScreenShare(GibCordClient c) { _c = c; }
     public bool AudioActive => _audio?.Active == true;
+    public long StartedAt { get; private set; }
 
     /// <summary>Okienko wyboru ekranu/okna i start transmisji. Zwraca komunikat błędu albo null.</summary>
     public async Task<string?> Start(IntPtr hwnd, int fps = 30, string quality = "1080p", bool withAudio = false)
@@ -100,7 +101,8 @@ public sealed class ScreenShare : IDisposable
             _pool.FrameArrived += OnFrame;
             _session = _pool.CreateCaptureSession(item);
             try { _session.IsCursorCaptureEnabled = true; } catch { }
-            item.Closed += (_, _) => App.Window?.UiRun(() => Stop());
+            StartedAt = Environment.TickCount64;
+            item.Closed += (_, _) => App.Window?.UiRun(() => { if (ReferenceEquals(_item, item)) Stop(); }); // tylko to okno, nie wcześniejsze
             _session.StartCapture();
             App.Log($"Transmisja: {item.DisplayName} {item.Size.Width}×{item.Size.Height}");
             return null;

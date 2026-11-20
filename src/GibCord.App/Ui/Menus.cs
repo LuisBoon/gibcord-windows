@@ -245,8 +245,10 @@ static class AddServerDialog
             }
         }
         catch { }
+        var seq = 0;
         link.TextChanged += async (_, _) =>
         {
+            var my = ++seq;
             var m1 = GcTpl.Match(link.Text); var m2 = DcTpl.Match(link.Text);
             (string Source, string Code)? t = m1.Success ? ("gibcord", m1.Groups[1].Value) : m2.Success ? ("discord", m2.Groups[1].Value) : null;
             preview.Children.Clear();
@@ -255,6 +257,7 @@ static class AddServerDialog
             try
             {
                 var p = await sh.C.Api.GetJson(t.Value.Source == "discord" ? $"templates/discord/{t.Value.Code}" : $"templates/{t.Value.Code}");
+                if (my != seq) return; // w międzyczasie wklejono inny link
                 preview.Children.Clear();
                 var cnt = p.Prop("counts");
                 preview.Add(U.T(p.Str("name") ?? "Szablon", 14, U.Bold));

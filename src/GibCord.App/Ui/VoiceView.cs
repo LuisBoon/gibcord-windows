@@ -526,7 +526,7 @@ public sealed class VoiceView : Grid, IDisposable
             var cam = C.Voice.Feeds.FirstOrDefault(f => !f.Screen && f.UserId == t.Uid);
             var key = "cam:" + t.Uid;
             if (cam is null) { t.Video.Visibility = Visibility.Collapsed; _video.Remove(key); continue; }
-            if (!_video.ContainsKey(key)) _video[key] = (t.Video, null, 0);
+            if (!_video.TryGetValue(key, out var ve) || !ReferenceEquals(ve.Img, t.Video)) _video[key] = (t.Video, null, 0); // po odświeżeniu kafelek jest nowy
             t.Video.Visibility = Visibility.Visible;
             Draw(key, cam);
         }

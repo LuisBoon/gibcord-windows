@@ -270,4 +270,20 @@ public class StoreTests
         Assert.Equal([4L, 5], added);
         Assert.True(s.Window(10).AtTail);
     }
+
+    [Fact]
+    public void BezOknaDlaNieotwartegoKanaluIUsuniecieWWatku()
+    {
+        var s = Make();
+        // wiadomość na nieotwartym kanale: tylko „ostatnia wiadomość”, bez okna w pamięci
+        s.Apply(Ev("message_create", new { message = Msg(30, 12, 2) }));
+        Assert.False(s.Windows.ContainsKey(12));
+        Assert.Equal(30, s.LastIdOf(12));
+        // usunięcie z panelu admina przychodzi bez threadId — znika też z otwartego wątku
+        s.Apply(Ev("thread_update", new { thread = new ThreadInfo { Id = 9, ChannelId = 10, ServerId = 100, MessageId = 5 } }));
+        var t = Msg(40, 10, 2); t.ThreadId = 9;
+        s.SetWindow(-9, [t], hasOlder: false);
+        s.Apply(Ev("message_delete", new { id = 40, channelId = 10 }));
+        Assert.Empty(s.Window(-9).Items);
+    }
 }

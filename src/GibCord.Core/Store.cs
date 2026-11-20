@@ -68,8 +68,11 @@ public sealed class Store
         Blocked.Clear(); Blocked.UnionWith(st.Blocked);
         Notify = st.Notify ?? new();
         Announcement = st.Announcement;
+        var oldWatch = Watches.Keys.ToList();
         Watches.Clear();
         foreach (var (k, v) in st.Watch) if (v is not null) Watches[k] = v;
+        // po ponownym połączeniu odtwarzacz ma dogonić to, co się zmieniło, gdy nas nie było
+        foreach (var k in oldWatch.Union(Watches.Keys).ToList()) Raise(ChangeKind.Watch, k, k);
         // wzmianki: liczymy tylko na żywo; po ponownym wczytaniu zostają tam, gdzie kanał dalej jest nieprzeczytany
         foreach (var cid in Mentions.Keys.ToList()) if (!IsUnread(cid)) Mentions.Remove(cid);
         Reindex();
@@ -377,7 +380,11 @@ public sealed class Store
             if (Threads.TryGetValue(tid, out var th) && (th.LastMessageId ?? 0) < m.Id) { th.LastMessageId = m.Id; th.LastAt = Math.Max(th.LastAt, m.CreatedAt); }
             if (!Windows.ContainsKey(key)) return; // wątek nie jest otwarty — dociągnie się przy otwarciu
         }
-        else BumpLast(m);
+        else
+        {
+            BumpLast(m);
+            if (!Windows.ContainsKey(key)) return; // kanał nieotwarty — bez okna (pamięć i zapis na dysku); dociągnie się przy otwarciu
+        }
         var w = Window(key);
         var i = w.Items.FindIndex(x => x.Id == m.Id);
         if (i < 0 && m.Nonce is not null) i = w.Items.FindIndex(x => x.Send != SendState.Sent && x.Nonce == m.Nonce);
@@ -498,7 +505,14 @@ public sealed class Store
             }
             case "message_delete":
             {
-                if (e.Long("id") is long id && e.Long("channelId") is long cid) RemoveLocal(e.Long("threadId") is long dt ? -dt : cid, id);
+                if (e.Long("id") is long id && e.Long("channelId") is long cid)
+                {
+                    var dk = e.Long("threadId") is long dt ? -dt : cid;
+                    // usunięcie z panelu admina albo przy banie przychodzi bez threadId — szukamy też w otwartych wątkach
+                    if (dk > 0 && Windows.GetValueOrDefault(dk)?.Items.Any(x => x.Id == id) != true)
+                        foreach (var (k, tw) in Windows) if (k < 0 && tw.Items.Any(x => x.Id == id)) { dk = k; break; }
+                    RemoveLocal(dk, id);
+                }
                 break;
             }
             case "reaction_update":

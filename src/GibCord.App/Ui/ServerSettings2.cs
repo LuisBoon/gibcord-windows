@@ -204,7 +204,7 @@ public sealed partial class ServerSettingsPage
                     ["permissions"] = ReadPerms(perms, r.Permissions),
                 };
                 if (body["icon"] is string s2 && s2.StartsWith('/')) body.Remove("icon");
-                await Run(() => Api.PatchJson($"roles/{r.Id}", body), "Rola zapisana");
+                if (await Run(() => Api.PatchJson($"roles/{r.Id}", body), "Rola zapisana")) DrawBody(keepScroll: true);
             }, 40).With(b => { b.Width = 200; b.HorizontalAlignment = HorizontalAlignment.Left; }));
 
         // osoby z rolą
@@ -281,10 +281,15 @@ public sealed partial class ServerSettingsPage
         foreach (var a in addable) add.Items.Add(a.Item3);
         add.SelectionChanged += (_, _) =>
         {
-            if (add.SelectedIndex < 0) return;
-            var (t, id, _) = addable[add.SelectedIndex];
-            list.Add(new PermOverride { Type = t, Id = id });
-            DrawTargets(list.Count - 1);
+            var ix = add.SelectedIndex;
+            if (ix < 0) return;
+            var (t, id, _) = addable[ix];
+            // ta sama rola / osoba drugi raz = duplikat, który przy zapisie nadpisze ustawienia — usuwamy ją z wyboru
+            addable.RemoveAt(ix);
+            add.SelectedIndex = -1;
+            add.Items.RemoveAt(ix);
+            if (!list.Any(o => o.Type == t && o.Id == id)) list.Add(new PermOverride { Type = t, Id = id });
+            DrawTargets(list.FindIndex(o => o.Type == t && o.Id == id));
         };
         var info = U.T("✓ zezwól · / jak w rolach · ✕ zabroń. Osoba wygrywa z rolami, rola z @wszyscy.", 11.5, null, Theme.Mu2, wrap: true);
         var content = U.V(10, info, targets, add, editor).With(p => p.Width = 440);

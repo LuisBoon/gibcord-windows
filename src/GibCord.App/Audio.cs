@@ -362,6 +362,8 @@ public sealed class VoiceHost
         if (inCall && !_ptt.IsRunning) _ptt.Start();
         if (!inCall && _ptt.IsRunning) { _ptt.Stop(); _c.Voice.PttDown = false; }
         if (!inCall && _screen?.Active == true) _screen.Stop(silent: true);
+        // rozmowa sama zakończyła transmisję (zmiana kanału, błąd, odebrane uprawnienie) — zgaś też przechwytywanie (żółta ramka)
+        else if (_screen?.Active == true && !_c.Voice.ScreenSharing && Environment.TickCount64 - _screen.StartedAt > 5000) _screen.Stop(silent: true);
         if (!inCall && _cam?.Active == true) _cam.Stop();
         if (_c.VoiceChannelId != _room)
         {

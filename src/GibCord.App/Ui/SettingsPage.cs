@@ -46,7 +46,8 @@ public sealed class SettingsPage : Grid
     void OnChange(StoreChange c)
     {
         // po zmianie „ja” (zapis profilu, 2FA, e-mail) — przerysuj, chyba że ktoś właśnie pisze w formularzu
-        if (c.Kind is ChangeKind.Me && _section is "security" or "account") Draw();
+        // konto: bez przerysowania (wpisywane hasła by znikły) — własne akcje odświeżają widok same
+        if (c.Kind is ChangeKind.Me && _section is "security" or "privacy") Draw();
         if (c.Kind is ChangeKind.Blocked && _section == "privacy") Draw();
     }
 
@@ -538,7 +539,7 @@ public sealed class SettingsPage : Grid
                     var u = await Api.PatchMe(new { settings });
                     S.Apply(new GatewayEvent("user_update", System.Text.Json.JsonSerializer.SerializeToElement(new { user = u }, Json.Options)));
                 }
-                catch (Exception ex) { Err(ex); }
+                catch (Exception ex) { Err(ex); return; } // bez zapisu na koncie motyw wróciłby po ponownym połączeniu
                 _sh.W.ApplyTheme(k);
             };
             themes.Children.Add(card);
@@ -574,8 +575,9 @@ public sealed class SettingsPage : Grid
             Shortcut("Alt+← / Alt+→", "Wstecz / dalej"),
             Shortcut("↑ w pustym polu", "Edytuj ostatnią wiadomość"),
             Shortcut("Ctrl+Shift+O", "Nakładka w grze"),
-            Shortcut("Ctrl+Shift+M", "Wycisz / włącz mikrofon (działa też w grze)"),
-            Shortcut("Ctrl+Shift+D", "Wyłącz / włącz dźwięk (działa też w grze)"),
+            Shortcut("Ctrl+Shift+M", "Wycisz / włącz mikrofon (w rozmowie, działa też w grze)"),
+            Shortcut("Ctrl+Shift+D", "Wyłącz / włącz dźwięk (w rozmowie, działa też w grze)"),
+            Toggle("Skróty Ctrl+Shift+M i Ctrl+Shift+D w całym systemie w trakcie rozmowy", p.GlobalShortcuts, v => { p.GlobalShortcuts = v; p.Save(); _sh.W.Keys?.Sync(); }),
             Shortcut("Esc", "Zamknij okienko, wątek, odpowiedź")));
         _body.Add(Card(Label("Strona"), U.Ghost("Otwórz GibCorda w przeglądarce", () => _ = Launcher.LaunchUriAsync(Api.BaseUri), 34).With(b => b.HorizontalAlignment = HorizontalAlignment.Left)));
     }

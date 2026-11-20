@@ -546,7 +546,7 @@ public sealed partial class MessageView : Grid
         f.Items.Add(M.Item("Kopiuj link do wiadomości", "\uE71B", () =>
         {
             var b = _v.Sh.C.Api.BaseUri.AbsoluteUri.TrimEnd('/');
-            Sidebar.Copy(Srv is { } sv ? $"{b}/kanal/{sv.Id}/{m.ChannelId}/{m.Id}" : $"{b}/dm/{m.ChannelId}/{m.Id}");
+            Sidebar.Copy(Srv is { } sv ? (m.ThreadId is long th ? $"{b}/kanal/{sv.Id}/{m.ChannelId}/watek/{th}" : $"{b}/kanal/{sv.Id}/{m.ChannelId}/{m.Id}") : $"{b}/dm/{m.ChannelId}/{m.Id}");
             _v.Sh.Info("Skopiowano link do wiadomości");
         }));
         if (m.AuthorId != S.Me.Id) f.Items.Add(M.Item("Zgłoś wiadomość", "\uE7BA", () => UserMenu.Report(_v.Sh, m)));

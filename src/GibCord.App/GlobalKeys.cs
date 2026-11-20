@@ -37,10 +37,25 @@ public sealed class GlobalKeys : IDisposable
             var wc = new WNDCLASSEX { cbSize = Marshal.SizeOf<WNDCLASSEX>(), lpfnWndProc = Marshal.GetFunctionPointerForDelegate(_proc), hInstance = GetModuleHandle(null), lpszClassName = "GibCordSkroty" };
             RegisterClassEx(ref wc);
             _hwnd = CreateWindowEx(0, "GibCordSkroty", "GibCord — skróty", 0, 0, 0, 0, 0, HWND_MESSAGE, IntPtr.Zero, wc.hInstance, IntPtr.Zero);
+        }
+        catch (Exception ex) { App.Log("Skróty globalne: " + ex.Message); }
+        c.VoiceChanged += Sync;
+    }
+
+    bool _on;
+
+    /// <summary>Skróty zajmujemy tylko w trakcie rozmowy (poza nią Ctrl+Shift+M/D działają w innych programach).</summary>
+    public void Sync()
+    {
+        var want = App.Prefs.GlobalShortcuts && _c.VoiceChannelId != 0 && _hwnd != IntPtr.Zero;
+        if (want == _on) return;
+        _on = want;
+        if (want)
+        {
             if (!RegisterHotKey(_hwnd, IdMute, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 'M')) App.Log("Skrót Ctrl+Shift+M zajęty przez inny program");
             if (!RegisterHotKey(_hwnd, IdDeaf, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 'D')) App.Log("Skrót Ctrl+Shift+D zajęty przez inny program");
         }
-        catch (Exception ex) { App.Log("Skróty globalne: " + ex.Message); }
+        else { UnregisterHotKey(_hwnd, IdMute); UnregisterHotKey(_hwnd, IdDeaf); }
     }
 
     IntPtr Proc(IntPtr hwnd, uint msg, IntPtr w, IntPtr l)
@@ -58,6 +73,7 @@ public sealed class GlobalKeys : IDisposable
 
     public void Dispose()
     {
+        _c.VoiceChanged -= Sync;
         if (_hwnd == IntPtr.Zero) return;
         UnregisterHotKey(_hwnd, IdMute);
         UnregisterHotKey(_hwnd, IdDeaf);
