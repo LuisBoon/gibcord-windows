@@ -17,7 +17,8 @@ public sealed class App : Application, IXamlMetadataProvider
     public IXamlType GetXamlType(string fullName) => _meta.GetXamlType(fullName);
     public XmlnsDefinition[] GetXmlnsDefinitions() => _meta.GetXmlnsDefinitions();
 
-    public static string DataDir { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GibCord6-dane");
+    // kopia do próby (--server …) ma osobny katalog: tokeny, pamięć i ustawienia nie mieszają się z prawdziwym GibCordem
+    public static string DataDir { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Options.OtherServer ? "GibCord6-dane-" + Options.ServerSlug : "GibCord6-dane");
     public static Prefs Prefs { get; private set; } = new();
     public static MainWindow? Window { get; private set; }
 

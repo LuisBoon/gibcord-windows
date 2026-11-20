@@ -22,7 +22,9 @@ public sealed class TitleBarView : Grid
         this.Cols("auto", "auto", "*", "auto", "*", "140");
         var logo = new Image { Source = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "gibcord.png"))), Width = 18, Height = 18 };
         _name = U.T("GibCord", 12.5, U.Bold);
-        var beta = U.Box(U.T("6.0 beta", 10, U.Bold, Theme.OnAccent), Theme.Accent, 5, U.Th(5, 1));
+        var beta = Options.OtherServer
+            ? U.Box(U.T("KOPIA · " + new Uri(Options.Server).Authority, 10, U.Bold, U.B("#ffffff")), U.B("#d6455e"), 5, U.Th(5, 1)) // próba na kopii — żeby nie pomylić z prawdziwym
+            : U.Box(U.T("6.0 beta", 10, U.Bold, Theme.OnAccent), Theme.Accent, 5, U.Th(5, 1));
         beta.VerticalAlignment = VerticalAlignment.Center;
         this.Add(U.H(8, logo, _name, beta).With(p => p.Margin = U.Th(12, 0, 0, 0)).At(0, 0));
 

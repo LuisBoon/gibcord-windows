@@ -45,7 +45,7 @@ public static class Program
     static bool RedirectToRunningInstance()
     {
         AppInstance key;
-        try { key = AppInstance.FindOrRegisterForKey(InstanceKey); }
+        try { key = AppInstance.FindOrRegisterForKey(Options.OtherServer ? InstanceKey + "-" + Options.ServerSlug : InstanceKey); }
         catch { return false; }
         if (key.IsCurrent) return false;
         var args = AppInstance.GetCurrent().GetActivatedEventArgs();
@@ -76,7 +76,12 @@ public static class Options
     /// <summary>--view login|chat|friends|dm|profile|switcher</summary>
     public static string View => Arg("--view") ?? "chat";
     /// <summary>--server https://...: inny serwer (np. kopia testowa).</summary>
-    public static string Server => Arg("--server") ?? Environment.GetEnvironmentVariable("GIBCORD_SERVER") ?? "https://gibcord.luisboon.pl";
+    public static string Server => Arg("--server") ?? Environment.GetEnvironmentVariable("GIBCORD_SERVER") ?? DefaultServer;
+    public const string DefaultServer = "https://gibcord.luisboon.pl";
+    /// <summary>Inny serwer niż prawdziwy GibCord (kopia do próby) — osobne dane, osobne okno, znacznik w pasku.</summary>
+    public static bool OtherServer => !Demo && Server.TrimEnd('/') != DefaultServer;
+    /// <summary>„gibcord.luisboon.pl:8443” → „gibcord.luisboon.pl-8443” (do nazw katalogu i instancji).</summary>
+    public static string ServerSlug => System.Text.RegularExpressions.Regex.Replace(new Uri(Server).Authority, "[^A-Za-z0-9.-]", "-");
     public static bool Hidden => Program.Args.Contains("--ukryty");
 }
 
