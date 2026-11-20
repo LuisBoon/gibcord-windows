@@ -642,6 +642,23 @@ public sealed class Store
                 Blocked.Clear(); Blocked.UnionWith(e.Prop("blocked").To<List<long>>() ?? []);
                 Raise(ChangeKind.Blocked);
                 break;
+            case "event_create":
+            case "event_update":
+            {
+                var ev2 = e.Prop("event").To<ServerEvent>();
+                if (ev2 is null || ServerById(ev2.ServerId) is not { } es) break;
+                es.Events.RemoveAll(x => x.Id == ev2.Id);
+                if (ev2.Open) es.Events.Add(ev2);
+                Raise(ChangeKind.Server, es.Id);
+                break;
+            }
+            case "event_delete":
+            {
+                var ev3 = e.Prop("event").To<ServerEvent>();
+                var id3 = ev3?.Id ?? e.Long("eventId") ?? e.Long("id") ?? 0;
+                foreach (var s3 in Servers) if (s3.Events.RemoveAll(x => x.Id == id3) > 0) Raise(ChangeKind.Server, s3.Id);
+                break;
+            }
             case "thread_update":
                 if (e.Prop("thread").To<ThreadInfo>() is { } t) MergeThread(t);
                 break;

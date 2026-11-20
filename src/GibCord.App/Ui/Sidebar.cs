@@ -132,6 +132,15 @@ public sealed class Sidebar : Grid
         _header.Tapped += HeaderTapped;
         FlyoutBase.SetAttachedFlyout(_header, ServerMenu.Build(_sh, srv));
 
+        // wydarzenia: wiersz nad kanałami (z liczbą zaplanowanych; „TRWA”, gdy coś się właśnie dzieje)
+        var open = srv.Events.Where(e => e.Open).ToList();
+        var active = open.Any(e => e.Active);
+        var evRow = new Grid { Height = 32 }.Cols("22", "*", "auto").Add(U.I("\uE787", 14, active ? Theme.Green : Theme.Mu).At(0, 0),
+            U.T(open.Count == 0 ? "Wydarzenia" : $"{open.Count} {Format.Plural(open.Count, "wydarzenie", "wydarzenia", "wydarzeń")}", 13.5, U.Semi, active ? Theme.Fg : Theme.Mu).At(0, 1));
+        if (active) evRow.Add(U.Box(U.T("TRWA", 9, U.Bold, U.B("#ffffff")), Theme.Green, 4, U.Th(4, 0)).At(0, 2));
+        _list.Children.Add(U.Row(evRow, () => Events.Show(_sh, srv.Id)).With(r => r.Margin = U.Th(8, 6, 8, 2)));
+        _list.Children.Add(U.HLine(.06).With(l => l.Margin = U.Th(14, 4)));
+
         foreach (var g in S.ChannelTree(srv))
         {
             if (g.Category is { } cat)

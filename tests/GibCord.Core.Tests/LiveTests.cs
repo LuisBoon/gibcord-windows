@@ -284,6 +284,24 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
     }
 
     [LiveFact]
+    public async Task Wydarzenia()
+    {
+        var (a, b) = (p.A, p.B);
+        var srv = a.Store.Servers.First(s => s.Channels.Any(c => c.Name == "pogaduchy"));
+        var start = DateTimeOffset.UtcNow.AddDays(1).ToUnixTimeMilliseconds();
+        var ev = await a.Api.CreateEvent(srv.Id, new Dictionary<string, object?> { ["name"] = "Turniej testowy", ["startAt"] = start, ["location"] = "boisko", ["description"] = "opis" });
+        Assert.Equal("scheduled", ev.Status);
+        await p.Until(() => b.Store.ServerById(srv.Id)!.Events.Any(e => e.Id == ev.Id), "wydarzenie u B");
+        var r = await b.Api.Rsvp(ev.Id, true);
+        Assert.Contains(b.Store.Me.Id, r.Rsvp);
+        var list = await b.Api.GetEvents(srv.Id);
+        Assert.Contains(list, e => e.Id == ev.Id && e.Location == "boisko");
+        await a.Api.PatchEvent(ev.Id, new { status = "canceled" });
+        await p.Until(() => !b.Store.ServerById(srv.Id)!.Events.Any(e => e.Id == ev.Id), "odwołanie u B");
+        await a.Api.DeleteEvent(ev.Id);
+    }
+
+    [LiveFact]
     public async Task PisanieZalacznikIStarszeWiadomosci()
     {
         var (a, b) = (p.A, p.B);

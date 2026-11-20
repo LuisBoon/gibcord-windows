@@ -50,6 +50,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
     public event Action<Message>? Notify;
     public event Action<User>? FriendRequest;
     public event Action<string>? SessionEnded;
+    /// <summary>Przypomnienie o wydarzeniu (15 min przed albo start: inMinutes = 0).</summary>
+    public event Action<ServerEvent, int>? EventReminder;
     /// <summary>Serwer wymaga potwierdzenia adresu e-mail (WS 4005) — aplikacja pokazuje ekran z linkiem do wysłania.</summary>
     public event Action? EmailGateRequired;
     public event Action<string>? Error;
@@ -217,6 +219,9 @@ public sealed partial class GibCordClient : IAsyncDisposable
                 break;
             case "friend_update":
                 if (ev.Data.Prop("friend").Str("status") == "incoming" && ev.Data.Prop("user").To<User>() is { } u) FriendRequest?.Invoke(u);
+                break;
+            case "event_reminder":
+                if (ev.Data.Prop("event").To<ServerEvent>() is { } er) EventReminder?.Invoke(er, (int)(ev.Data.Long("inMinutes") ?? 0));
                 break;
         }
     }

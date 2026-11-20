@@ -59,7 +59,8 @@ static class ServerMenu
                 }
                 catch (Exception ex) { sh.Info(GibCordClient.Friendly(ex), true); }
             }));
-        f.Items.Add(M.Item("Oznacz wszystko jako przeczytane", "", () => { foreach (var c in srv.Channels.Where(c => !c.IsVoice && s.IsUnread(c.Id))) sh.C.MarkRead(c.Id); }));
+        f.Items.Add(M.Item("Oznacz wszystko jako przeczytane", "\uE8FB", () => { foreach (var c in srv.Channels.Where(c => !c.IsVoice && s.IsUnread(c.Id))) sh.C.MarkRead(c.Id); }));
+        f.Items.Add(M.Item("Wydarzenia", "\uE787", () => Events.Show(sh, srv.Id)));
         f.Items.Add(NotifyMenu.Sub(sh, "server", srv.Id, s.Notify.Servers.GetValueOrDefault(srv.Id)));
         f.Items.Add(M.Item("Ustawienia serwera na stronie", "", () => _ = Launcher.LaunchUriAsync(new Uri(sh.C.Api.BaseUri, $"serwer/{srv.Id}"))));
         if (srv.OwnerId != s.Me.Id && !srv.Official)

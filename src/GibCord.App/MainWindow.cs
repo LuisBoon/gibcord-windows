@@ -105,6 +105,13 @@ public sealed class MainWindow : Window
         _overlay = new GameOverlay(Client, Dq, () => _presence.InGame);
         Client.SessionEnded += why => ShowLogin(why);
         Client.EmailGateRequired += ShowEmailGate;
+        Client.EventReminder += (e, mins) =>
+        {
+            var srv = Client.Store.ServerById(e.ServerId)?.Name ?? "";
+            var title = mins > 0 ? $"Za {mins} min: {e.Name}" : $"Zaczyna się: {e.Name}";
+            if (App.Prefs.Notifications) Toasts.Show(title, srv, e.ChannelId ?? 0, "ev" + e.Id);
+            _shell?.Info("📅 " + title);
+        };
         Client.Notify += OnNotify;
         Client.FriendRequest += u => { if (App.Prefs.Notifications) Toasts.Show("Zaproszenie do znajomych", $"{u.Name} chce dodać Cię do znajomych", 0, "fr" + u.Id); };
         Client.Store.Changed += c => { if (c.Kind is ChangeKind.All or ChangeKind.Reads or ChangeKind.Dms or ChangeKind.MessageAdded or ChangeKind.Notify or ChangeKind.Servers) UpdateUnread(); };

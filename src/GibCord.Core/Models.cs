@@ -187,6 +187,7 @@ public sealed class Server
     public List<Emoji> Emojis { get; set; } = [];
     public List<Sticker> Stickers { get; set; } = [];
     public List<Sound> Sounds { get; set; } = [];
+    public List<ServerEvent> Events { get; set; } = [];
     public MyPerms? MyPerms { get; set; }
     public long CreatedAt { get; set; }
     public bool Levels { get; set; }
@@ -194,6 +195,25 @@ public sealed class Server
     public List<long> AutoRoleIds { get; set; } = [];
     public long? LevelChannelId { get; set; }
     public string? Banner { get; set; }
+}
+
+/// <summary>Wydarzenie serwera (v3): zaplanowane → trwa → zakończone / odwołane.</summary>
+public sealed class ServerEvent
+{
+    public long Id { get; set; }
+    public long ServerId { get; set; }
+    public long? ChannelId { get; set; }
+    public string Name { get; set; } = "";
+    public string? Description { get; set; }
+    public long StartAt { get; set; }
+    public long? EndAt { get; set; }
+    public string? Location { get; set; }
+    public long CreatorId { get; set; }
+    public List<long> Rsvp { get; set; } = [];
+    public string Status { get; set; } = "scheduled";
+
+    [JsonIgnore] public bool Active => Status == "active";
+    [JsonIgnore] public bool Open => Status is "scheduled" or "active";
 }
 
 public sealed class Sound

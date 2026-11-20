@@ -191,6 +191,13 @@ public sealed class GibCordApi : IDisposable
     public Task<System.Text.Json.JsonElement> PostJson(string path, object? body = null, CancellationToken ct = default) => Send(HttpMethod.Post, path, body, ct);
     public Task<System.Text.Json.JsonElement> PutJson(string path, object? body = null, CancellationToken ct = default) => Send(HttpMethod.Put, path, body, ct);
 
+    // ── wydarzenia ──
+    public Task<List<ServerEvent>> GetEvents(long serverId, CancellationToken ct = default) => Send<List<ServerEvent>>(HttpMethod.Get, $"servers/{serverId}/events", ct: ct);
+    public Task<ServerEvent> CreateEvent(long serverId, object body, CancellationToken ct = default) => Send<ServerEvent>(HttpMethod.Post, $"servers/{serverId}/events", body, ct);
+    public Task<ServerEvent> PatchEvent(long id, object body, CancellationToken ct = default) => Send<ServerEvent>(HttpMethod.Patch, $"events/{id}", body, ct);
+    public Task DeleteEvent(long id, CancellationToken ct = default) => Send(HttpMethod.Delete, $"events/{id}", ct: ct);
+    public Task<ServerEvent> Rsvp(long id, bool on, CancellationToken ct = default) => Send<ServerEvent>(on ? HttpMethod.Put : HttpMethod.Delete, $"events/{id}/rsvp", ct: ct);
+
     // ── wyszukiwarka ──
     public Task<SearchResult> Search(SearchQuery q, CancellationToken ct = default) => Send<SearchResult>(HttpMethod.Get, "search?" + q.ToQueryString(), ct: ct);
 
