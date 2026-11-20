@@ -373,6 +373,44 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
         await b.LeaveVoice();
     }
 
+
+    [LiveFact]
+    public async Task PocztaAdmina()
+    {
+        var a = p.A;
+        // pola, z których korzysta natywna poczta (AdminMail.cs)
+        var meta = await a.Api.GetJson("admin/mail");
+        Assert.False(string.IsNullOrEmpty(meta.Str("domain")));
+        var box = meta.Prop("boxes").EnumerateArray().First(b => b.Prop("system").ValueKind == System.Text.Json.JsonValueKind.False);
+        var bid = box.Long("id")!.Value;
+        Assert.False(string.IsNullOrEmpty(box.Str("localPart")));
+        Assert.Contains("@", box.Str("address"));
+        Assert.True(box.Prop("unread").ValueKind is System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Number);
+        var list = await a.Api.GetJson($"admin/mail/messages?limit=5&boxId={bid}&folder=inbox");
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, list.Prop("messages").ValueKind);
+        // wysyłka (na kopii testowej transport jest udawany) → kopia w „Wysłane”
+        var subject = "Test natywnej poczty " + Guid.NewGuid().ToString("N")[..6];
+        var sent = await a.Api.PostJson("admin/mail/send", new Dictionary<string, object?> { ["boxId"] = bid, ["to"] = "ktos@example.com", ["cc"] = "", ["subject"] = subject, ["text"] = "Cześć!\n\n> cytat", ["signature"] = true, ["attachments"] = new List<long>() });
+        var id = sent.Long("id")!.Value;
+        Assert.Equal("sent", sent.Str("folder"));
+        Assert.Equal("out", sent.Str("direction"));
+        var sentList = await a.Api.GetJson($"admin/mail/messages?limit=10&boxId={bid}&folder=sent");
+        var row = sentList.Prop("messages").EnumerateArray().First(m => m.Long("id") == id);
+        Assert.Equal(subject, row.Str("subject"));
+        Assert.Equal("ktos@example.com", row.Prop("to").EnumerateArray().First().Str("address"));
+        Assert.True(row.Long("date") > 0 || row.Long("receivedAt") > 0);
+        var full = await a.Api.GetJson($"admin/mail/messages/{id}");
+        Assert.Contains("Cześć!", full.Str("text"));
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, full.Prop("attachments").ValueKind);
+        // gwiazdka, wyszukiwanie, kosz, usunięcie na zawsze
+        await a.Api.PatchJson($"admin/mail/messages/{id}", new { starred = true });
+        var starred = await a.Api.GetJson($"admin/mail/messages?limit=10&boxId={bid}&starred=1");
+        Assert.Contains(starred.Prop("messages").EnumerateArray(), m => m.Long("id") == id);
+        var del = await a.Api.DeleteJson($"admin/mail/messages/{id}");
+        Assert.Equal("trash", del.Str("deleted"));
+        var del2 = await a.Api.DeleteJson($"admin/mail/messages/{id}");
+        Assert.Equal("permanent", del2.Str("deleted"));
+    }
     [LiveFact]
     public async Task PanelAdmina()
     {

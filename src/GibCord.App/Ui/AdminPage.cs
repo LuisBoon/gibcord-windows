@@ -17,6 +17,7 @@ public sealed class AdminPage : Grid
     readonly StackPanel _nav = new() { Spacing = 2, Padding = U.Th(12, 24, 12, 24) };
     readonly StackPanel _body = new() { Spacing = 14, MaxWidth = 900, HorizontalAlignment = HorizontalAlignment.Left, Padding = U.Th(40, 28, 40, 60) };
     readonly ScrollViewer _sv;
+    readonly Grid _wide = new(); // sekcje na całą wysokość (poczta: trzy kolumny)
     string _section = "stats";
     string _q = "", _filter = "all";
 
@@ -35,7 +36,7 @@ public sealed class AdminPage : Grid
         close.VerticalAlignment = VerticalAlignment.Top;
         close.Background = U.W(.08);
         close.CornerRadius = new CornerRadius(20);
-        this.Add(new Border { Background = U.W(.03), Child = U.Scroll(_nav) }.At(0, 0), _sv.At(0, 1), close.At(0, 2));
+        this.Add(new Border { Background = U.W(.03), Child = U.Scroll(_nav) }.At(0, 0), _sv.At(0, 1), _wide.At(0, 1), close.At(0, 2));
         KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape) { e.Handled = true; sh.CloseAdmin(); } };
         Draw();
     }
@@ -58,10 +59,15 @@ public sealed class AdminPage : Grid
         Item("system", "\uE9D9", "System i wykresy");
         Item("log", "", "Dziennik");
         Item("announce", "", "Ogłoszenie");
+        Item("mail", "\uE715", "Poczta");
         _nav.Add(U.HLine(.08).With(l => l.Margin = U.Th(10, 10)));
-        _nav.Add(U.Row(U.H(10, U.I("", 15, Theme.Mu), U.T("Poczta (na stronie)", 13.5, U.Semi, Theme.Mu)), () => _ = Launcher.LaunchUriAsync(new Uri(Api.BaseUri, "admin/poczta")), false, 8, U.Th(10, 0), U.Th(0, 1)).With(r => r.Height = 38));
         _nav.Add(U.Row(U.H(10, U.I("", 15, Theme.Mu), U.T("Aktywność osób (strona)", 13.5, U.Semi, Theme.Mu)), () => _ = Launcher.LaunchUriAsync(new Uri(Api.BaseUri, "admin/aktywnosc")), false, 8, U.Th(10, 0), U.Th(0, 1)).With(r => r.Height = 38));
         _body.Children.Clear();
+        _wide.Children.Clear();
+        var wide = _section == "mail";
+        _sv.Visibility = wide ? Visibility.Collapsed : Visibility.Visible;
+        _wide.Visibility = wide ? Visibility.Visible : Visibility.Collapsed;
+        if (wide) { _wide.Children.Add(new AdminMail(_sh)); return; }
         switch (_section)
         {
             case "users": Users(); break;

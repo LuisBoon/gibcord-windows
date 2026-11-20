@@ -465,7 +465,7 @@ public sealed class MainWindow : Window
     {
         try
         {
-            await Task.Delay(Options.View is "switcher" or "profile" or "emoji" or "overlay" ? 3500 : 2500);
+            await Task.Delay(Options.View is "switcher" or "profile" or "emoji" or "overlay" or "adminmail" ? 3500 : 2500);
             if (Options.View == "switcher") _shell?.OpenSwitcher();
             if (Options.View == "profile") _shell?.ShowProfileDemo();
             if (Options.View == "emoji") _shell?.ShowPickerDemo();
