@@ -54,7 +54,8 @@ static class VoiceUi
         var where = U.T(string.IsNullOrEmpty(sub) ? title : $"{title} / {sub}", 11.5, null, Theme.Mu);
         var text = U.V(0, state, where);
         var go = new Border { Child = new Grid().Cols("auto", "*").Add(U.I(G.Signal, 16, StateBrush(c)).With(i => i.Margin = U.Th(2, 0, 8, 0)).At(0, 0), text.At(0, 1)), Background = Theme.Transparent, CornerRadius = new CornerRadius(8), Padding = U.Th(4, 4) };
-        go.Tip("Przejdź do rozmowy");
+        go.Tip("Przejdź do rozmowy (prawy przycisk: stan połączenia)");
+        go.RightTapped += (_, e) => { e.Handled = true; ShowStats(sh, go); };
         go.PointerEntered += (_, _) => go.Background = Theme.Hover;
         go.PointerExited += (_, _) => go.Background = Theme.Transparent;
         go.Tapped += (_, _) => sh.OpenChannel(c.VoiceChannelId);
@@ -69,6 +70,40 @@ static class VoiceUi
         if (c.Voice.ScreenSharing)
             return U.V(0, box, new Border { Background = U.Alpha("#ff4d6a", .18), Padding = U.Th(12, 4), Child = U.T("Nadajesz ekran", 11.5, U.Bold, Theme.Red) });
         return box;
+    }
+
+    /// <summary>Stan połączenia: ping do serwera, jakość głosu, ustawienia pokoju, odświeżane co sekundę.</summary>
+    public static void ShowStats(Shell sh, FrameworkElement anchor)
+    {
+        var c = sh.C;
+        var panel = new StackPanel { Spacing = 8, Width = 300 };
+        var fly = new Flyout { Content = panel, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Top };
+        var t = sh.DispatcherQueue.CreateTimer();
+        t.Interval = TimeSpan.FromSeconds(1);
+        void Draw()
+        {
+            panel.Children.Clear();
+            panel.Add(U.T("Stan połączenia", 15, U.Bold));
+            FrameworkElement Row(string k, string v, Brush? fg = null) => new Grid().Cols("*", "auto").Add(U.T(k, 13, null, Theme.Mu).At(0, 0), U.T(v, 13, U.Bold, fg ?? Theme.Fg).At(0, 1));
+            var rtt = c.Rtt?.TotalMilliseconds;
+            panel.Add(Row("Ping do serwera", rtt is double r ? $"{Math.Round(r)} ms" : "—", rtt is null ? Theme.Mu : rtt < 80 ? Theme.Green : rtt < 200 ? Theme.Yellow : Theme.Red));
+            var q = c.Voice.Quality;
+            panel.Add(Row("Jakość głosu", q switch { >= 3 => "świetna", 2 => "dobra", 1 => "słaba", _ => "bardzo słaba" }, q >= 3 ? Theme.Green : q == 2 ? Theme.Teal : q == 1 ? Theme.Yellow : Theme.Red));
+            panel.Add(Row("Stan", StateText(c)));
+            if (sh.S.ChannelById(c.VoiceChannelId) is { } ch)
+            {
+                panel.Add(Row("Dźwięk kanału", $"{(ch.Bitrate > 0 ? ch.Bitrate : 64)} kb/s"));
+                panel.Add(Row("Transmisje do", ch.MaxStream ?? "1080p"));
+            }
+            panel.Add(Row("Osób w rozmowie", (sh.S.Voice.GetValueOrDefault(c.VoiceChannelId)?.Count ?? 0).ToString()));
+            if (c.Voice.ScreenSharing) panel.Add(Row("Nadajesz ekran", App.Prefs.StreamQuality + " · " + App.Prefs.StreamFps + " kl/s" + (sh.W.Screen?.AudioActive == true ? " · z dźwiękiem" : ""), Theme.Red));
+            panel.Add(U.T("Głos idzie przez serwer GibCorda (LiveKit), szyfrowany w drodze.", 11, null, Theme.Mu2, wrap: true));
+        }
+        t.Tick += (_, _) => Draw();
+        fly.Opened += (_, _) => t.Start();
+        fly.Closed += (_, _) => t.Stop();
+        Draw();
+        fly.ShowAt(anchor);
     }
 
     /// <summary>Przycisk soundboardu: dźwięki wbudowane i serwera, słyszą je wszyscy w rozmowie.</summary>
@@ -341,7 +376,13 @@ public sealed class VoiceView : Grid, IDisposable
         var head = new Grid().Cols("auto", "auto", "*", "auto");
         head.Add(U.I(G.Voice, 17, Theme.Mu).With(i => i.Margin = U.Th(0, 0, 10, 0)).At(0, 0), U.T(ch?.Name ?? "Rozmowa", 15, U.Bold).At(0, 1),
             U.T(members.Count == 0 ? "nikogo tu nie ma" : $"{members.Count} {Format.Plural(members.Count, "osoba", "osoby", "osób")}", 12.5, null, Theme.Mu).With(t => t.Margin = U.Th(12, 0, 0, 0)).At(0, 2));
-        if (Here) head.Add(U.T(VoiceUi.StateText(C), 12.5, U.Bold, VoiceUi.StateBrush(C)).At(0, 3));
+        if (Here)
+        {
+            var st = U.T(VoiceUi.StateText(C), 12.5, U.Bold, VoiceUi.StateBrush(C));
+            st.Tip("Kliknij: ping i jakość połączenia");
+            st.Tapped += (_, _) => VoiceUi.ShowStats(_sh, st);
+            head.Add(st.At(0, 3));
+        }
         _header.Child = head;
 
         // scena: oglądana transmisja na dużo + kafelki
