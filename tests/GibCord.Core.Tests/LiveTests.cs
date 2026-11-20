@@ -181,6 +181,34 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
     }
 
     [LiveFact]
+    public async Task RejestracjaBlokadaZgloszenie()
+    {
+        // nowe konto z aplikacji (token od razu), GET /api/me bez bramki na kopii testowej
+        var c = p.New();
+        var name = "nowy" + Guid.NewGuid().ToString("N")[..6];
+        var r = await c.Register(name, LivePair.Pass, "Nowy Testowy", name + "@example.test");
+        Assert.NotNull(r.Token);
+        var (me, gate) = await c.Api.GetMe();
+        Assert.Equal(name, me.Username);
+        Assert.False(gate);
+        await c.DisposeAsync();
+
+        // blokada: stan u blokującego przychodzi przez block_update
+        var (a, b) = (p.A, p.B);
+        await a.Api.Block(b.Store.Me.Id);
+        await p.Until(() => a.Store.Blocked.Contains(b.Store.Me.Id), "blokada u A");
+        await a.Api.Unblock(b.Store.Me.Id);
+        await p.Until(() => !a.Store.Blocked.Contains(b.Store.Me.Id), "odblokowanie u A");
+        // znajomość wróci w teście Znajomi — blokada ją usuwa
+        // zgłoszenie cudzej wiadomości
+        var chan = a.Store.Servers.SelectMany(s => s.Channels).First(x => x.Name == "pogaduchy");
+        var m = await b.Api.SendMessage(chan.Id, "do zgłoszenia " + name);
+        await a.Api.Report(m.Id, "spam", "test z aplikacji");
+        var ex = await Assert.ThrowsAsync<ApiException>(() => b.Api.Report(m.Id, "spam", null));
+        Assert.Contains("wlasnej", GibCordClient.Fold(ex.Message));
+    }
+
+    [LiveFact]
     public async Task PisanieZalacznikIStarszeWiadomosci()
     {
         var (a, b) = (p.A, p.B);
