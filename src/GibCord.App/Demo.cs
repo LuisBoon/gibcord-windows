@@ -42,6 +42,7 @@ public static class Demo
             case "thread": sh.Go(Eg, Ogolne); sh.OpenThread(1); break;
             case "search": sh.Go(Eg, Ogolne); sh.OpenSearch("sobot"); break;
             case "settings": sh.Go(Eg, Ogolne); sh.ShowSettings("profile"); break;
+            case "srvsettings": sh.Go(Eg, Ogolne); sh.ShowServerSettings(Eg, "channels"); break;
             case "dmcall":
                 sh.C.Store.Voice[DmOla] = [new VoiceMember { UserId = OlaId, Video = true }];
                 sh.C.DemoSpeaker = OlaId;

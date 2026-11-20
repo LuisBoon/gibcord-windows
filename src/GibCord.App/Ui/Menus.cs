@@ -62,7 +62,13 @@ static class ServerMenu
         f.Items.Add(M.Item("Oznacz wszystko jako przeczytane", "\uE8FB", () => { foreach (var c in srv.Channels.Where(c => !c.IsVoice && s.IsUnread(c.Id))) sh.C.MarkRead(c.Id); }));
         f.Items.Add(M.Item("Wydarzenia", "\uE787", () => Events.Show(sh, srv.Id)));
         f.Items.Add(NotifyMenu.Sub(sh, "server", srv.Id, s.Notify.Servers.GetValueOrDefault(srv.Id)));
-        f.Items.Add(M.Item("Ustawienia serwera na stronie", "", () => _ = Launcher.LaunchUriAsync(new Uri(sh.C.Api.BaseUri, $"serwer/{srv.Id}"))));
+        var canSettings = new[] { Perm.ManageServer, Perm.ManageChannels, Perm.ManageRoles, Perm.Kick, Perm.Ban, Perm.Timeout, Perm.ManageExpressions, Perm.ManageMessages, Perm.ViewAuditLog, Perm.ManageNicknames }
+            .Any(p => s.CanServer(srv, p));
+        if (canSettings)
+        {
+            var section = s.CanServer(srv, Perm.ManageServer) ? "overview" : s.CanServer(srv, Perm.ManageChannels) ? "channels" : s.CanServer(srv, Perm.ManageRoles) ? "roles" : "members";
+            f.Items.Add(M.Item("Ustawienia serwera", "\uE713", () => sh.ShowServerSettings(srv.Id, section)));
+        }
         if (srv.OwnerId != s.Me.Id && !srv.Official)
         {
             f.Items.Add(new MenuFlyoutSeparator());

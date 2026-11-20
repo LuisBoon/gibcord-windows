@@ -133,6 +133,16 @@ public sealed class Category
     public long Id { get; set; }
     public string Name { get; set; } = "";
     public int Position { get; set; }
+    public List<PermOverride> Overrides { get; set; } = [];
+}
+
+/// <summary>Nadpisanie uprawnień kanału / kategorii: type everyone (id 0) | role | member.</summary>
+public sealed class PermOverride
+{
+    public string Type { get; set; } = "everyone";
+    public long Id { get; set; }
+    public long Allow { get; set; }
+    public long Deny { get; set; }
 }
 
 public sealed class Channel
@@ -151,6 +161,7 @@ public sealed class Channel
     public int Bitrate { get; set; }
     public int UserLimit { get; set; }
     public string? MaxStream { get; set; }
+    public List<PermOverride> Overrides { get; set; } = [];
 
     [JsonIgnore] public bool IsVoice => Type == "voice";
     [JsonIgnore] public bool IsCardChannel => Kind is "announce" or "changelog";

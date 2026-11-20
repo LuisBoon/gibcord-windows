@@ -20,10 +20,10 @@ static class People
     }
 
     /// <summary>Okienko z listą osób do zaznaczenia. Zwraca wybrane id albo null (anulowano).</summary>
-    public static async Task<List<long>?> Pick(Shell sh, string title, int max, Func<int, string> okLabel, IEnumerable<long>? exclude = null)
+    public static async Task<List<long>?> Pick(Shell sh, string title, int max, Func<int, string> okLabel, IEnumerable<long>? exclude = null, List<long>? only = null)
     {
         var s = sh.S;
-        var all = Candidates(s, exclude);
+        var all = only ?? Candidates(s, exclude);
         var picked = new List<long>();
         var search = new TextBox { PlaceholderText = "Wpisz nazwę znajomego" };
         var chips = new WrapPanel { Spacing = 6 };
@@ -71,6 +71,15 @@ static class People
         Draw();
         search.Loaded += (_, _) => search.Focus(FocusState.Programmatic);
         return await d.ShowAsync() == ContentDialogResult.Primary && picked.Count > 0 ? picked : null;
+    }
+
+    /// <summary>Wybór członków serwera (np. nadanie roli kilku osobom naraz).</summary>
+    public static Task<List<long>?> PickMembers(Shell sh, Server srv, string title, IEnumerable<long> exclude)
+    {
+        var ex = exclude.ToHashSet();
+        var ids = srv.Members.Select(m => m.UserId).Where(id => !ex.Contains(id) && sh.S.U(id) is not null)
+            .OrderBy(id => sh.S.NameOf(id, srv), StringComparer.Create(Format.Pl, true)).ToList();
+        return Pick(sh, title, 200, n => n == 0 ? "Wybierz osoby" : $"Dodaj ({n})", null, ids);
     }
 
     /// <summary>„+” przy rozmowach prywatnych: jedna osoba = rozmowa 1:1, więcej = grupa (do 10 osób).</summary>

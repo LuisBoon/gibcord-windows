@@ -576,6 +576,25 @@ public sealed class Shell : Grid
         _chat?.FocusComposer();
     }
 
+    ServerSettingsPage? _srvSettings;
+
+    public void ShowServerSettings(long serverId, string section = "overview")
+    {
+        CloseServerSettings();
+        _srvSettings = new ServerSettingsPage(this, serverId, section);
+        _srvSettings.At(0, 0, colSpan: 5);
+        Children.Add(_srvSettings);
+        _srvSettings.Loaded += (_, _) => _srvSettings?.Focus(FocusState.Programmatic);
+    }
+
+    public void CloseServerSettings()
+    {
+        if (_srvSettings is null) return;
+        Children.Remove(_srvSettings);
+        _srvSettings = null;
+        _chat?.FocusComposer();
+    }
+
     // ── pełny ekran transmisji: chowa kolumny, okno na cały ekran ──
     public bool FocusMode { get; private set; }
 

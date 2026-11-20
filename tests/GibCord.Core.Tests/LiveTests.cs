@@ -302,6 +302,53 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
     }
 
     [LiveFact]
+    public async Task UstawieniaSerwera()
+    {
+        var (a, b) = (p.A, p.B);
+        var srv = a.Store.Servers.First(s => s.Channels.Any(c => c.Name == "pogaduchy"));
+        Assert.Equal(a.Store.Me.Id, srv.OwnerId);
+        var tag = Guid.NewGuid().ToString("N")[..6];
+        // przegląd
+        var upd = await a.Api.PatchJson($"servers/{srv.Id}", new Dictionary<string, object?> { ["description"] = "opis " + tag, ["levels"] = true });
+        Assert.Equal("opis " + tag, upd.To<Server>()!.Description);
+        // kategoria, kanał, kolejność, nadpisania
+        var cat = await a.Api.PostJson($"servers/{srv.Id}/categories", new { name = "Kat " + tag });
+        var catId = cat.Long("id")!.Value;
+        var ch = await a.Api.PostJson($"servers/{srv.Id}/channels", new Dictionary<string, object?> { ["name"] = "kanal-" + tag, ["type"] = "text", ["categoryId"] = catId, ["slowmode"] = 10 });
+        var chId = ch.Long("id")!.Value;
+        await a.Api.PatchJson($"channels/{chId}", new Dictionary<string, object?> { ["topic"] = "temat", ["readonly"] = true });
+        var lay = await a.Api.PutJson($"servers/{srv.Id}/layout", new { channels = new[] { new { id = chId, categoryId = (long?)catId, position = 0 } } });
+        Assert.Contains(lay.To<Server>()!.Channels, c => c.Id == chId && c.Readonly && c.Slowmode == 10);
+        var ov = await a.Api.PutJson($"channels/{chId}/overrides/everyone/0", new { allow = 0, deny = Perm.SendMessages });
+        Assert.Contains(ov.To<Channel>()!.Overrides, o => o.Type == "everyone" && o.Deny == Perm.SendMessages);
+        // rola: tworzenie, uprawnienia, nadanie B, zabranie
+        var role = await a.Api.PostJson($"servers/{srv.Id}/roles", new { name = "Rola " + tag, color = "#7cc7ff" });
+        var rid = role.Long("id")!.Value;
+        await a.Api.PatchJson($"roles/{rid}", new Dictionary<string, object?> { ["permissions"] = Perm.ManageMessages | Perm.Kick, ["hoist"] = true, ["mentionable"] = true });
+        await a.Api.PutJson($"servers/{srv.Id}/roles/{rid}/members", new { add = new[] { b.Store.Me.Id } });
+        await p.Until(() => b.Store.ServerById(srv.Id)!.Members.Find(m => m.UserId == b.Store.Me.Id)!.RoleIds.Contains(rid), "rola u B");
+        await a.Api.PutJson($"servers/{srv.Id}/roles/{rid}/members", new { remove = new[] { b.Store.Me.Id } });
+        // automoderacja, dziennik, zgłoszenia, bany
+        var am = await a.Api.PatchJson($"servers/{srv.Id}/automod", new Dictionary<string, object?> { ["level"] = 1, ["words"] = new[] { "brzydkie" } });
+        Assert.Equal(1, am.Long("level"));
+        var audit = await a.Api.GetJson($"servers/{srv.Id}/audit?limit=50");
+        Assert.Contains(audit.Prop("entries").EnumerateArray(), e => e.Str("action") == "role_create");
+        var reps = await a.Api.GetJson($"servers/{srv.Id}/reports?status=open");
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, reps.Prop("reports").ValueKind);
+        var bans = await a.Api.GetJson($"servers/{srv.Id}/bans");
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, bans.ValueKind);
+        // emoji z pliku PNG 1×1
+        var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+        var emo = await a.Api.PostImage($"servers/{srv.Id}/emojis?name=e{tag}", new MemoryStream(png), "image/png");
+        await a.Api.DeleteJson($"emojis/{emo.Long("id")}");
+        // sprzątanie
+        await a.Api.PatchJson($"servers/{srv.Id}/automod", new Dictionary<string, object?> { ["level"] = 0, ["words"] = Array.Empty<string>() });
+        await a.Api.DeleteJson($"roles/{rid}");
+        await a.Api.DeleteJson($"channels/{chId}");
+        await a.Api.DeleteJson($"categories/{catId}");
+    }
+
+    [LiveFact]
     public async Task PisanieZalacznikIStarszeWiadomosci()
     {
         var (a, b) = (p.A, p.B);
