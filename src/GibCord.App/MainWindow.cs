@@ -92,6 +92,7 @@ public sealed class MainWindow : Window
         {
             Client = Demo.CreateClient(UiRun);
             Client.Voice.Options = App.Prefs.Voice;
+            if (Options.View == "overlay") _overlay = new GameOverlay(Client, Dq, () => true); // obraz nakładki zapisuje się obok zrzutu
             if (Options.View == "login") ShowLogin(null); else ShowShell();
             Activate();
             if (Options.Screenshot is { } path) _ = Screenshot(path);

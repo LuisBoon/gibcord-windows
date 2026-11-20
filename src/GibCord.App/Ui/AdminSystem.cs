@@ -125,6 +125,14 @@ public sealed class AdminSystem : StackPanel
         _charts.Children.Clear();
         var step = (Num(_data, "stepSec") ?? 60) * 1000;
         foreach (var d in defs) _charts.Children.Add(Chart(d, pts, step));
+        // tryb pokazowy: przewiń do wykresów (zrzut w CI ma mało miejsca)
+        if (Options.Demo)
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                DependencyObject? p = this;
+                while (p is not null and not ScrollViewer) p = VisualTreeHelper.GetParent(p);
+                (p as ScrollViewer)?.ChangeView(null, 470, null, true);
+            });
     }
 
     static FrameworkElement Tile(string value, string label, string sub, bool? warn = false) => new Border
