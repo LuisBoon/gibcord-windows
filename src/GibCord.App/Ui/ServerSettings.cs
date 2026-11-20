@@ -80,6 +80,7 @@ public sealed partial class ServerSettingsPage : Grid
         if (Can(Perm.Ban)) Item("bans", "", "Bany");
         if (Can(Perm.ManageExpressions)) Item("emoji", "", "Emoji, naklejki, dźwięki");
         if (Can(Perm.ManageServer) || Can(Perm.ManageMessages)) Item("automod", "", "Automoderacja");
+        if (Can(Perm.ManageServer)) Item("template", "\uE8A5", "Szablon serwera");
         if (Can(Perm.ManageMessages)) Item("reports", "", "Zgłoszenia");
         if (Can(Perm.ViewAuditLog)) Item("audit", "", "Dziennik zmian");
         if (Owner)
@@ -105,6 +106,7 @@ public sealed partial class ServerSettingsPage : Grid
             case "automod": Automod(); break;
             case "reports": Reports(); break;
             case "audit": Audit(); break;
+            case "template": Template(); break;
             default: Overview(); break;
         }
         if (keepScroll) _sv.ChangeView(null, off, null, true);
@@ -211,6 +213,46 @@ public sealed partial class ServerSettingsPage : Grid
                 try { var code = await Api.CreateInvite(_sid); var link = $"{Api.BaseUri.AbsoluteUri.TrimEnd('/')}/i/{code}"; Sidebar.Copy(link); _sh.Info("Skopiowano: " + link); }
                 catch (Exception ex) { Err(ex); }
             }, 34).With(b => b.HorizontalAlignment = HorizontalAlignment.Left)));
+    }
+
+    // ───────────────────────── Szablon ─────────────────────────
+
+    void Template()
+    {
+        Title("Szablon serwera", "Kanały, kategorie i role tego serwera jako przepis — ktoś może założyć taki sam serwer jednym kliknięciem. Bez wiadomości i członków.");
+        var host = new StackPanel { Spacing = 12 };
+        host.Add(new ProgressRing { IsActive = true, Width = 22, Height = 22 });
+        _body.Add(host);
+        _ = FillTemplate(host);
+    }
+
+    async Task FillTemplate(StackPanel host)
+    {
+        System.Text.Json.JsonElement t;
+        try { t = (await Api.GetJson($"servers/{_sid}/template")).Prop("template"); }
+        catch (Exception ex) { host.Children.Clear(); host.Add(U.T(GibCordClient.Friendly(ex), 13, null, Theme.Red, wrap: true)); return; }
+        host.Children.Clear();
+        var name = new TextBox { Text = t.Str("name") ?? Srv!.Name, MaxLength = 100, PlaceholderText = "Nazwa szablonu" };
+        var desc = new TextBox { Text = t.Str("description") ?? "", MaxLength = 120, PlaceholderText = "Krótki opis (opcjonalnie)" };
+        if (t.ValueKind != System.Text.Json.JsonValueKind.Object)
+        {
+            host.Add(Card(Label("Nazwa"), name, Label("Opis"), desc,
+                U.Primary("Utwórz szablon", async () => { if (await Run(() => Api.PostJson($"servers/{_sid}/template", new { name = name.Text.Trim(), description = desc.Text.Trim() }), "Szablon gotowy")) DrawBody(); }, 40)
+                    .With(b => { b.Width = 200; b.HorizontalAlignment = HorizontalAlignment.Left; })));
+            return;
+        }
+        var link = $"{Api.BaseUri.AbsoluteUri.TrimEnd('/')}/szablon/{t.Str("code")}";
+        host.Add(Card(Label("Link do szablonu"), U.H(8, U.T(link, 13, U.Semi).With(x => x.IsTextSelectionEnabled = true), U.Ghost("Kopiuj", () => { Sidebar.Copy(link); _sh.Info("Skopiowano link do szablonu"); }, 30)),
+            U.T($"Użyto {t.Long("uses") ?? 0} razy · zmieniony {Format.When(t.Long("updatedAt") ?? 0)}", 12, null, Theme.Mu)));
+        if (t.Bool("dirty") == true)
+            host.Add(Card(U.T("Serwer zmienił się od ostatniego zapisu szablonu.", 13, U.Semi, Theme.Yellow),
+                U.Ghost("Zaktualizuj szablon", async () => { if (await Run(() => Api.PatchJson($"servers/{_sid}/template", new { sync = true }), "Szablon zaktualizowany")) DrawBody(); }, 32).With(b => b.HorizontalAlignment = HorizontalAlignment.Left)));
+        host.Add(Card(Label("Nazwa"), name, Label("Opis"), desc,
+            U.H(8, U.Ghost("Zapisz", async () => await Run(() => Api.PatchJson($"servers/{_sid}/template", new { name = name.Text.Trim(), description = desc.Text.Trim() }), "Zapisano"), 32),
+                U.Ghost("Usuń szablon", async () =>
+                {
+                    if (await M.Confirm(_sh, "Usunąć szablon?", "Link przestanie działać. Serwery już założone z szablonu zostają.", "Usuń") && await Run(() => Api.DeleteJson($"servers/{_sid}/template"), "Szablon usunięty")) DrawBody();
+                }, 32))));
     }
 
     async void DeleteServer()

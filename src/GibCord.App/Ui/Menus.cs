@@ -196,20 +196,78 @@ static class SettingsMenu
     }
 }
 
-/// <summary>Dodanie serwera: dołączenie z zaproszenia albo nowy serwer.</summary>
+/// <summary>Dodanie serwera: dołączenie z zaproszenia albo nowy serwer — pusty, z gotowego szablonu, z szablonu GibCorda albo z Discorda.</summary>
 static class AddServerDialog
 {
+    static readonly System.Text.RegularExpressions.Regex GcTpl = new(@"/szablon/([A-Za-z0-9]{12})");
+    static readonly System.Text.RegularExpressions.Regex DcTpl = new(@"(?:discord\.new/|discord(?:app)?\.com/template/)([A-Za-z0-9]{2,32})");
+
     public static async void Show(Shell sh)
     {
         var code = new TextBox { PlaceholderText = "https://gibcord.luisboon.pl/i/abc123 albo abc123" };
         var name = new TextBox { PlaceholderText = "np. Ekipa z klasy", MaxLength = 100 };
+        var list = new StackPanel { Spacing = 4 };
+        var preview = new StackPanel { Spacing = 4 };
+        var link = new TextBox { PlaceholderText = "Link do szablonu: GibCord (/szablon/…) albo Discord (discord.new/…)" };
+        (string Source, string Code)? chosen = null;
+        void Pick((string, string)? t, string label)
+        {
+            chosen = t;
+            foreach (var b in list.Children.OfType<Border>()) b.Background = Equals(b.Tag, label) ? Theme.Active : U.W(.04);
+        }
+        Border Opt(string label, string blurb, string letter, (string, string)? t)
+        {
+            var b = new Border { Tag = label, Background = U.W(.04), CornerRadius = new CornerRadius(10), Padding = U.Th(10, 8),
+                Child = U.H(10, U.Box(U.T(letter, 15, U.Bold, Theme.OnAccent).With(x => x.HorizontalAlignment = HorizontalAlignment.Center), Theme.Accent, 10, U.Th(0)).With(x => { x.Width = 36; x.Height = 36; }),
+                    U.V(0, U.T(label, 13.5, U.Bold), U.T(blurb, 11.5, null, Theme.Mu, wrap: true).With(x => x.MaxWidth = 330))) };
+            b.Tapped += (_, _) => { Pick(t, label); if (t is null) preview.Children.Clear(); };
+            list.Add(b);
+            return b;
+        }
+        Opt("Pusty serwer", "Jeden kanał tekstowy i jeden głosowy — resztę dodasz sam.", "+", null);
+        Pick(null, "Pusty serwer");
+        try
+        {
+            var arr = await sh.C.Api.GetJson("templates/builtin");
+            foreach (var t in arr.EnumerateArray())
+            {
+                var key = t.Str("key") ?? "";
+                var cnt = t.Prop("preview").Prop("counts");
+                Opt(t.Str("name") ?? key, (t.Str("blurb") ?? "") + $" · {cnt.Long("text")} tekst., {cnt.Long("voice")} głos., {cnt.Long("roles")} ról", t.Str("letter") ?? "•", ("builtin", key));
+            }
+        }
+        catch { }
+        link.TextChanged += async (_, _) =>
+        {
+            var m1 = GcTpl.Match(link.Text); var m2 = DcTpl.Match(link.Text);
+            (string Source, string Code)? t = m1.Success ? ("gibcord", m1.Groups[1].Value) : m2.Success ? ("discord", m2.Groups[1].Value) : null;
+            preview.Children.Clear();
+            if (t is null) return;
+            preview.Add(new ProgressRing { IsActive = true, Width = 18, Height = 18 });
+            try
+            {
+                var p = await sh.C.Api.GetJson(t.Value.Source == "discord" ? $"templates/discord/{t.Value.Code}" : $"templates/{t.Value.Code}");
+                preview.Children.Clear();
+                var cnt = p.Prop("counts");
+                preview.Add(U.T(p.Str("name") ?? "Szablon", 14, U.Bold));
+                preview.Add(U.T($"{cnt.Long("categories")} kategorii · {cnt.Long("text")} tekstowych · {cnt.Long("voice")} głosowych · {cnt.Long("roles")} ról", 12, null, Theme.Mu));
+                var chans = string.Join(", ", p.Prop("channels").EnumerateArray().Take(12).Select(c => (c.Str("type") == "voice" ? "🔊" : "#") + c.Str("name")));
+                preview.Add(U.T(chans, 11.5, null, Theme.Mu2, wrap: true));
+                if (p.Str("notes") is { Length: > 0 } notes) preview.Add(U.T(notes, 11.5, null, Theme.Yellow, wrap: true));
+                Pick(t, "");
+                if (string.IsNullOrWhiteSpace(name.Text)) name.Text = p.Str("serverName") ?? p.Str("name") ?? "";
+            }
+            catch (Exception ex) { preview.Children.Clear(); preview.Add(U.T(GibCordClient.Friendly(ex), 12, null, Theme.Red, wrap: true)); }
+        };
         var panel = U.V(10,
             U.T("Masz zaproszenie? Wklej link albo kod:", 13, U.Semi, Theme.Mu), code,
             U.HLine(.12).With(l => l.Margin = U.Th(0, 8)),
-            U.T("Albo załóż własny serwer:", 13, U.Semi, Theme.Mu), name);
+            U.T("Albo załóż własny serwer:", 13, U.Semi, Theme.Mu), name,
+            new ScrollViewer { Content = list, MaxHeight = 230 },
+            link, preview).With(p => p.Width = 420);
         var d = new ContentDialog
         {
-            Title = "Dodaj serwer", Content = panel, PrimaryButtonText = "Dołącz", SecondaryButtonText = "Załóż serwer", CloseButtonText = "Anuluj",
+            Title = "Dodaj serwer", Content = new ScrollViewer { Content = panel, MaxHeight = 600 }, PrimaryButtonText = "Dołącz", SecondaryButtonText = "Załóż serwer", CloseButtonText = "Anuluj",
             DefaultButton = ContentDialogButton.Primary, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,
         };
         var r = await d.ShowAsync();
@@ -223,13 +281,16 @@ static class AddServerDialog
                 var srv = await sh.C.Api.JoinInvite(k);
                 await sh.C.RefreshState();
                 sh.Go(srv.Id, 0);
-                if (sh.S.ServerById(srv.Id) is { } joined && joined.Roles.Any(r => r.SelfAssignable)) ServerProfile.PickRoles(sh, joined);
+                if (sh.S.ServerById(srv.Id) is { } joined && joined.Roles.Any(x => x.SelfAssignable)) ServerProfile.PickRoles(sh, joined);
             }
             else if (r == ContentDialogResult.Secondary && name.Text.Trim() is { Length: > 0 } n)
             {
-                var srv = await sh.C.Api.CreateServer(n);
+                object body = chosen is { } t ? new { name = n, template = new { source = t.Source, code = t.Code } } : new { name = n };
+                var e = await sh.C.Api.PostJson("servers", body);
+                var srvId = e.Long("id") ?? 0;
                 await sh.C.RefreshState();
-                sh.Go(srv.Id, 0);
+                sh.Go(srvId, 0);
+                sh.Info("Serwer gotowy! Zaproś znajomych z menu serwera.");
             }
         }
         catch (Exception ex) { sh.Info(GibCordClient.Friendly(ex), true); }

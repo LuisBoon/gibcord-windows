@@ -399,6 +399,28 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
     }
 
     [LiveFact]
+    public async Task Szablony()
+    {
+        var a = p.A;
+        var srv = a.Store.Servers.First(s => s.Channels.Any(c => c.Name == "pogaduchy"));
+        var cur = (await a.Api.GetJson($"servers/{srv.Id}/template")).Prop("template");
+        if (cur.ValueKind == System.Text.Json.JsonValueKind.Object) await a.Api.DeleteJson($"servers/{srv.Id}/template");
+        var t = (await a.Api.PostJson($"servers/{srv.Id}/template", new { name = "Testowy szablon", description = "opis" })).Prop("template");
+        var code = t.Str("code")!;
+        var pv = await a.Api.GetJson($"templates/{code}");
+        Assert.True(pv.Prop("counts").Long("text") >= 1);
+        var builtin = await a.Api.GetJson("templates/builtin");
+        var key = builtin.EnumerateArray().First().Str("key")!;
+        var s1 = await a.Api.PostJson("servers", new { name = "Z gotowego", template = new { source = "builtin", code = key } });
+        var s2 = await a.Api.PostJson("servers", new { name = "Z mojego", template = new { source = "gibcord", code } });
+        Assert.True(s2.To<Server>()!.Channels.Count >= 2);
+        await a.Api.PatchJson($"servers/{srv.Id}/template", new { sync = true });
+        await a.Api.DeleteJson($"servers/{s1.Long("id")}");
+        await a.Api.DeleteJson($"servers/{s2.Long("id")}");
+        await a.Api.DeleteJson($"servers/{srv.Id}/template");
+    }
+
+    [LiveFact]
     public async Task PisanieZalacznikIStarszeWiadomosci()
     {
         var (a, b) = (p.A, p.B);
