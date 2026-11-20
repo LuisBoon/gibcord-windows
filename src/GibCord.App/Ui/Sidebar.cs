@@ -195,6 +195,7 @@ public sealed class Sidebar : Grid
         var av = new Avatar(22).Set(S, _sh.C.Api, vm.UserId, srv);
         _talk.Add((vm.UserId, av));
         var icons = U.H(4);
+        if (_sh.C.SoundLabels.TryGetValue(vm.UserId, out var sl) && sl.Until > Environment.TickCount64) icons.Add(U.Box(U.T(sl.Label, 10, U.Bold, Theme.OnAccent), Theme.Accent, 4, U.Th(4, 0)));
         if (vm.Streaming) icons.Add(U.Box(U.T("NA ŻYWO", 9, U.Bold, U.B("#ffffff")), Theme.Red2, 4, U.Th(4, 0)));
         if (vm.Video) icons.Add(U.I("", 12, Theme.Mu));
         if (vm.Muted || vm.ServerMuted || vm.Suppressed) icons.Add(U.I("", 12, Theme.Red));

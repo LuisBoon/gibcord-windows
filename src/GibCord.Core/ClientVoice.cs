@@ -133,6 +133,41 @@ public sealed partial class GibCordClient
 
     int BitrateOf(long cid) => Store.ChannelById(cid) is { Bitrate: > 0 } c ? c.Bitrate : 64;
 
+    // ── soundboard ──
+
+    /// <summary>Dźwięk z soundboardu w moim pokoju (do odtworzenia przez aplikację). Url względny (/sounds/… albo /uploads/…).</summary>
+    public event Action<SoundPlay>? SoundPlayed;
+    /// <summary>Kto właśnie puścił dźwięk (etykieta przy osobie na ~3 s).</summary>
+    public Dictionary<long, (string Label, long Until)> SoundLabels { get; } = [];
+
+    /// <summary>Puszcza dźwięk w pokoju: wbudowany (klucz) albo z serwera (id). Serwer pilnuje limitów i uprawnień.</summary>
+    public void PlaySound(long? soundId, string? builtin)
+    {
+        if (VoiceChannelId == 0) { VoiceInfo?.Invoke("Najpierw wejdź na kanał głosowy", true); return; }
+        if (Offline) { OnSound(VoiceChannelId, Store.Me.Id, builtin is null ? "/sounds/ding.mp3" : $"/sounds/{builtin}.mp3", 1, soundId, builtin); return; }
+        _ = _gw?.Send(builtin is not null ? (object)new { t = "sound_play", builtin } : new { t = "sound_play", soundId });
+    }
+
+    public static readonly Dictionary<string, (string Emoji, string Name)> BuiltinSounds = new()
+    {
+        ["airhorn"] = ("📯", "Trąbka"), ["drumroll"] = ("🥁", "Werble"), ["rimshot"] = ("🥁", "Ba-dum-tss"), ["applause"] = ("👏", "Oklaski"),
+        ["sad"] = ("😢", "Smutna trąbka"), ["boing"] = ("🤪", "Boing"), ["ding"] = ("🔔", "Ding"), ["tada"] = ("🎉", "Tadam"),
+    };
+
+    void OnSound(long cid, long uid, string url, double volume, long? soundId, string? builtin)
+    {
+        string label;
+        if (builtin is not null) label = BuiltinSounds.TryGetValue(builtin, out var b) ? b.Emoji + " " + b.Name : "🔊 " + builtin;
+        else
+        {
+            var snd = Store.ServerOfChannel(cid)?.Sounds.Find(x => x.Id == soundId);
+            label = (string.IsNullOrEmpty(snd?.Emoji) ? "🔊" : snd!.Emoji) + " " + (snd?.Name ?? "dźwięk");
+        }
+        SoundLabels[uid] = (label, Environment.TickCount64 + 3500);
+        if (!Voice.Options.Deafened) SoundPlayed?.Invoke(new SoundPlay(cid, uid, url, Math.Clamp(volume, 0, 1), label));
+        VoiceChanged?.Invoke();
+    }
+
     void OnVoiceEvent(GatewayEvent ev)
     {
         var d = ev.Data;
@@ -155,6 +190,9 @@ public sealed partial class GibCordClient
                 VoiceChanged?.Invoke();
                 return;
             }
+            case "error" when d.Str("op") == "sound_play":
+                VoiceInfo?.Invoke(d.Str("error") ?? "Nie udało się puścić dźwięku", true);
+                return;
             case "error" when d.Str("op") is "voice_join" or "voice_stream" or "voice_video":
             {
                 var msg = d.Str("error") ?? "Nie udało się";
@@ -163,6 +201,10 @@ public sealed partial class GibCordClient
                 VoiceInfo?.Invoke(msg, true);
                 return;
             }
+            case "sound_play":
+                if (d.Long("channelId") is long sc && sc == VoiceChannelId && d.Long("userId") is long su && d.Str("url") is { } surl && !Store.Blocked.Contains(su))
+                    OnSound(sc, su, surl, d.TryGetProperty("volume", out var sv) && sv.ValueKind == JsonValueKind.Number ? sv.GetDouble() : 1, d.Long("soundId"), d.Str("builtin"));
+                return;
             case "call_ring":
                 if (d.Long("channelId") is long rc && d.Long("from") is long from && rc != VoiceChannelId) CallRing?.Invoke(rc, from);
                 return;

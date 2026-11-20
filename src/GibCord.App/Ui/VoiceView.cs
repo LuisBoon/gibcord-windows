@@ -62,12 +62,63 @@ static class VoiceUi
         var right = U.H(0);
         if (!c.Offline && sh.W.Screen is not null)
             right.Add(U.IconButton(G.Screen, c.Voice.ScreenSharing ? "Zakończ transmisję" : "Udostępnij ekran", () => ToggleScreen(sh), 15, 32, c.Voice.ScreenSharing ? Theme.Red : null));
+        right.Add(SoundboardButton(sh, 32));
         right.Add(leave);
         var row = new Grid().Cols("*", "auto").Add(go.At(0, 0), right.At(0, 1));
         var box = new Border { Child = row, Padding = U.Th(8, 6, 6, 6), Background = Theme.Rail, BorderBrush = Theme.Line, BorderThickness = U.Th(0, 1, 0, 0) };
         if (c.Voice.ScreenSharing)
             return U.V(0, box, new Border { Background = U.Alpha("#ff4d6a", .18), Padding = U.Th(12, 4), Child = U.T("Nadajesz ekran", 11.5, U.Bold, Theme.Red) });
         return box;
+    }
+
+    /// <summary>Przycisk soundboardu: dźwięki wbudowane i serwera, słyszą je wszyscy w rozmowie.</summary>
+    public static Button SoundboardButton(Shell sh, double box)
+    {
+        var b = U.IconButton("\uE7F5", "Soundboard — puść dźwięk wszystkim w rozmowie", () => { }, box > 40 ? 16 : 15, box);
+        b.Click += (_, _) => ShowSoundboard(sh, b);
+        return b;
+    }
+
+    public static void ShowSoundboard(Shell sh, FrameworkElement anchor)
+    {
+        var c = sh.C;
+        var srv = sh.S.ServerOfChannel(c.VoiceChannelId);
+        var panel = new StackPanel { Spacing = 6, Width = 340 };
+        var fly = new Flyout { Content = U.Scroll(panel).With(s => s.MaxHeight = 420), Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Top };
+        if (srv is not null && !sh.S.Can(c.VoiceChannelId, Perm.UseSoundboard))
+        {
+            panel.Add(U.T("Nie masz uprawnień do dźwięków na tym kanale.", 13, null, Theme.Mu, wrap: true));
+            fly.ShowAt(anchor);
+            return;
+        }
+        Button Snd(string emoji, string name, Action play)
+        {
+            var btn = new Button
+            {
+                Content = U.H(6, U.T(emoji, 16), U.T(name, 12.5, U.Semi).With(t => t.MaxWidth = 110)), Background = U.W(.08), BorderThickness = U.Th(0),
+                CornerRadius = new CornerRadius(10), Padding = U.Th(10, 6), Width = 162, HorizontalContentAlignment = HorizontalAlignment.Left,
+            };
+            btn.Click += (_, _) => play();
+            return btn;
+        }
+        panel.Add(U.T("WBUDOWANE", 10.5, U.Bold, Theme.Mu2));
+        var wrap = new WrapPanel { Spacing = 6 };
+        var keys = c.Info?.BuiltinSounds.Select(x => x.Key).ToList() is { Count: > 0 } k ? k : GibCordClient.BuiltinSounds.Keys.ToList();
+        foreach (var key in keys)
+        {
+            var (emo, name) = GibCordClient.BuiltinSounds.TryGetValue(key, out var bi) ? bi : ("🔊", key);
+            wrap.Children.Add(Snd(emo, name, () => c.PlaySound(null, key)));
+        }
+        panel.Add(wrap);
+        if (srv is { Sounds.Count: > 0 })
+        {
+            panel.Add(U.T(srv.Name.ToUpperInvariant(), 10.5, U.Bold, Theme.Mu2).With(t => t.Margin = U.Th(0, 6, 0, 0)));
+            var w2 = new WrapPanel { Spacing = 6 };
+            foreach (var snd in srv.Sounds) { var id = snd.Id; w2.Children.Add(Snd(string.IsNullOrEmpty(snd.Emoji) ? "🔊" : snd.Emoji!, snd.Name, () => c.PlaySound(id, null))); }
+            panel.Add(w2);
+        }
+        panel.Add(U.T("Jeden dźwięk na 2 sekundy. Słyszą go wszyscy w rozmowie (poza wygłuszonymi).", 11, null, Theme.Mu2, wrap: true).With(t => t.Margin = U.Th(0, 6, 0, 0)));
+        fly.ShowAt(anchor);
     }
 
     /// <summary>Start / koniec transmisji ekranu (systemowe okienko wyboru ekranu albo okna).</summary>
@@ -206,11 +257,13 @@ public sealed class VoiceView : Grid, IDisposable
     readonly Dictionary<string, (Image Img, WriteableBitmap? Bmp, long Seen)> _video = [];
     bool _disposed;
 
-    public VoiceView(Shell sh, long cid)
+    /// <summary>Kompaktowy: bez nagłówka — scena rozmowy nad czatem w rozmowie prywatnej (kamery, transmisje).</summary>
+    public VoiceView(Shell sh, long cid, bool compact = false)
     {
         _sh = sh;
         _cid = cid;
-        this.Rows("48", "*", "auto");
+        this.Rows(compact ? "0" : "48", "*", "auto");
+        if (compact) { _controls.Padding = U.Th(0, 6, 0, 10); Background = U.B("#40080414"); }
         this.Add(_header.At(0), _stage.At(1), _controls.At(2));
         _tick = DispatcherQueue.CreateTimer();
         _tick.Interval = TimeSpan.FromMilliseconds(66);
@@ -319,7 +372,9 @@ public sealed class VoiceView : Grid, IDisposable
             var cam = U.IconButton(G.Camera, camOn ? "Wyłącz kamerę" : "Włącz kamerę", () => VoiceUi.ToggleCamera(_sh), 16, 44, camOn ? U.B("#ffffff") : null);
             cam.Background = camOn ? U.B("#2fa66a") : U.W(.1); cam.CornerRadius = new CornerRadius(22);
             if (C.Offline || _sh.W.Cam is null) cam.Visibility = Visibility.Collapsed;
-            _controls.Child = U.H(12, mic, deaf, cam, screen, settings, leave).With(p => p.HorizontalAlignment = HorizontalAlignment.Center);
+            var sb = VoiceUi.SoundboardButton(_sh, 44);
+            sb.Background = U.W(.1); sb.CornerRadius = new CornerRadius(22);
+            _controls.Child = U.H(12, mic, deaf, cam, screen, sb, settings, leave).With(p => p.HorizontalAlignment = HorizontalAlignment.Center);
         }
         else
         {
@@ -417,7 +472,13 @@ public sealed class CallBar : Grid
             var (mic, deaf) = VoiceUi.MuteButtons(_sh);
             var leave = new Button { Content = U.I(G.HangUp, 16, U.B("#ffffff")), Width = 48, Height = 34, CornerRadius = new CornerRadius(17), Background = Theme.Red2, BorderThickness = U.Th(0) };
             leave.Click += (_, _) => _ = c.LeaveVoice();
-            right.Add(mic, deaf, leave);
+            var camOn = _sh.W.Cam?.Active == true;
+            var cam = U.IconButton(G.Camera, camOn ? "Wyłącz kamerę" : "Włącz kamerę", () => VoiceUi.ToggleCamera(_sh), 15, 32, camOn ? Theme.Green : null);
+            var sharing = c.Voice.ScreenSharing;
+            var screen = U.IconButton(G.Screen, sharing ? "Zakończ transmisję" : "Udostępnij ekran", () => VoiceUi.ToggleScreen(_sh), 15, 32, sharing ? Theme.Red : null);
+            if (c.Offline || _sh.W.Cam is null) cam.Visibility = Visibility.Collapsed;
+            if (c.Offline || _sh.W.Screen is null) screen.Visibility = Visibility.Collapsed;
+            right.Add(mic, deaf, cam, screen, VoiceUi.SoundboardButton(_sh, 32), leave);
         }
         else
         {

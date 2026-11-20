@@ -118,7 +118,44 @@ public sealed class Shell : Grid
 
     // ───────────────────────── rozmowy ─────────────────────────
 
-    void OnVoiceChanged() => Dirty(side: true, voice: true);
+    long _camAfterJoin;
+    DispatcherQueueTimer? _soundTimer;
+
+    void OnVoiceChanged()
+    {
+        Dirty(side: true, voice: true);
+        // rozmowa wideo: kamera włącza się, gdy połączenie z głosem jest gotowe
+        if (_camAfterJoin != 0 && C.VoiceChannelId == _camAfterJoin && C.VoiceStatus == GibCord.Core.Voice.VoiceState.Connected)
+        {
+            _camAfterJoin = 0;
+            if (W.Cam?.Active != true) VoiceUi.ToggleCamera(this);
+        }
+        // etykiety soundboardu znikają po ~3 s
+        if (C.SoundLabels.Count > 0)
+        {
+            _soundTimer ??= DispatcherQueue.CreateTimer();
+            _soundTimer.Interval = TimeSpan.FromSeconds(3.7);
+            _soundTimer.IsRepeating = false;
+            _soundTimer.Tick -= SoundTick;
+            _soundTimer.Tick += SoundTick;
+            _soundTimer.Stop();
+            _soundTimer.Start();
+        }
+    }
+
+    void SoundTick(DispatcherQueueTimer t, object o)
+    {
+        var now = Environment.TickCount64;
+        foreach (var k in C.SoundLabels.Where(x => x.Value.Until <= now).Select(x => x.Key).ToList()) C.SoundLabels.Remove(k);
+        Dirty(side: true, voice: true);
+    }
+
+    public void StartVideoCall(long dmId)
+    {
+        _camAfterJoin = dmId;
+        if (C.VoiceChannelId != dmId) _ = C.StartCall(dmId);
+        else OnVoiceChanged();
+    }
     void OnVoiceInfo(string msg, bool error) => Info(msg, error);
 
     void OnCallRing(long cid, long from)

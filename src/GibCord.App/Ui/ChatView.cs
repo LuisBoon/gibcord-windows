@@ -61,6 +61,8 @@ public sealed partial class ChatView : Grid, IDisposable
     readonly Composer _composer;
     readonly Border _pill;
     readonly CallBar? _call;
+    readonly Grid _listArea = new Grid().Rows("auto", "*");
+    VoiceView? _stage;
     readonly DispatcherQueueTimer _typingTimer;
     readonly long _lastReadAtOpen;
     bool _stick = true;
@@ -98,10 +100,9 @@ public sealed partial class ChatView : Grid, IDisposable
         _typing = U.T("", 11.5, null, Theme.Mu);
         _typing.Margin = U.Th(18, 0, 0, 0);
         _composer = new Composer(this);
-        var listArea = new Grid().Rows("auto", "*");
-        if (tid == 0 && S.DmById(cid) is not null) { _call = new CallBar(sh, cid); listArea.Add(_call.At(0)); }
-        listArea.Add(_sv.At(1), _pill.At(1));
-        this.Add(_header.At(0), listArea.At(1), _typing.At(2), _composer.At(3));
+        if (tid == 0 && S.DmById(cid) is not null) { _call = new CallBar(sh, cid); _listArea.Add(_call.At(0)); }
+        _listArea.Add(_sv.At(1), _pill.At(1));
+        this.Add(_header.At(0), _listArea.At(1), _typing.At(2), _composer.At(3));
 
         AllowDrop = true;
         DragOver += (_, e) => { if (_composer.CanAttach && e.DataView.Contains(StandardDataFormats.StorageItems)) { e.AcceptedOperation = DataPackageOperation.Copy; e.DragUIOverride.Caption = "Wyślij na czat"; } };
@@ -123,6 +124,7 @@ public sealed partial class ChatView : Grid, IDisposable
 
     public void Dispose()
     {
+        _stage?.Dispose();
         _disposed = true;
         _typingTimer.Stop();
         Sh.C.StoppedTyping(Key);
@@ -131,8 +133,30 @@ public sealed partial class ChatView : Grid, IDisposable
     public void FocusComposer() => _composer.FocusBox();
 
     /// <summary>Pasek rozmowy (DM): kto rozmawia, dołącz / rozłącz.</summary>
-    public void RefreshCall() { if (_disposed) return; _call?.Refresh(); RefreshHeader(); }
+    public void RefreshCall() { if (_disposed) return; _call?.Refresh(); UpdateStage(); RefreshHeader(); }
     public void TickTalk() => _call?.Tick();
+
+    /// <summary>Rozmowa prywatna z kamerą albo transmisją: kafelki nad czatem (jak na kanale głosowym, tylko mniejsze).</summary>
+    void UpdateStage()
+    {
+        if (_call is null) return;
+        var c = Sh.C;
+        var members = S.Voice.GetValueOrDefault(Cid) ?? [];
+        var want = c.VoiceChannelId == Cid && (members.Any(m => m.Video || m.Streaming) || c.Voice.Feeds.Any() || Sh.W.Cam?.Active == true);
+        if (want && _stage is null)
+        {
+            _stage = new VoiceView(Sh, Cid, compact: true) { Height = Math.Clamp(ActualHeight * .5, 260, 520) };
+            _listArea.Add(_stage.At(0));
+        }
+        else if (!want && _stage is not null)
+        {
+            _stage.Dispose();
+            _listArea.Children.Remove(_stage);
+            _stage = null;
+        }
+        else _stage?.Refresh();
+        if (_stage is not null) _call.Visibility = Visibility.Collapsed;
+    }
 
     // ───────────────────────── nagłówek ─────────────────────────
 
@@ -169,6 +193,7 @@ public sealed partial class ChatView : Grid, IDisposable
         var search = U.IconButton("\uE721", "Szukaj wiadomości (Ctrl+F)", () => Sh.OpenSearch(), 16, 32, Sh.SearchOpen ? Theme.Fg : null);
         var icons = U.H(2,
             DmObj is not null ? U.IconButton(G.Phone, Sh.C.VoiceChannelId == Cid ? "Jesteś w tej rozmowie" : "Zadzwoń", () => Sh.StartCall(Cid), 16, 32, Sh.C.VoiceChannelId == Cid ? Theme.Green : null) : null,
+            DmObj is not null && !Sh.C.Offline && Sh.W.Cam is not null ? U.IconButton(G.Camera, "Rozmowa wideo", () => Sh.StartVideoCall(Cid), 16, 32) : null,
             threads,
             U.IconButton("\uE718", "Przypięte wiadomości", ShowPins, 16, 32),
             search,

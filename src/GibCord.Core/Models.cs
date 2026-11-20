@@ -234,6 +234,8 @@ public sealed record SearchQuery(string Text, long? AuthorId = null, string? Has
     public bool IsEmpty => string.IsNullOrWhiteSpace(Text) && AuthorId is null && Has is null;
 }
 
+public sealed record SoundPlay(long ChannelId, long UserId, string Url, double Volume, string Label);
+
 /// <summary>GIF z wyszukiwarki (GIPHY przez serwer) albo z ulubionych.</summary>
 public sealed class GifItem
 {
@@ -466,7 +468,8 @@ public static class Perm
 {
     public const long Admin = 1, ManageServer = 2, ManageChannels = 4, ManageRoles = 8, Kick = 16, Ban = 32, ManageMessages = 64,
         Timeout = 128, VoiceModerate = 256, CreateInvite = 512, MentionEveryone = 1024, Stream = 2048;
+    public const long ManageNicknames = 4096, ManageEvents = 8192, ManageExpressions = 16384;
     public const long ViewChannel = 32768, SendMessages = 65536, AddReactions = 131072, AttachFiles = 262144,
-        Connect = 524288, Speak = 1048576;
+        Connect = 524288, Speak = 1048576, UseSoundboard = 2097152, ViewAuditLog = 4194304;
     public const long All = 8388607;
 }

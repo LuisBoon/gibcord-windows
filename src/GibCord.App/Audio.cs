@@ -178,6 +178,45 @@ public sealed class AudioIo : IDisposable
 }
 
 /// <summary>Krótkie dźwięki rozmów (wejście, wyjście, wyciszenie, dzwonek) — miękkie sinusy jak „Miękkie” na stronie.</summary>
+/// <summary>Dźwięki z soundboardu (MP3 z serwera) — na wybranych głośnikach, z głośnością dźwięku × głośność rozmowy.</summary>
+public static class Sfx
+{
+    static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
+    static readonly Dictionary<string, byte[]> Cache = [];
+    static int _playing;
+
+    public static async void Play(Uri? url, double volume, string deviceId)
+    {
+        if (url is null || Options.Demo || volume <= 0) return;
+        if (Interlocked.Increment(ref _playing) > 4) { Interlocked.Decrement(ref _playing); return; } // naraz najwyżej 4
+        try
+        {
+            byte[]? data;
+            lock (Cache) Cache.TryGetValue(url.AbsoluteUri, out data);
+            if (data is null)
+            {
+                data = await Http.GetByteArrayAsync(url);
+                if (data.Length < 2_000_000) lock (Cache) { if (Cache.Count > 60) Cache.Clear(); Cache[url.AbsoluteUri] = data; }
+            }
+            var bytes = data;
+            await Task.Run(() =>
+            {
+                using var ms = new MemoryStream(bytes);
+                using var reader = new StreamMediaFoundationReader(ms);
+                var vol = new NAudio.Wave.SampleProviders.VolumeSampleProvider(reader.ToSampleProvider()) { Volume = (float)Math.Clamp(volume, 0, 2) };
+                var dev = AudioDevices.Get(deviceId, DataFlow.Render);
+                using var o = dev is null ? new WasapiOut(AudioClientShareMode.Shared, 80) : new WasapiOut(dev, AudioClientShareMode.Shared, true, 80);
+                o.Init(vol);
+                o.Play();
+                var end = Environment.TickCount64 + 15000;
+                while (o.PlaybackState == PlaybackState.Playing && Environment.TickCount64 < end) Thread.Sleep(30);
+            });
+        }
+        catch (Exception ex) { App.Log("Soundboard: " + ex.Message); }
+        finally { Interlocked.Decrement(ref _playing); }
+    }
+}
+
 public static class Tones
 {
     static WasapiOut? _ring;
@@ -286,6 +325,7 @@ public sealed class VoiceHost
         };
         c.VoiceChanged += Sync;
         c.Store.Changed += ch => { if (ch.Kind is ChangeKind.Voice or ChangeKind.All) MembersChanged(); };
+        c.SoundPlayed += s => Sfx.Play(c.Api.Abs(s.Url), s.Volume * c.Voice.Options.OutputVolume, c.Voice.Options.OutputDevice);
     }
 
     public string? AudioError => _io.Error;
