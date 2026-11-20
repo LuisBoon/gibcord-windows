@@ -102,6 +102,10 @@ public sealed class Prefs
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)
     /// <summary>Ustawienia głosu: urządzenia, czułość, „naciśnij, aby mówić”, głośność osób.</summary>
     public Voice.VoiceOptions Voice { get; set; } = new();
+    /// <summary>Transmisja ekranu: jakość (720p / 1080p / 1440p), płynność (30 / 60) i dźwięk z komputera.</summary>
+    public string StreamQuality { get; set; } = "1080p";
+    public int StreamFps { get; set; } = 30;
+    public bool StreamAudio { get; set; } = true;
     /// <summary>Ostatnio użyte emoji (najnowsze pierwsze; zwykłe albo &lt;:nazwa:id&gt;).</summary>
     public List<string> RecentEmoji { get; set; } = [];
     /// <summary>Ogłoszenie adminów zamknięte krzyżykiem (jego czas „at”).</summary>

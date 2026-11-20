@@ -62,10 +62,16 @@ public sealed class ScreenShare : IDisposable
     public string? Title => _item?.DisplayName;
     public event Action? Stopped;
 
+    ScreenAudio? _audio;
+    int _tw, _th;
+    string _quality = "1080p";
+    byte[] _scaled = [];
+
     public ScreenShare(GibCordClient c) { _c = c; }
+    public bool AudioActive => _audio?.Active == true;
 
     /// <summary>Okienko wyboru ekranu/okna i start transmisji. Zwraca komunikat błędu albo null.</summary>
-    public async Task<string?> Start(IntPtr hwnd, int fps = 30)
+    public async Task<string?> Start(IntPtr hwnd, int fps = 30, string quality = "1080p", bool withAudio = false)
     {
         if (!GraphicsCaptureSession.IsSupported()) return "Ten Windows nie pozwala nagrywać ekranu (potrzebny Windows 10 1903 albo nowszy).";
         var picker = new GraphicsCapturePicker();
@@ -77,10 +83,16 @@ public sealed class ScreenShare : IDisposable
         {
             _item = item;
             _size = item.Size;
-            var (w, h) = Fit(item.Size.Width, item.Size.Height);
-            _frameMs = 1000 / Math.Clamp(w * h > 2560 * 1440 ? Math.Min(fps, 20) : fps, 5, 60);
-            _push = await _c.Voice.StartScreenShare(w, h, Math.Clamp(fps, 5, 60), false);
+            var (w, h) = Fit(item.Size.Width, item.Size.Height, quality);
+            _tw = w; _th = h; _quality = quality;
+            _frameMs = 1000 / Math.Clamp(fps, 5, 60);
+            _push = await _c.Voice.StartScreenShare(w, h, Math.Clamp(fps, 5, 60), withAudio);
             if (_push is null) { _item = null; return "Najpierw wejdź na kanał głosowy."; }
+            if (withAudio && _c.Voice.ScreenAudio)
+            {
+                _audio = new ScreenAudio(_c);
+                if (_audio.Start() is { } aerr) { _audio = null; App.Window?.CurrentShell?.Info(aerr + " Transmisja idzie bez dźwięku.", true); }
+            }
             _c.SetStreaming(true);
             _dev = Direct3D.Create();
             _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_dev, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, item.Size);
@@ -100,11 +112,43 @@ public sealed class ScreenShare : IDisposable
         }
     }
 
-    /// <summary>Ekrany większe niż 1440p wysyłamy w 1440p (koder i internet podziękują).</summary>
-    static (int W, int H) Fit(int w, int h)
+    /// <summary>Rozmiar wysyłanego obrazu: mieści się w wybranej jakości (720p / 1080p / 1440p), z zachowaniem proporcji.</summary>
+    static (int W, int H) Fit(int w, int h, string quality)
     {
         w = Math.Max(2, w); h = Math.Max(2, h);
-        return (w & ~1, h & ~1);
+        var (mw, mh) = quality switch { "720p" => (1280, 720), "1440p" => (2560, 1440), _ => (1920, 1080) };
+        // pionowy ekran / okno: ograniczamy dłuższy bok tak samo
+        if (h > w) (mw, mh) = (mh, mw);
+        var k = Math.Min(1.0, Math.Min(mw / (double)w, mh / (double)h));
+        return ((int)(w * k) & ~1, (int)(h * k) & ~1);
+    }
+
+    /// <summary>Zmniejszenie klatki BGRA (średnia z 4 sąsiednich pikseli — tekst zostaje czytelny). Wiersze liczone równolegle.</summary>
+    static unsafe void Scale(byte[] src, int sw, int sh, byte[] dst, int dw, int dh)
+    {
+        var fx = (sw << 16) / dw;
+        var fy = (sh << 16) / dh;
+        fixed (byte* ps = src, pd = dst)
+        {
+            var s0 = (IntPtr)ps; var d0 = (IntPtr)pd;
+            Parallel.For(0, dh, y =>
+            {
+                var sp = (byte*)s0; var dp = (byte*)d0;
+                var sy = Math.Min(sh - 2, (y * fy) >> 16);
+                var r0 = sp + (long)sy * sw * 4;
+                var r1 = r0 + sw * 4;
+                var o = dp + (long)y * dw * 4;
+                for (var x = 0; x < dw; x++)
+                {
+                    var sx = Math.Min(sw - 2, (x * fx) >> 16) * 4;
+                    o[0] = (byte)((r0[sx] + r0[sx + 4] + r1[sx] + r1[sx + 4] + 2) >> 2);
+                    o[1] = (byte)((r0[sx + 1] + r0[sx + 5] + r1[sx + 1] + r1[sx + 5] + 2) >> 2);
+                    o[2] = (byte)((r0[sx + 2] + r0[sx + 6] + r1[sx + 2] + r1[sx + 6] + 2) >> 2);
+                    o[3] = 255;
+                    o += 4;
+                }
+            });
+        }
     }
 
     async void OnFrame(Direct3D11CaptureFramePool pool, object _)
@@ -127,7 +171,15 @@ public sealed class ScreenShare : IDisposable
             var full = sb.PixelWidth * sb.PixelHeight * 4;
             if (_buf.Length != full) _buf = new byte[full];
             sb.CopyToBuffer(_buf.AsBuffer());
-            if (w != sb.PixelWidth || h != sb.PixelHeight)
+            // większe niż wybrana jakość → zmniejszamy (okno mogło też zmienić rozmiar)
+            var (tw, th) = Fit(sb.PixelWidth, sb.PixelHeight, _quality);
+            if (tw < w || th < h)
+            {
+                if (_scaled.Length != tw * th * 4) _scaled = new byte[tw * th * 4];
+                Scale(_buf, sb.PixelWidth, sb.PixelHeight, _scaled, tw, th);
+                _push(_scaled, tw, th);
+            }
+            else if (w != sb.PixelWidth || h != sb.PixelHeight)
             {
                 // nieparzyste wymiary: przycinamy do parzystych (wymóg kodera)
                 var cropped = new byte[w * h * 4];
@@ -146,6 +198,8 @@ public sealed class ScreenShare : IDisposable
         try { _session?.Dispose(); } catch { }
         try { if (_pool is not null) { _pool.FrameArrived -= OnFrame; _pool.Dispose(); } } catch { }
         _session = null; _pool = null; _push = null; _item = null;
+        try { _audio?.Stop(); } catch { }
+        _audio = null;
         try { (_dev as IDisposable)?.Dispose(); } catch { }
         _dev = null;
         if (!was) return;
