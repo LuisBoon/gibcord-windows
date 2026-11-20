@@ -173,6 +173,23 @@ public sealed class GibCordApi : IDisposable
     public Task SetNick(long serverId, long userId, string? nick, CancellationToken ct = default) =>
         Send(HttpMethod.Patch, $"servers/{serverId}/members/{(userId == 0 ? "@me" : userId.ToString())}", new Dictionary<string, object?> { ["nick"] = string.IsNullOrWhiteSpace(nick) ? null : nick.Trim() }, ct);
     public Task UnhideDm(long dmId, CancellationToken ct = default) => Send(HttpMethod.Delete, $"dms/{dmId}/hide", ct: ct);
+    public Task<Dm> CreateGroup(IReadOnlyList<long> userIds, CancellationToken ct = default) => Send<Dm>(HttpMethod.Post, "dms", new { userIds }, ct);
+    public Task<Dm> RenameGroup(long dmId, string? name, CancellationToken ct = default) =>
+        Send<Dm>(HttpMethod.Patch, $"dms/{dmId}", new Dictionary<string, object?> { ["name"] = string.IsNullOrWhiteSpace(name) ? null : name.Trim() }, ct);
+    public Task<Dm> AddToGroup(long dmId, long userId, CancellationToken ct = default) => Send<Dm>(HttpMethod.Post, $"dms/{dmId}/members", new { userId }, ct);
+    public Task RemoveFromGroup(long dmId, long userId, CancellationToken ct = default) => Send(HttpMethod.Delete, $"dms/{dmId}/members/{(userId == 0 ? "@me" : userId.ToString())}", ct: ct);
+
+    /// <summary>Obrazek wysyłany jako surowe bajty (ikona grupy / serwera, awatar, baner).</summary>
+    public async Task<System.Text.Json.JsonElement> PostImage(string path, Stream data, string? contentType, CancellationToken ct = default)
+    {
+        var content = new StreamContent(data);
+        content.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrEmpty(contentType) ? "application/octet-stream" : contentType);
+        return await SendRaw(HttpMethod.Post, path, content, ct).ConfigureAwait(false);
+    }
+    public Task<System.Text.Json.JsonElement> DeleteJson(string path, CancellationToken ct = default) => Send(HttpMethod.Delete, path, ct: ct);
+    public Task<System.Text.Json.JsonElement> PatchJson(string path, object body, CancellationToken ct = default) => Send(HttpMethod.Patch, path, body, ct);
+    public Task<System.Text.Json.JsonElement> PostJson(string path, object? body = null, CancellationToken ct = default) => Send(HttpMethod.Post, path, body, ct);
+    public Task<System.Text.Json.JsonElement> PutJson(string path, object? body = null, CancellationToken ct = default) => Send(HttpMethod.Put, path, body, ct);
 
     // ── wyszukiwarka ──
     public Task<SearchResult> Search(SearchQuery q, CancellationToken ct = default) => Send<SearchResult>(HttpMethod.Get, "search?" + q.ToQueryString(), ct: ct);

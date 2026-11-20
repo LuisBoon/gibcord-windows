@@ -200,6 +200,15 @@ public sealed partial class ChatView : Grid, IDisposable
         var icons = U.H(2,
             DmObj is not null ? U.IconButton(G.Phone, Sh.C.VoiceChannelId == Cid ? "Jesteś w tej rozmowie" : "Zadzwoń", () => Sh.StartCall(Cid), 16, 32, Sh.C.VoiceChannelId == Cid ? Theme.Green : null) : null,
             DmObj is not null && !Sh.C.Offline && Sh.W.Cam is not null ? U.IconButton(G.Camera, "Rozmowa wideo", () => Sh.StartVideoCall(Cid), 16, 32) : null,
+            DmObj is { IsGroup: true } ? U.IconButton("\uE716", "Ustawienia grupy (osoby, nazwa, obrazek)", () => People.GroupSettings(Sh, Cid), 16, 32) : null,
+            DmObj is { IsGroup: false } ? U.IconButton("\uE8FA", "Utwórz grupę z tą osobą", async () =>
+            {
+                var other = S.DmOther(DmObj!)?.Id ?? 0;
+                var ids = await People.Pick(Sh, "Nowa grupa", 8, n => n == 0 ? "Wybierz osoby" : $"Utwórz grupę ({n + 2} osób)", [other]);
+                if (ids is null) return;
+                try { var dm = await Sh.C.Api.CreateGroup([other, .. ids]); S.Apply(new GatewayEvent("dm_create", System.Text.Json.JsonSerializer.SerializeToElement(new { dm }, Json.Options))); Sh.Go(0, dm.Id); }
+                catch (Exception ex) { Sh.Info(GibCordClient.Friendly(ex), true); }
+            }, 16, 32) : null,
             threads,
             U.IconButton("\uE718", "Przypięte wiadomości", ShowPins, 16, 32),
             search,

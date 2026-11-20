@@ -230,7 +230,7 @@ public sealed class Sidebar : Grid
         _list.Children.Add(U.Row(fr, () => _sh.Go(0, 0), _sh.ServerId == 0 && _sh.ChannelId == 0));
 
         var head = new Grid().Cols("*", "auto").Add(U.T("ROZMOWY PRYWATNE", 11, U.Bold, Theme.Mu2).At(0, 0),
-            U.IconButton("", "Nowa rozmowa", _sh.OpenSwitcher, 12, 22).At(0, 1));
+            U.IconButton("\uE710", "Nowa rozmowa albo grupa", () => People.NewConversation(_sh), 12, 22).At(0, 1));
         _list.Children.Add(new Border { Child = head, Padding = U.Th(16, 16, 10, 4) });
 
         var dms = S.DmsSorted();

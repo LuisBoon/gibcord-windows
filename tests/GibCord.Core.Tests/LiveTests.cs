@@ -235,6 +235,32 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
     }
 
     [LiveFact]
+    public async Task Grupy()
+    {
+        var (a, b) = (p.A, p.B);
+        // trzecia osoba ze wspólnego serwera
+        var x = p.New();
+        var name = "grupa" + Guid.NewGuid().ToString("N")[..6];
+        Assert.NotNull((await x.Register(name, LivePair.Pass, null, name + "@example.test")).Token);
+        var srv = a.Store.Servers.First(s => s.Channels.Any(c => c.Name == "pogaduchy"));
+        await x.Api.JoinInvite(await a.Api.CreateInvite(srv.Id));
+        var xid = (await x.Api.GetMe()).Me.Id;
+
+        var dm = await a.Api.CreateGroup([b.Store.Me.Id, xid]);
+        Assert.True(dm.IsGroup);
+        Assert.Equal(3, dm.UserIds.Count);
+        await p.Until(() => b.Store.DmById(dm.Id) is { IsGroup: true }, "grupa u B");
+        var renamed = await a.Api.RenameGroup(dm.Id, "Ekipa " + name);
+        Assert.Equal("Ekipa " + name, renamed.Name);
+        await p.Until(() => b.Store.DmById(dm.Id)?.Name == "Ekipa " + name, "nazwa grupy u B");
+        await a.Api.RemoveFromGroup(dm.Id, xid);
+        await p.Until(() => b.Store.DmById(dm.Id)?.UserIds.Count == 2, "usunięcie osoby u B");
+        await b.Api.RemoveFromGroup(dm.Id, 0);
+        await p.Until(() => b.Store.DmById(dm.Id) is null, "wyjście B z grupy");
+        await x.DisposeAsync();
+    }
+
+    [LiveFact]
     public async Task PisanieZalacznikIStarszeWiadomosci()
     {
         var (a, b) = (p.A, p.B);
