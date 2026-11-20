@@ -81,6 +81,9 @@ public sealed class AdminMail : Grid
     int _listVer, _openVer;
     WebView2? _web;
     bool _webFailed;
+    Grid _mid = new();
+    /// <summary>Wąskie okno: zamiast trzech kolumn lista albo podgląd (z „Wróć”).</summary>
+    bool _narrow;
 
     GibCordApi Api => _sh.C.Api;
 
@@ -98,13 +101,26 @@ public sealed class AdminMail : Grid
             U.IconButton("", "Oznacz wszystko jako przeczytane", () => _ = AllRead(), 13, 30));
         var midHead = U.V(8, new Grid().Cols("*", "auto").Add(_listTitle.At(0, 0), tools.At(0, 1)), _search);
         midHead.Padding = U.Th(12, 12, 12, 8);
-        var mid = new Grid { BorderBrush = Theme.Line, BorderThickness = U.Th(0, 0, 1, 0) }.Rows("auto", "*");
+        var mid = _mid = new Grid { BorderBrush = Theme.Line, BorderThickness = U.Th(0, 0, 1, 0) }.Rows("auto", "*");
         mid.Add(midHead.At(0), U.Scroll(_rows).At(1));
 
         this.Add(left.At(0, 0), mid.At(0, 1), _read.At(0, 2));
+        SizeChanged += (_, e) => { var n = e.NewSize.Width < 980; if (n != _narrow) { _narrow = n; Layout(); DrawRead(); } };
         DrawRead();
         Loaded += async (_, _) => { await LoadMeta(); await LoadList(); };
         Unloaded += (_, _) => { try { _web?.Close(); } catch { } _web = null; };
+    }
+
+    /// <summary>Szeroko: skrzynki | lista | podgląd. Wąsko: skrzynki | lista albo podgląd.</summary>
+    void Layout()
+    {
+        ColumnDefinitions[0].Width = new GridLength(_narrow ? 190 : 230);
+        ColumnDefinitions[1].Width = _narrow ? new GridLength(1, GridUnitType.Star) : new GridLength(370);
+        ColumnDefinitions[2].Width = _narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        var showRead = _narrow && _cur is not null;
+        Grid.SetColumn(_read, _narrow ? 1 : 2);
+        _mid.Visibility = showRead ? Visibility.Collapsed : Visibility.Visible;
+        _read.Visibility = !_narrow || showRead ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ───────────────────────── dane ─────────────────────────
@@ -348,6 +364,7 @@ public sealed class AdminMail : Grid
 
     void DrawRead()
     {
+        Layout();
         _read.Children.Clear();
         _read.RowDefinitions.Clear();
         var m = _cur;
@@ -359,6 +376,7 @@ public sealed class AdminMail : Grid
         }
         _read.Rows("auto", "*");
         var head = new StackPanel { Spacing = 6, Padding = U.Th(18, 14, 18, 10) };
+        if (_narrow) head.Add(U.Ghost("← Wróć do listy", () => { _cur = null; _thread = []; DrawRows(); DrawRead(); }, 28).With(b => b.HorizontalAlignment = HorizontalAlignment.Left));
         head.Add(U.T(string.IsNullOrWhiteSpace(m.Subject) ? "(bez tematu)" : m.Subject!, 18, U.Bold, wrap: true));
         var from = m.From is null ? "" : (string.IsNullOrWhiteSpace(m.From.Name) ? m.From.Address : $"{m.From.Name} <{m.From.Address}>");
         head.Add(U.T("Od: " + from, 12.5, U.Semi, wrap: true));

@@ -65,6 +65,11 @@ public sealed class GameOverlay : IDisposable
     public void Notify(string title, string text)
     {
         if (!App.Prefs.OverlayMessages || App.Prefs.OverlayMode == "off" || !InGame) return;
+        // GDI+ nie rysuje kolorowych emoji (wychodzą kwadraciki) — w dymku je pomijamy
+        static string Clean(string s) => System.Text.RegularExpressions.Regex.Replace(new string(s.Where(c => !char.IsSurrogate(c) && c != '\uFE0F' && c != '\u200D').ToArray()), @"\s{2,}", " ").Trim();
+        title = Clean(title);
+        text = Clean(text);
+        if (text.Length == 0) text = "(emoji)";
         _notes.Add((title, text.Length > 120 ? text[..117] + "…" : text, Environment.TickCount64 + 6000));
         if (_notes.Count > 3) _notes.RemoveAt(0);
         _last = "";
