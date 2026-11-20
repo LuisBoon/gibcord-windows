@@ -5,6 +5,7 @@ using Microsoft.UI.Dispatching;
 using NAudio.CoreAudioApi;
 using NAudio.Dsp;
 using NAudio.Wave;
+using Role = NAudio.CoreAudioApi.Role;
 
 namespace GibCord.App;
 
