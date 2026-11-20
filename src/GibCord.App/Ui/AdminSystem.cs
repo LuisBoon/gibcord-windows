@@ -74,20 +74,26 @@ public sealed class AdminSystem : StackPanel
         }
     }
 
+    int _ver;
+
     async Task Load(bool quiet = false)
     {
-        if (_loading) return;
+        if (quiet && _loading) return; // odświeżenie z timera, gdy poprzednie jeszcze trwa — pomijamy
+        var ver = ++_ver;
+        var range = _range;
         _loading = true;
         try
         {
-            _data = Options.Demo ? DemoData() : await _sh.C.Api.GetJson($"admin/metrics?range={_range}");
+            var data = Options.Demo ? DemoData() : await _sh.C.Api.GetJson($"admin/metrics?range={range}");
+            if (ver != _ver || range != _range) return; // w międzyczasie wybrano inny zakres
+            _data = data;
             Draw();
         }
         catch (Exception ex)
         {
-            if (!quiet) { _tiles.Children.Clear(); _tiles.Children.Add(U.T(GibCordClient.Friendly(ex), 13, null, Theme.Red, wrap: true)); }
+            if (!quiet && ver == _ver) { _tiles.Children.Clear(); _tiles.Children.Add(U.T(GibCordClient.Friendly(ex), 13, null, Theme.Red, wrap: true)); }
         }
-        finally { _loading = false; }
+        finally { if (ver == _ver) _loading = false; }
     }
 
     void Draw()
@@ -154,7 +160,7 @@ public sealed class AdminSystem : StackPanel
         {
             canvas.Children.Clear();
             var W = canvas.ActualWidth;
-            if (W < 50) return;
+            if (W < 64 + 10 + 120) return; // za wąsko na osie i podpisy
             const double H = 170, L = 64, R = 10, T = 8, B = 22;
             var vals = def.Series.SelectMany(s => pts.Select(s.Get)).Where(v => v is not null && !double.IsNaN(v.Value)).Select(v => v!.Value).ToList();
             var max = def.YMax ?? NiceMax(Math.Max(vals.Count > 0 ? vals.Max() : 1, def.Ref?.V ?? 0) * 1.08);
@@ -180,7 +186,7 @@ public sealed class AdminSystem : StackPanel
                     var dt = DateTimeOffset.FromUnixTimeMilliseconds((long)t).ToLocalTime();
                     var lab = U.T(_range is "1h" or "24h" ? dt.ToString("HH:mm") : dt.ToString("ddd d", Pl) + (_range == "7d" ? dt.ToString(" HH:mm") : ""), 10.5, null, Theme.Mu2);
                     lab.Measure(new Size(200, 30));
-                    Canvas.SetLeft(lab, Math.Clamp(X(t) - lab.DesiredSize.Width * f, L, W - R - lab.DesiredSize.Width));
+                    Canvas.SetLeft(lab, Math.Clamp(X(t) - lab.DesiredSize.Width * f, L, Math.Max(L, W - R - lab.DesiredSize.Width)));
                     Canvas.SetTop(lab, H - B + 4);
                     canvas.Children.Add(lab);
                 }

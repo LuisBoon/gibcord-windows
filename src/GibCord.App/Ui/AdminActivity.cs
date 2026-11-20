@@ -165,6 +165,9 @@ public sealed class AdminActivity : StackPanel
                 var days = r.Prop("days").ValueKind == JsonValueKind.Array ? r.Prop("days").EnumerateArray().Reverse().ToList() : [];
                 var max = Math.Max(30, days.Count > 0 ? days.Max(x => Num(x, "onMin") ?? 0) : 30);
                 var sum = days.Sum(x => Num(x, "onMin") ?? 0);
+                // średnia jak na stronie: tylko po dniach od początku historii
+                var histSince = Num(r, "since");
+                var counted = histSince is { } hs ? days.Count(x => DateTime.TryParse(x.Str("date"), out var dd) && new DateTimeOffset(dd.Date.AddDays(1).AddSeconds(-1)).ToUnixTimeMilliseconds() >= hs) : 0;
                 var bars = new Grid { Height = 90, ColumnSpacing = 4 };
                 for (var i = 0; i < days.Count; i++)
                 {
@@ -188,7 +191,7 @@ public sealed class AdminActivity : StackPanel
                     labs.Add(U.T(ds.Length >= 10 ? ds[8..].TrimStart('0') : "", 10, null, Theme.Mu2).With(t => t.HorizontalAlignment = HorizontalAlignment.Center).At(0, i));
                 }
                 body.Children.Add(Section("Na ekranie w ostatnich 14 dniach", U.V(4, bars, labs,
-                    U.T(sum > 0 ? $"Razem {Dur(sum)} · średnio {Dur(sum / Math.Max(1, days.Count))} dziennie." : "Jeszcze nie było na ekranie od początku historii.", 12, null, Theme.Mu))));
+                    U.T(sum > 0 ? $"Razem {Dur(sum)} · średnio {Dur(sum / Math.Max(1, counted > 0 ? counted : 14))} dziennie." : "Jeszcze nie było na ekranie od początku historii.", 12, null, Theme.Mu))));
                 // ostatnie wejścia
                 var visits = new StackPanel { Spacing = 4 };
                 foreach (var v in r.Prop("visits").ValueKind == JsonValueKind.Array ? r.Prop("visits").EnumerateArray() : Enumerable.Empty<JsonElement>())

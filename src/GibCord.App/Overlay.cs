@@ -37,6 +37,8 @@ public sealed class GameOverlay : IDisposable
     [DllImport("user32.dll")] static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref POINT dst, ref SIZE size, IntPtr hdcSrc, ref POINT src, int key, ref BLENDFUNCTION blend, int flags);
     [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr hwnd, int id, int mods, int vk);
     [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr hwnd, int id);
+    [DllImport("user32.dll")] static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+    const uint WDA_EXCLUDEFROMCAPTURE = 0x11; // Windows 10 2004+: okno niewidoczne w nagraniach i transmisjach ekranu
     [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hwnd);
     [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
     [DllImport("user32.dll")] static extern int GetSystemMetrics(int i);
@@ -93,6 +95,8 @@ public sealed class GameOverlay : IDisposable
         var wc = new WNDCLASSEX { cbSize = Marshal.SizeOf<WNDCLASSEX>(), lpfnWndProc = Marshal.GetFunctionPointerForDelegate(_proc), hInstance = GetModuleHandle(null), lpszClassName = "GibCordNakladka" };
         RegisterClassEx(ref wc);
         _hwnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, "GibCordNakladka", "GibCord — nakładka", WS_POPUP, 0, 0, 10, 10, IntPtr.Zero, IntPtr.Zero, wc.hInstance, IntPtr.Zero);
+        // nakładka (z treścią prywatnych wiadomości) nie może trafić do transmisji ani nagrania (GibCord, OBS, Xbox Game Bar)
+        if (_hwnd != IntPtr.Zero && !SetWindowDisplayAffinity(_hwnd, WDA_EXCLUDEFROMCAPTURE)) App.Log("Nakładka: nie da się ukryć przed nagrywaniem (starszy Windows)");
     }
 
     /// <summary>Ctrl+Shift+O zajmujemy tylko w trakcie rozmowy — poza nią należy do innych programów (VS Code, przeglądarka).</summary>

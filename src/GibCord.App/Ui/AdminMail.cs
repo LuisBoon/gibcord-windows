@@ -95,7 +95,7 @@ public sealed class AdminMail : Grid
         var left = new Grid { Background = U.W(.03), BorderBrush = Theme.Line, BorderThickness = U.Th(0, 0, 1, 0) }.Rows("auto", "*");
         left.Add(new Border { Padding = U.Th(8, 12, 8, 0), Child = compose }.At(0), U.Scroll(_left).At(1));
 
-        _search.KeyDown += (_, e) => { if (e.Key == VirtualKey.Enter) { _q = _search.Text.Trim(); _ = LoadList(); } };
+        _search.KeyDown += (_, e) => { if (e.Key == VirtualKey.Enter) { _q = _search.Text.Trim(); _cur = null; _thread = []; _openVer++; DrawRead(); _ = LoadList(); } };
         var tools = U.H(2,
             U.IconButton("", "Odśwież", () => { _ = LoadMeta(); _ = LoadList(); }, 13, 30),
             U.IconButton("", "Oznacz wszystko jako przeczytane", () => _ = AllRead(), 13, 30));
@@ -108,7 +108,7 @@ public sealed class AdminMail : Grid
         SizeChanged += (_, e) => { var n = e.NewSize.Width < 980; if (n != _narrow) { _narrow = n; Layout(); DrawRead(); } };
         DrawRead();
         Loaded += async (_, _) => { await LoadMeta(); await LoadList(); };
-        Unloaded += (_, _) => { try { _web?.Close(); } catch { } _web = null; };
+        Unloaded += (_, _) => { _closed = true; CloseWeb(); };
     }
 
     /// <summary>Szeroko: skrzynki | lista | podgląd. Wąsko: skrzynki | lista albo podgląd.</summary>
@@ -129,11 +129,15 @@ public sealed class AdminMail : Grid
         b.Unread.ValueKind == JsonValueKind.Object && b.Unread.TryGetProperty(folder, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32()
         : b.Unread.ValueKind == JsonValueKind.Number && folder == "inbox" ? b.Unread.GetInt32() : 0;
 
+    int _metaVer;
+
     async Task LoadMeta()
     {
+        var ver = ++_metaVer;
         try
         {
             var r = Options.Demo ? Demo("meta") : await Api.GetJson("admin/mail");
+            if (ver != _metaVer) return; // nowsze zapytanie już w drodze — liczniki z niego
             _domain = r.Str("domain") ?? "";
             _boxes = r.Prop("boxes").To<List<Box>>() ?? [];
             if (_box == 0 || _boxes.All(b => b.Id != _box)) _box = (_boxes.FirstOrDefault(b => !b.System) ?? _boxes.FirstOrDefault())?.Id ?? 0;
@@ -186,7 +190,8 @@ public sealed class AdminMail : Grid
             if (ver != _openVer || m is null) return;
             _cur = m;
             _thread = [];
-            if (_list.Find(x => x.Id == id) is { Seen: false } row) { row.Seen = true; DrawRows(); _ = LoadMeta(); }
+            if (_list.Find(x => x.Id == id) is { Seen: false } row) { row.Seen = true; DrawRows(); }
+            if (!images) _ = LoadMeta(); // otwarcie oznacza jako przeczytane (także maile z listy wątku)
             DrawRead();
             if (m.ThreadId is long t)
             {
@@ -230,7 +235,7 @@ public sealed class AdminMail : Grid
     void RemoveCurrent(Mail m)
     {
         _list.RemoveAll(x => x.Id == m.Id);
-        if (_cur?.Id == m.Id) { _cur = null; _thread = []; }
+        if (_cur?.Id == m.Id) { _cur = null; _thread = []; _openVer++; }
         DrawRows();
         DrawRead();
         _ = LoadMeta();
@@ -309,7 +314,7 @@ public sealed class AdminMail : Grid
                     U.I(glyph, 13, on ? Theme.Fg : Theme.Mu).At(0, 0),
                     U.T(name, 13, on || n > 0 ? U.Bold : U.Semi, on ? Theme.Fg : Theme.Mu).At(0, 1),
                     n > 0 ? U.Badge(n).At(0, 2) : null);
-                _left.Add(U.Row(row, () => { _box = bid; _folder = k; _q = ""; _search.Text = ""; _cur = null; _thread = []; DrawLeft(); DrawRead(); _ = LoadList(); }, on, 8, U.Th(8, 0), U.Th(0, 1)).With(r => r.Height = 32));
+                _left.Add(U.Row(row, () => { _box = bid; _folder = k; _q = ""; _search.Text = ""; _cur = null; _thread = []; _openVer++; DrawLeft(); DrawRead(); _ = LoadList(); }, on, 8, U.Th(8, 0), U.Th(0, 1)).With(r => r.Height = 32));
             }
         }
         _left.Add(U.HLine(.08).With(l => l.Margin = U.Th(4, 12)));
@@ -326,12 +331,14 @@ public sealed class AdminMail : Grid
     // ───────────────────────── lista ─────────────────────────
 
     static string Who(Addr? a) => a is null ? "" : string.IsNullOrWhiteSpace(a.Name) ? a.Address : a.Name!;
+    /// <summary>Data z nagłówka maila bywa absurdalna (spam z rokiem 10000) — przycinamy do zakresu .NET.</summary>
+    static DateTimeOffset Local(long ms) => DateTimeOffset.FromUnixTimeMilliseconds(Math.Clamp(ms, 0, 253_402_214_400_000)).ToLocalTime();
     static string When(long ms)
     {
-        var d = DateTimeOffset.FromUnixTimeMilliseconds(ms).ToLocalTime();
+        var d = Local(ms);
         return d.Date == DateTime.Today ? d.ToString("HH:mm") : d.Year == DateTime.Today.Year ? d.ToString("d MMM", Pl) : d.ToString("d.MM.yyyy");
     }
-    static string Full(long ms) => DateTimeOffset.FromUnixTimeMilliseconds(ms).ToLocalTime().ToString("ddd, d MMMM yyyy, HH:mm", Pl);
+    static string Full(long ms) => Local(ms).ToString("ddd, d MMMM yyyy, HH:mm", Pl);
 
     void DrawRows()
     {
@@ -376,7 +383,7 @@ public sealed class AdminMail : Grid
         }
         _read.Rows("auto", "*");
         var head = new StackPanel { Spacing = 6, Padding = U.Th(18, 14, 18, 10) };
-        if (_narrow) head.Add(U.Ghost("← Wróć do listy", () => { _cur = null; _thread = []; DrawRows(); DrawRead(); }, 28).With(b => b.HorizontalAlignment = HorizontalAlignment.Left));
+        if (_narrow) head.Add(U.Ghost("← Wróć do listy", () => { _cur = null; _thread = []; _openVer++; DrawRows(); DrawRead(); }, 28).With(b => b.HorizontalAlignment = HorizontalAlignment.Left));
         head.Add(U.T(string.IsNullOrWhiteSpace(m.Subject) ? "(bez tematu)" : m.Subject!, 18, U.Bold, wrap: true));
         var from = m.From is null ? "" : (string.IsNullOrWhiteSpace(m.From.Name) ? m.From.Address : $"{m.From.Name} <{m.From.Address}>");
         head.Add(U.T("Od: " + from, 12.5, U.Semi, wrap: true));
@@ -408,7 +415,7 @@ public sealed class AdminMail : Grid
         {
             if (!await Patch(m, new { seen = false })) return;
             if (_list.Find(x => x.Id == m.Id) is { } r) r.Seen = false;
-            _cur = null; DrawRows(); DrawRead(); _ = LoadMeta();
+            _cur = null; _openVer++; DrawRows(); DrawRead(); _ = LoadMeta();
         });
         if (m.Folder is not ("archive" or "trash" or "spam")) Btn("", "Archiwum", () => _ = Move(m, "archive", "Przeniesiono do archiwum"));
         if (m.Folder is "archive" or "trash") Btn("", "Przywróć", () => _ = Move(m, m.Direction == "out" ? "sent" : "inbox", "Przywrócono"));
@@ -456,55 +463,97 @@ public sealed class AdminMail : Grid
     static void ShowText(Border host, Mail m)
     {
         host.Background = U.W(.04);
-        host.Child = U.Scroll(U.T(m.Text ?? "", 13.5, null, Theme.Fg, wrap: true).With(t => { t.IsTextSelectionEnabled = true; t.Margin = U.Th(16); }));
+        host.Child = U.Scroll(U.T(m.Text ?? "", 13.5, null, Theme.Fg, wrap: true).With(t => { t.IsTextSelectionEnabled = true; t.Margin = U.Th(16); t.VerticalAlignment = VerticalAlignment.Top; }));
+    }
+
+    Task<WebView2>? _webTask;
+    bool _closed, _expectNav;
+    string? _tempFile;
+
+    /// <summary>Jeden WebView2 na panel — kolejne wywołania czekają na to samo tworzenie (bez osieroconych procesów).</summary>
+    Task<WebView2> GetWeb() => _webTask ??= CreateWeb();
+
+    async Task<WebView2> CreateWeb()
+    {
+        var web = new WebView2();
+        var env = await CoreWebView2Environment.CreateWithOptionsAsync(null, Path.Combine(App.DataDir, "webview-poczta"), new CoreWebView2EnvironmentOptions());
+        await web.EnsureCoreWebView2Async(env);
+        var core = web.CoreWebView2;
+        core.Settings.IsScriptEnabled = false;
+        core.Settings.AreDevToolsEnabled = false;
+        core.Settings.IsStatusBarEnabled = false;
+        core.Settings.IsWebMessageEnabled = false;
+        core.Settings.AreHostObjectsAllowed = false;
+        // linki z maila: tylko w przeglądarce (http/https/mailto), nigdy w podglądzie
+        core.NewWindowRequested += (_, e) => { e.Handled = true; OpenExternal(e.Uri); };
+        core.NavigationStarting += (_, e) =>
+        {
+            // przepuszczamy wyłącznie nawigację, którą sami zleciliśmy (NavigateToString albo nasz plik tymczasowy)
+            var ours = _expectNav && (e.Uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || e.Uri == "about:blank"
+                || (_tempFile is not null && string.Equals(e.Uri, new Uri(_tempFile).AbsoluteUri, StringComparison.OrdinalIgnoreCase)));
+            if (ours) { _expectNav = false; return; }
+            e.Cancel = true;
+            OpenExternal(e.Uri);
+        };
+        _web = web;
+        if (_closed) { CloseWeb(); throw new OperationCanceledException(); }
+        return web;
+    }
+
+    void CloseWeb()
+    {
+        try { _web?.Close(); } catch { }
+        _web = null;
+        _webTask = null;
+        DeleteTemp();
+    }
+
+    void DeleteTemp()
+    {
+        if (_tempFile is { } f) { try { File.Delete(f); } catch { } _tempFile = null; }
     }
 
     async Task ShowHtml(Border host, Mail m)
     {
+        WebView2 web;
+        try { web = await GetWeb(); }
+        catch (OperationCanceledException) { return; }
+        catch (Exception ex)
+        {
+            // brak składnika WebView2 w Windowsie — do końca sesji pokazujemy tekst
+            App.Log("Poczta: WebView2 — " + ex.Message);
+            _webFailed = true;
+            _webTask = null;
+            if (_cur?.Id == m.Id && !_closed) ShowText(host, m);
+            return;
+        }
+        if (_closed || _cur?.Id != m.Id || host.XamlRoot is null) return;
         try
         {
-            if (_web is null)
-            {
-                var web = new WebView2();
-                var env = await CoreWebView2Environment.CreateWithOptionsAsync(null, Path.Combine(App.DataDir, "webview-poczta"), new CoreWebView2EnvironmentOptions());
-                await web.EnsureCoreWebView2Async(env);
-                var core = web.CoreWebView2;
-                core.Settings.IsScriptEnabled = false;
-                core.Settings.AreDevToolsEnabled = false;
-                core.Settings.IsStatusBarEnabled = false;
-                core.Settings.IsWebMessageEnabled = false;
-                core.Settings.AreHostObjectsAllowed = false;
-                // linki z maila: tylko w przeglądarce, nigdy w podglądzie
-                core.NewWindowRequested += (_, e) => { e.Handled = true; OpenExternal(e.Uri); };
-                core.NavigationStarting += (_, e) =>
-                {
-                    if (e.Uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || e.Uri == "about:blank" || e.Uri.StartsWith("file:", StringComparison.OrdinalIgnoreCase) && e.Uri.Contains("podglad-maila")) return;
-                    e.Cancel = true;
-                    OpenExternal(e.Uri);
-                };
-                _web = web;
-            }
-            if (_cur?.Id != m.Id) return;
-            if (_web.Parent is Border old) old.Child = null;
-            host.Child = _web;
+            if (web.Parent is Border old && !ReferenceEquals(old, host)) old.Child = null;
+            host.Child = web;
             var csp = "default-src 'none'; img-src data:" + (_imgs ? " https: http:" : "") + "; style-src 'unsafe-inline'; font-src data:";
             var doc = $"<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"{csp}\"><base target=\"_blank\">" +
                 "<style>html{color-scheme:light}body{margin:0;padding:18px 20px;font:14px/1.55 'Segoe UI',Arial,sans-serif;color:#222;background:#fff;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}blockquote{margin:0 0 0 6px;padding-left:10px;border-left:3px solid #ddd;color:#555}</style>" +
                 $"</head><body>{m.Html}</body></html>";
-            if (doc.Length < 1_500_000) _web.NavigateToString(doc);
+            DeleteTemp();
+            // NavigateToString ma limit ~2 MB (liczony w bajtach) — większe (obrazki wbudowane w treść) przez plik tymczasowy
+            if (System.Text.Encoding.UTF8.GetByteCount(doc) < 1_400_000) { _expectNav = true; web.NavigateToString(doc); }
             else
             {
-                // NavigateToString ma limit ~2 MB (obrazki wbudowane w treść) — wtedy przez plik tymczasowy
-                var file = Path.Combine(App.DataDir, "podglad-maila.html");
+                var file = Path.Combine(App.DataDir, $"podglad-maila-{Guid.NewGuid():N}.html");
                 await File.WriteAllTextAsync(file, doc);
-                _web.CoreWebView2.Navigate(new Uri(file).AbsoluteUri);
+                if (_closed || _cur?.Id != m.Id) { try { File.Delete(file); } catch { } return; }
+                _tempFile = file;
+                _expectNav = true;
+                web.CoreWebView2.Navigate(new Uri(file).AbsoluteUri);
             }
         }
         catch (Exception ex)
         {
-            App.Log("Poczta: WebView2 — " + ex.Message);
-            _webFailed = true;
-            if (_cur?.Id == m.Id) ShowText(host, m);
+            // pojedynczy błąd (np. bardzo duży mail) — ten mail jako tekst, następne znowu w HTML
+            App.Log("Poczta: podgląd — " + ex.Message);
+            if (_cur?.Id == m.Id && !_closed) ShowText(host, m);
         }
     }
 
@@ -557,9 +606,13 @@ public sealed class AdminMail : Grid
         var text = new TextBox { Header = "Treść", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 230 };
         ScrollViewer.SetVerticalScrollBarVisibility(text, ScrollBarVisibility.Auto);
         var sig = new CheckBox { Content = "Dołącz podpis skrzynki", IsChecked = true };
-        var files = new List<(long Id, string Name)>();
+        var note = U.T("", 11.5, null, Theme.Mu2, wrap: true);
+        var err = U.T("", 12, null, Theme.Red, wrap: true);
+        var files = new List<(long Id, string Name, ulong Size)>();
         var fileList = new WrapPanel { Spacing = 6 };
         var uploading = 0;
+        ulong pendingBytes = 0;
+        const ulong maxBytes = 10UL * 1048576; // jak na stronie: załączniki razem najwyżej 10 MB
         var addFile = U.Ghost("Dołącz plik…", async () =>
         {
             var picker = new Windows.Storage.Pickers.FileOpenPicker();
@@ -567,29 +620,35 @@ public sealed class AdminMail : Grid
             WinRT.Interop.InitializeWithWindow.Initialize(picker, _sh.W.Hwnd);
             var f = await picker.PickSingleFileAsync();
             if (f is null) return;
+            var size = (await f.GetBasicPropertiesAsync()).Size;
+            if (files.Aggregate(0UL, (n, x) => n + x.Size) + pendingBytes + size > maxBytes) { err.Text = "Załączniki razem mogą mieć najwyżej 10 MB."; return; }
             var label = U.T($"⏳ {f.Name}", 12, null, Theme.Mu);
-            fileList.Children.Add(label);
+            var chip = U.H(4, label);
+            fileList.Children.Add(chip);
             uploading++;
+            pendingBytes += size;
             try
             {
                 using var s = await f.OpenStreamForReadAsync();
                 var up = await Api.Upload(s, f.Name, f.ContentType);
-                files.Add((up.Id, f.Name));
-                label.Text = "📎 " + f.Name;
+                var entry = (up.Id, f.Name, size);
+                files.Add(entry);
+                label.Text = $"📎 {f.Name} · {Format.Size((long)size)}";
                 label.Foreground = Theme.Fg;
+                chip.Add(U.IconButton(G.Close, "Usuń z wiadomości", () => { files.Remove(entry); fileList.Children.Remove(chip); }, 9, 22));
             }
             catch (Exception ex) { label.Text = $"✕ {f.Name}: {GibCordClient.Friendly(ex)}"; label.Foreground = Theme.Red; }
-            finally { uploading--; }
+            finally { uploading--; pendingBytes -= size; }
         }, 30);
-        var note = U.T("", 11.5, null, Theme.Mu2, wrap: true);
-        var err = U.T("", 12, null, Theme.Red, wrap: true);
         if (reply is not null)
         {
             var own = new HashSet<string>(_boxes.SelectMany(b => b.Aliases.Select(a => $"{a}@{_domain}").Append(b.Address)), StringComparer.OrdinalIgnoreCase);
             var main = (reply.ReplyTo is { Count: > 0 } rt ? rt[0] : reply.From)?.Address ?? "";
             var rcpt = new List<string> { main };
-            if (all) rcpt.AddRange(reply.To.Concat(reply.Cc).Select(a => a.Address).Where(a => !own.Contains(a)));
-            to.Text = string.Join(", ", rcpt.Where(a => a.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase));
+            if (all) rcpt.AddRange(reply.To.Concat(reply.Cc).Select(a => a.Address));
+            // własne skrzynki i aliasy nie dostają kopii (jak na stronie); gdy zostałby nikt — główny adresat mimo wszystko
+            var list = rcpt.Where(a => a.Length > 0 && !own.Contains(a)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            to.Text = string.Join(", ", list.Count > 0 ? list : [main]);
             subject.Text = System.Text.RegularExpressions.Regex.IsMatch(reply.Subject ?? "", "^(re|odp):", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? reply.Subject : "Re: " + reply.Subject;
             note.Text = "Pod Twoją odpowiedzią dołączy się cytat oryginału.";
         }
@@ -607,9 +666,15 @@ public sealed class AdminMail : Grid
             DefaultButton = ContentDialogButton.None, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
         };
         d.Resources["ContentDialogMaxWidth"] = 700.0;
+        var sending = false;
+        var dialogClosed = false;
+        d.Closed += (_, _) => dialogClosed = true;
         d.PrimaryButtonClick += async (_, e) =>
         {
+            if (sending) { e.Cancel = true; return; } // drugi klik w trakcie wysyłki
             var def = e.GetDeferral();
+            sending = true;
+            d.IsPrimaryButtonEnabled = false;
             try
             {
                 err.Text = "";
@@ -628,8 +693,13 @@ public sealed class AdminMail : Grid
                 await Api.PostJson("admin/mail/send", payload);
                 _sh.Info("Wysłano");
             }
-            catch (Exception ex) { err.Text = GibCordClient.Friendly(ex); e.Cancel = true; }
-            finally { def.Complete(); }
+            catch (Exception ex)
+            {
+                err.Text = GibCordClient.Friendly(ex);
+                e.Cancel = true;
+                if (dialogClosed) _sh.Info("Nie wysłano: " + err.Text, true);
+            }
+            finally { sending = false; d.IsPrimaryButtonEnabled = true; def.Complete(); }
         };
         await M.WaitNoDialog(XamlRoot);
         if (await d.ShowAsync() != ContentDialogResult.Primary) return;
