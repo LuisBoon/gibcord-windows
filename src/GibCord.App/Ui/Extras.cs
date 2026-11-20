@@ -137,6 +137,12 @@ public static class ProfileCard
         fly.ShowAt(anchor);
     }
 
+    static string BadgeName(string b) => b switch
+    {
+        "early" => "🐣 Pierwsza pięćdziesiątka", "admin" => "👑 Właściciel GibCorda", "owner" => "🏰 Właściciel serwera", "chatty" => "💬 Gaduła",
+        "talker" => "🎙️ Gawędziarz", "streamer" => "📺 Nadawca", "social" => "🤝 Towarzyski", "gifs" => "🎞️ GIF-omaniak", _ => "🏅 " + b,
+    };
+
     public static FrameworkElement? Build(Shell sh, long uid, Action close)
     {
         var s = sh.S;
@@ -175,7 +181,20 @@ public static class ProfileCard
                 wrap.Children.Add(U.Box(U.H(6, new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 9, Height = 9, Fill = U.B(r.Color ?? "#8b8599") }, U.T(r.Name, 12, U.Semi)), U.W(.07), 8, U.Th(8, 3)));
             body.Add(Card("Role", wrap));
         }
-        body.Add(Card("Na GibCordzie od", U.T(Format.Local(u.CreatedAt).ToString("d MMMM yyyy", Format.Pl), 13)));
+        if (u.Birthday is { Length: >= 10 } bd && DateTime.TryParse(bd, out var bday))
+            body.Add(Card("Urodziny", U.T((u.BirthdayToday ? "🎂 Dziś! " : "") + bday.ToString("d MMMM", Format.Pl), 13, u.BirthdayToday ? U.Bold : null)));
+        var since = new WrapPanel { Spacing = 16 };
+        since.Children.Add(U.V(2, U.T("NA GIBCORDZIE OD", 10.5, U.Bold, Theme.Mu2), U.T(Format.Local(u.CreatedAt).ToString("d MMM yyyy", Format.Pl), 13)));
+        if (s.MemberOf(srv, uid) is { JoinedAt: > 0 } mem) since.Children.Add(U.V(2, U.T("NA SERWERZE OD", 10.5, U.Bold, Theme.Mu2), U.T(Format.Local(mem.JoinedAt).ToString("d MMM yyyy", Format.Pl), 13)));
+        if (s.Friends.GetValueOrDefault(uid) is { Status: "friends", Since: > 0 } fr) since.Children.Add(U.V(2, U.T("ZNAJOMI OD", 10.5, U.Bold, Theme.Mu2), U.T(Format.Local(fr.Since).ToString("d MMM yyyy", Format.Pl), 13)));
+        if (srv is { Levels: true } && s.MemberOf(srv, uid) is { Level: > 0 } lm) since.Children.Add(U.V(2, U.T("POZIOM", 10.5, U.Bold, Theme.Mu2), U.T("⭐ " + lm.Level, 13, U.Bold, Theme.Yellow)));
+        body.Add(U.Box(since, U.B("#4D0A0618"), 12, U.Th(12, 10)));
+        if (u.Badges.Count > 0)
+        {
+            var badges = new WrapPanel { Spacing = 6 };
+            foreach (var b in u.Badges) badges.Children.Add(U.Box(U.T(BadgeName(b), 11.5, U.Semi), U.W(.08), 8, U.Th(8, 3)));
+            body.Add(Card("Odznaki", badges));
+        }
         if (uid != s.Me.Id)
         {
             var btns = new Grid { ColumnSpacing = 8 }.Cols("*", "*");

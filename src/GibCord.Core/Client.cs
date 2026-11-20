@@ -50,6 +50,10 @@ public sealed partial class GibCordClient : IAsyncDisposable
     public event Action<Message>? Notify;
     public event Action<User>? FriendRequest;
     public event Action<string>? SessionEnded;
+    /// <summary>Urodziny znajomego (albo moje — id = ja).</summary>
+    public event Action<long>? Birthday;
+    /// <summary>Nowe zgłoszenie na serwerze, który moderuję (albo zatrzymana wiadomość automoderacji).</summary>
+    public event Action<JsonElement>? ReportCreated;
     /// <summary>Przypomnienie o wydarzeniu (15 min przed albo start: inMinutes = 0).</summary>
     public event Action<ServerEvent, int>? EventReminder;
     /// <summary>Serwer wymaga potwierdzenia adresu e-mail (WS 4005) — aplikacja pokazuje ekran z linkiem do wysłania.</summary>
@@ -219,6 +223,15 @@ public sealed partial class GibCordClient : IAsyncDisposable
                 break;
             case "friend_update":
                 if (ev.Data.Prop("friend").Str("status") == "incoming" && ev.Data.Prop("user").To<User>() is { } u) FriendRequest?.Invoke(u);
+                break;
+            case "birthday":
+                if (ev.Data.Long("userId") is long bu) Birthday?.Invoke(bu);
+                break;
+            case "birthday_self":
+                Birthday?.Invoke(Store.Me.Id);
+                break;
+            case "report_create":
+                if (ev.Data.Prop("report") is { ValueKind: JsonValueKind.Object } rep) ReportCreated?.Invoke(rep);
                 break;
             case "event_reminder":
                 if (ev.Data.Prop("event").To<ServerEvent>() is { } er) EventReminder?.Invoke(er, (int)(ev.Data.Long("inMinutes") ?? 0));

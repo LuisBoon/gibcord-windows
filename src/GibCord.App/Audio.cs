@@ -223,7 +223,7 @@ public static class Tones
 
     public static void Play(string kind)
     {
-        if (!App.Prefs.Sounds || Options.Demo) return;
+        if (Options.Demo || (kind == "msg" ? !App.Prefs.MessageSound : !App.Prefs.Sounds)) return;
         (double f, double ms)[] notes = kind switch
         {
             "join" => [(523.25, 90), (783.99, 140)],
@@ -232,6 +232,7 @@ public static class Tones
             "leaveOther" => [(392, 120)],
             "mute" => [(440, 70)],
             "unmute" => [(660, 70)],
+            "msg" => [(880, 60), (1174.66, 90)],
             _ => [(600, 80)],
         };
         _ = Task.Run(() =>

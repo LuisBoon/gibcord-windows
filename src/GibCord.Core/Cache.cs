@@ -89,6 +89,8 @@ public sealed class Prefs
     public long LastDm { get; set; }
     public bool Notifications { get; set; } = true;
     public bool Sounds { get; set; } = true;
+    /// <summary>Krótki dźwięk przy nowej wiadomości (gdy przychodzi powiadomienie).</summary>
+    public bool MessageSound { get; set; } = true;
     /// <summary>Pokazuj innym, w co grasz (wykrywanie po procesach) i czego słuchasz w Spotify.</summary>
     public bool GameDetection { get; set; } = true;
     public bool MusicDetection { get; set; } = true;

@@ -160,6 +160,10 @@ public sealed class GibCordApi : IDisposable
         return e.To<Attachment>()!;
     }
 
+    // ── „Co nowego” (wydania serwisu) ──
+    public Task<System.Text.Json.JsonElement> WhatsNew(CancellationToken ct = default) => Send(HttpMethod.Get, "whatsnew", ct: ct);
+    public Task WhatsNewSeen(CancellationToken ct = default) => Send(HttpMethod.Post, "whatsnew/seen", ct: ct);
+
     // ── blokady, zgłoszenia, moderacja ──
     public Task Block(long userId, CancellationToken ct = default) => Send(HttpMethod.Post, "blocks", new { userId }, ct);
     public Task Unblock(long userId, CancellationToken ct = default) => Send(HttpMethod.Delete, $"blocks/{userId}", ct: ct);

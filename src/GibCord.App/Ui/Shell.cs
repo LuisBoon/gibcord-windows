@@ -288,6 +288,7 @@ public sealed class Shell : Grid
     {
         if (_navigated || !S.Loaded) return;
         _navigated = true;
+        if (!Options.Demo && !C.Offline) DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => _ = WhatsNew());
         var p = App.Prefs;
         if (Options.Demo) { Demo.Navigate(this); return; }
         if (p.LastServer > 0 && S.ServerById(p.LastServer) is { } srv)
@@ -607,6 +608,35 @@ public sealed class Shell : Grid
         if (FocusMode) { _members.Visibility = Visibility.Collapsed; _threadHost.Visibility = Visibility.Collapsed; }
         else { _members.Refresh(); _threadHost.Visibility = _threadHost.Child is null ? Visibility.Collapsed : Visibility.Visible; }
         W.SetFullScreen(FocusMode);
+    }
+
+    /// <summary>„Co nowego w GibCordzie” po aktualizacji serwisu (raz na wydanie, jak na stronie).</summary>
+    async Task WhatsNew()
+    {
+        try
+        {
+            await Task.Delay(2500);
+            var r = await C.Api.WhatsNew();
+            if (r.Prop("releases") is not { ValueKind: System.Text.Json.JsonValueKind.Array } rel || rel.GetArrayLength() == 0) return;
+            var panel = new StackPanel { Spacing = 14, Width = 460 };
+            foreach (var x in rel.EnumerateArray())
+            {
+                panel.Add(U.H(8, U.Box(U.T(x.Str("version") ?? "", 11, U.Bold, Theme.OnAccent), Theme.Accent, 6, U.Th(6, 2)), U.T(x.Str("title") ?? "", 16, U.Bold, wrap: true)));
+                if (x.Prop("items").ValueKind == System.Text.Json.JsonValueKind.Array)
+                    foreach (var it in x.Prop("items").EnumerateArray())
+                        panel.Add(new Grid().Cols("36", "*").Add(U.T(it.Str("icon") ?? "•", 18).At(0, 0),
+                            U.V(2, U.T(it.Str("title") ?? "", 13.5, U.Bold, wrap: true), U.T(it.Str("text") ?? "", 12.5, null, Theme.Mu, wrap: true)).At(0, 1)));
+            }
+            var d = new ContentDialog
+            {
+                Title = "Co nowego w GibCordzie", Content = new ScrollViewer { Content = panel, MaxHeight = 520 }, PrimaryButtonText = "Super!",
+                SecondaryButtonText = "Cała historia zmian", XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
+            };
+            var res = await d.ShowAsync();
+            try { await C.Api.WhatsNewSeen(); } catch { }
+            if (res == ContentDialogResult.Secondary) OpenChannelByKind("changelog");
+        }
+        catch (Exception ex) { App.Log("Co nowego: " + ex.Message); }
     }
 
     /// <summary>Ogłoszenie właścicieli GibCorda (pasek u góry, zamykany krzyżykiem — do następnego ogłoszenia).</summary>

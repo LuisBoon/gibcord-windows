@@ -11,15 +11,19 @@ public sealed class FriendsView : Grid
     readonly Shell _sh;
     readonly StackPanel _tabs = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
     readonly StackPanel _list = new() { Padding = U.Th(24, 12, 24, 24), Spacing = 2 };
+    readonly StackPanel _active = new() { Padding = U.Th(16, 16, 16, 24), Spacing = 10 };
+    readonly Border _activeCol;
     string _tab = "online";
 
     public FriendsView(Shell sh)
     {
         _sh = sh;
-        this.Rows("48", "*");
+        this.Rows("48", "*").Cols("*", "auto");
         var head = new Border { BorderBrush = Theme.Line, BorderThickness = U.Th(0, 0, 0, 1), Padding = U.Th(16, 0) };
-        head.Child = U.H(14, U.H(8, U.I("", 18), U.T("Znajomi", 15, U.Bold)), new Microsoft.UI.Xaml.Shapes.Rectangle { Width = 1, Height = 22, Fill = U.W(.14) }, _tabs);
-        this.Add(head.At(0), U.Scroll(_list).At(1));
+        head.Child = U.H(14, U.H(8, U.I("\uE716", 18), U.T("Znajomi", 15, U.Bold)), new Microsoft.UI.Xaml.Shapes.Rectangle { Width = 1, Height = 22, Fill = U.W(.14) }, _tabs);
+        _activeCol = new Border { Width = 320, BorderBrush = Theme.Line, BorderThickness = U.Th(1, 0, 0, 0), Child = U.Scroll(_active) };
+        this.Add(head.At(0, 0, colSpan: 2), U.Scroll(_list).At(1, 0), _activeCol.At(1, 1));
+        SizeChanged += (_, e) => _activeCol.Visibility = e.NewSize.Width > 860 ? Visibility.Visible : Visibility.Collapsed;
         if (_sh.S.Friends.Values.Any(f => f.Status == "incoming")) _tab = "pending";
         Refresh();
     }
@@ -41,6 +45,7 @@ public sealed class FriendsView : Grid
         add.Click += (_, _) => { _tab = "add"; Refresh(); };
         _tabs.Children.Add(add);
         _list.Children.Clear();
+        DrawActive();
         switch (_tab)
         {
             case "add": BuildAdd(); break;
@@ -48,6 +53,32 @@ public sealed class FriendsView : Grid
             case "all": BuildList(Friends(), "Wszyscy znajomi", "Nie masz jeszcze znajomych. Dodaj kogoś po nazwie użytkownika."); break;
             default: BuildList(Friends().Where(f => S.StatusOf(f.UserId) != "offline").ToList(), "Dostępni", "Nikogo ze znajomych nie ma teraz w sieci. Gibek czeka razem z Tobą."); break;
         }
+    }
+
+    /// <summary>„Aktywni teraz”: znajomi, którzy grają, słuchają muzyki albo są w rozmowie.</summary>
+    void DrawActive()
+    {
+        _active.Children.Clear();
+        _active.Add(U.T("Aktywni teraz", 18, U.Bold));
+        var any = false;
+        foreach (var f in Friends())
+        {
+            var u = S.U(f.UserId);
+            if (u is null || S.StatusOf(u.Id) == "offline") continue;
+            var voice = S.Voice.FirstOrDefault(kv => kv.Value.Any(v => v.UserId == u.Id));
+            string? line = u.GameName is { } g ? "🎮 " + g : u.Activity is { Type: "spotify" } a ? $"🎵 {a.Title} – {a.ArtistText}" : null;
+            string? where = voice.Value is not null && S.ChannelById(voice.Key) is { } vc ? $"🔊 {vc.Name} · {S.ServerOfChannel(vc.Id)?.Name}" : null;
+            if (line is null && where is null) continue;
+            any = true;
+            var uid = u.Id;
+            var card = U.Box(U.V(6, U.H(10, new Avatar(32, true).Set(S, _sh.C.Api, uid, null, true), U.T(u.Name, 14, U.Bold)),
+                line is null ? null : U.T(line, 12.5, null, Theme.Fg, wrap: true), where is null ? null : U.T(where, 12, U.Semi, Theme.Green, wrap: true)), U.W(.05), 12, U.Th(14, 12), Theme.Line, 1);
+            card.Tapped += (_, _) => _sh.ShowProfile(uid, card);
+            if (voice.Value is not null && S.ChannelById(voice.Key) is { } jc && S.ServerOfChannel(jc.Id) is { } js)
+                ((StackPanel)card.Child).Add(U.Ghost("Dołącz", () => _sh.JoinVoiceChannel(js.Id, jc.Id), 28).With(b => b.HorizontalAlignment = HorizontalAlignment.Left));
+            _active.Add(card);
+        }
+        if (!any) _active.Add(U.T("Na razie cisza… Gdy ktoś ze znajomych zacznie grać, słuchać muzyki albo wejdzie na kanał głosowy, zobaczysz to tutaj.", 13, null, Theme.Mu, wrap: true));
     }
 
     List<Friend> Friends() => S.Friends.Values.Where(f => f.Status == "friends").OrderBy(f => S.U(f.UserId)?.Name ?? "", StringComparer.Create(Format.Pl, true)).ToList();
@@ -95,7 +126,14 @@ public sealed class FriendsView : Grid
                 actions.Add(Round("", "Anuluj zaproszenie", async () => { var e = await _sh.C.RemoveFriend(uid); if (e is not null) _sh.Info(e, true); }));
             else
             {
-                actions.Add(Round("", "Napisz", () => _sh.OpenDmWith(uid)));
+                actions.Add(Round("\uE8BD", "Napisz", () => _sh.OpenDmWith(uid)));
+                actions.Add(Round(G.Phone, "Zadzwoń", async () =>
+                {
+                    var (dm, err) = await _sh.C.OpenDm(uid);
+                    if (err is not null) { _sh.Info(err, true); return; }
+                    _sh.Go(0, dm);
+                    _sh.StartCall(dm);
+                }));
                 var more = Round("", "Więcej", () => { });
                 var menu = new MenuFlyout();
                 menu.Items.Add(M.Item("Pokaż profil", "", () => _sh.ShowProfile(uid, more)));

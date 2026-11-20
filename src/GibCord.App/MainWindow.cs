@@ -105,6 +105,22 @@ public sealed class MainWindow : Window
         _overlay = new GameOverlay(Client, Dq, () => _presence.InGame);
         Client.SessionEnded += why => ShowLogin(why);
         Client.EmailGateRequired += ShowEmailGate;
+        Client.Birthday += uid =>
+        {
+            var me = uid == Client.Store.Me.Id;
+            var name = Client.Store.U(uid)?.Name ?? "Ktoś";
+            var text = me ? "Wszystkiego najlepszego od całego GibCorda! 🎂" : $"{name} ma dziś urodziny 🎂 — złóż życzenia!";
+            if (App.Prefs.Notifications) Toasts.Show(me ? "🎉 Sto lat!" : "🎂 Urodziny", text, 0, "bd" + uid);
+            _shell?.Info(text);
+        };
+        Client.ReportCreated += r =>
+        {
+            var auto = r.Str("reason") == "automod";
+            var srv = r.Long("serverId") is long sid ? Client.Store.ServerById(sid)?.Name : null;
+            var title = auto ? "Automoderacja zatrzymała wiadomość" : "Nowe zgłoszenie";
+            if (App.Prefs.Notifications) Toasts.Show(title, srv ?? "Rozmowa prywatna", 0, "rep" + r.Long("id"));
+            _shell?.Info($"🚩 {title}{(srv is null ? "" : " · " + srv)} — zajrzyj do ustawień serwera → Zgłoszenia");
+        };
         Client.EventReminder += (e, mins) =>
         {
             var srv = Client.Store.ServerById(e.ServerId)?.Name ?? "";
@@ -201,6 +217,7 @@ public sealed class MainWindow : Window
 
     void OnNotify(Message m)
     {
+        Tones.Play("msg");
         if (!App.Prefs.Notifications) return;
         var s = Client.Store;
         Toasts.Show(s.NotificationTitle(m), s.PlainText(m), m.Key, "c" + m.Key);

@@ -478,6 +478,7 @@ public sealed class SettingsPage : Grid
         var p = App.Prefs;
         _body.Add(Card(
             Toggle("Powiadomienia na pulpicie", p.Notifications, v => { p.Notifications = v; p.Save(); }),
+            Toggle("Dźwięk nowej wiadomości", p.MessageSound, v => { p.MessageSound = v; p.Save(); }),
             U.T("Status „Nie przeszkadzać” wycisza wszystkie powiadomienia.", 12, null, Theme.Mu2, wrap: true),
             U.Ghost("Wyślij próbne powiadomienie", () => Toasts.Show("GibCord", "Tak wyglądają powiadomienia z GibCorda 🎉", 0, "test"), 34).With(b => b.HorizontalAlignment = HorizontalAlignment.Left)));
     }
