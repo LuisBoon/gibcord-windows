@@ -105,9 +105,22 @@ public sealed class MainWindow : Window
         AppInstance.GetCurrent().Activated += (_, e) => Dq.TryEnqueue(() => { BringToFront(); HandleLaunchActivation(e); });
 
         if (Client.HasToken) { ShowShell(); _ = Client.Start(); }
+        else if (Handoff.Pending() is { } code) _ = LoginFromHandoff(code);
         else ShowLogin(null);
         if (Options.Hidden && Client.HasToken) Client.SetVisible(false); else Activate();
         _ = Updater.Run(v => _shell?.ShowUpdate(v));
+    }
+
+    /// <summary>Przesiadka ze starej aplikacji: logowanie kodem zostawionym przez nią na dysku.</summary>
+    async Task LoginFromHandoff(string code)
+    {
+        try
+        {
+            var r = await Client.RedeemHandoff(code);
+            if (r.Token is not null) { App.Log("Przesiadka: zalogowano kodem ze starej aplikacji"); ShowShell(); _ = Client.Start(); return; }
+        }
+        catch (Exception ex) { App.Log("Przesiadka: " + ex.Message); }
+        ShowLogin("Witaj w nowym GibCordzie! Zaloguj się raz jeszcze — kolejne razy już nie trzeba.");
     }
 
     public void UiRun(Action a)

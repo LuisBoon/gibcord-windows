@@ -128,15 +128,17 @@ sealed class VoiceTile : Grid
     {
         Uid = vm.UserId;
         Width = w; Height = h;
-        Av = new Avatar(Math.Min(80, h * .45)).Set(sh.S, sh.C.Api, vm.UserId, srv);
-        Av.HorizontalAlignment = HorizontalAlignment.Center;
+        Av = new Avatar(80).Set(sh.S, sh.C.Api, vm.UserId, srv);
+        // awatar skaluje się razem z kafelkiem (kafelki dopasowują się do szerokości okna)
+        var avBox = new Viewbox { Child = Av, Stretch = Stretch.Uniform, Height = Math.Min(80, h * .45), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        SizeChanged += (_, e) => avBox.Height = Math.Max(28, Math.Min(80, e.NewSize.Height * .45));
         _frame = new Border { CornerRadius = new CornerRadius(14), Background = U.W(.06), BorderBrush = U.W(.08), BorderThickness = U.Th(2) };
         var icons = U.H(4);
         if (vm.Muted || vm.ServerMuted || vm.Suppressed) icons.Add(U.I(G.MicOff, 13, Theme.Red));
         if (vm.Deafened || vm.ServerDeafened) icons.Add(U.I(G.SpeakerOff, 13, Theme.Red));
         var name = U.T(sh.S.NameOf(vm.UserId, srv) + (me ? " (Ty)" : ""), 12.5, U.Semi);
         var label = new Border { Background = U.B("#99120c22"), CornerRadius = new CornerRadius(8), Padding = U.Th(8, 3), Margin = U.Th(8), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Child = U.H(6, name, icons) };
-        var center = new Grid().Add(Av.With(a => a.VerticalAlignment = VerticalAlignment.Center));
+        var center = new Grid().Add(avBox);
         this.Add(_frame, center, new Border { CornerRadius = new CornerRadius(12), Margin = U.Th(2), Child = Video }, label);
         if (vm.Streaming)
         {
@@ -174,6 +176,7 @@ public sealed class VoiceView : Grid, IDisposable
     readonly Border _controls = new() { Padding = U.Th(0, 10, 0, 16) };
     readonly DispatcherQueueTimer _tick;
     readonly List<VoiceTile> _tiles = [];
+    readonly List<VoiceTile> _gridTiles = [];
     readonly Dictionary<string, (Image Img, WriteableBitmap? Bmp, long Seen)> _video = [];
     bool _disposed;
 
@@ -187,7 +190,28 @@ public sealed class VoiceView : Grid, IDisposable
         _tick.Interval = TimeSpan.FromMilliseconds(66);
         _tick.Tick += (_, _) => Tick();
         _tick.Start();
+        _stage.SizeChanged += (_, e) => Fit(e.NewSize.Width, e.NewSize.Height);
         Refresh();
+    }
+
+    /// <summary>Kafelki tak duże, jak się da, żeby wszystkie zmieściły się na ekranie (jak w makiecie).</summary>
+    void Fit(double width, double height)
+    {
+        var n = _gridTiles.Count;
+        if (n == 0 || width <= 0 || height <= 0) return;
+        const double gap = 12, pad = 32, ratio = .62;
+        double bestW = 0;
+        for (var cols = 1; cols <= n; cols++)
+        {
+            var w = (width - pad - (cols - 1) * gap) / cols;
+            var rows = (int)Math.Ceiling(n / (double)cols);
+            var h = w * ratio;
+            if (rows * h + (rows - 1) * gap + pad > height) h = (height - pad - (rows - 1) * gap) / rows;
+            w = Math.Min(w, h / ratio);
+            if (w > bestW) bestW = w;
+        }
+        bestW = Math.Clamp(bestW, 150, 440);
+        foreach (var t in _gridTiles) { t.Width = bestW; t.Height = Math.Round(bestW * ratio); }
     }
 
     GibCordClient C => _sh.C;
@@ -217,6 +241,7 @@ public sealed class VoiceView : Grid, IDisposable
         _stage.Children.Clear();
         _stage.RowDefinitions.Clear();
         _tiles.Clear();
+        _gridTiles.Clear();
         var watched = Here ? C.Voice.Feeds.FirstOrDefault(f => f.Screen) : null;
         var me = s.Me.Id;
         if (watched is not null)
@@ -245,8 +270,9 @@ public sealed class VoiceView : Grid, IDisposable
             var n = members.Count;
             var (w, h) = n <= 2 ? (340d, 220d) : n <= 6 ? (260d, 170d) : (200d, 130d);
             var wrap = new WrapPanel { Spacing = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = U.Th(16) };
-            foreach (var vm in members) wrap.Children.Add(Tile(vm, srv, w, h, vm.UserId == me));
+            foreach (var vm in members) { var t = Tile(vm, srv, w, h, vm.UserId == me); _gridTiles.Add(t); wrap.Children.Add(t); }
             _stage.Add(U.Scroll(wrap));
+            Fit(_stage.ActualWidth, _stage.ActualHeight);
         }
 
         // przyciski na dole

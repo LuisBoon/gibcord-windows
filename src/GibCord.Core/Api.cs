@@ -93,6 +93,9 @@ public sealed class GibCordApi : IDisposable
     public Task<LoginResult> LoginMfa(string ticket, string code, CancellationToken ct = default) =>
         Send<LoginResult>(HttpMethod.Post, "login/mfa", new { ticket, code = code.Replace(" ", "").Replace("-", "") }, ct);
     public Task Logout(CancellationToken ct = default) => Send(HttpMethod.Post, "logout", ct: ct);
+    /// <summary>Przesiadka ze starej aplikacji: jednorazowy kod → sesja (bez wpisywania hasła).</summary>
+    public Task<LoginResult> RedeemHandoff(string code, CancellationToken ct = default) =>
+        Send<LoginResult>(HttpMethod.Post, "auth/handoff/redeem", new { code }, ct);
     public async Task<(StateResponse State, string Raw)> GetStateRaw(CancellationToken ct = default)
     {
         var e = await Send(HttpMethod.Get, "state", ct: ct).ConfigureAwait(false);

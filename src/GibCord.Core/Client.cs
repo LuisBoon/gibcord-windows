@@ -79,6 +79,13 @@ public sealed partial class GibCordClient : IAsyncDisposable
         return r;
     }
 
+    public async Task<LoginResult> RedeemHandoff(string code)
+    {
+        var r = await Api.RedeemHandoff(code);
+        if (r.Token is not null) Accept(r.Token);
+        return r;
+    }
+
     void Accept(string token)
     {
         _tokens.Save(token);
