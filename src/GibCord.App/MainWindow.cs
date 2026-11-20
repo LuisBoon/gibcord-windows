@@ -134,6 +134,13 @@ public sealed class MainWindow : Window
         Client.Store.Changed += c => { if (c.Kind is ChangeKind.All or ChangeKind.Me) Dq.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, SyncThemeFromAccount); };
         Client.Store.Changed += c => { if (c.Kind is ChangeKind.All or ChangeKind.Reads or ChangeKind.Dms or ChangeKind.MessageAdded or ChangeKind.Notify or ChangeKind.Servers) UpdateUnread(); };
 
+        Toasts.Reply = (key, text) => Dq.TryEnqueue(async () =>
+        {
+            var err = await Client.Send(key, text);
+            if (err is not null) Toasts.Show("Nie wysłano odpowiedzi", err, key, "err" + key);
+            else Client.MarkRead(key);
+        });
+        Toasts.MarkRead = key => Dq.TryEnqueue(() => { Client.MarkRead(key); Toasts.ClearFor(key); });
         Toasts.Init(OpenFromNotification);
         DeepLink.Register();
         Tray.Init(this);
@@ -251,7 +258,7 @@ public sealed class MainWindow : Window
         Tones.Play("msg");
         if (!App.Prefs.Notifications) return;
         var s = Client.Store;
-        Toasts.Show(s.NotificationTitle(m), s.PlainText(m), m.Key, "c" + m.Key);
+        Toasts.Show(s.NotificationTitle(m), s.PlainText(m), m.Key, "c" + m.Key, canReply: s.Can(m.ChannelId, Perm.SendMessages));
         if (Native.GetForegroundWindow() != Hwnd) Native.Flash(Hwnd);
     }
 

@@ -13,14 +13,31 @@ public static class Toasts
 {
     static bool _ok;
 
+    /// <summary>Odpowiedź wpisana w dymku (klucz rozmowy, tekst) i „Oznacz jako przeczytane” — bez otwierania okna.</summary>
+    public static Action<long, string>? Reply;
+    public static Action<long>? MarkRead;
+
     public static void Init(Action<long> open)
     {
         try
         {
             AppNotificationManager.Default.NotificationInvoked += (_, a) =>
             {
-                if (a.Arguments.TryGetValue("c", out var c) && long.TryParse(c, out var cid)) open(cid);
-                else open(0);
+                a.Arguments.TryGetValue("c", out var cs);
+                a.Arguments.TryGetValue("a", out var act);
+                long.TryParse(cs, out var cid);
+                switch (act)
+                {
+                    case "reply" when a.UserInput.TryGetValue("odp", out var text) && !string.IsNullOrWhiteSpace(text):
+                        Reply?.Invoke(cid, text);
+                        return;
+                    case "reply":
+                        return;
+                    case "read":
+                        MarkRead?.Invoke(cid);
+                        return;
+                }
+                open(cid);
             };
             AppNotificationManager.Default.Register();
             _ok = true;
@@ -28,16 +45,23 @@ public static class Toasts
         catch (Exception ex) { App.Log("Powiadomienia niedostępne: " + ex.Message); }
     }
 
-    public static void Show(string title, string body, long channelId, string group)
+    public static void Show(string title, string body, long channelId, string group, bool canReply = false)
     {
         if (!_ok) return;
         try
         {
-            var n = new AppNotificationBuilder()
+            var b = new AppNotificationBuilder()
                 .AddArgument("c", channelId.ToString())
                 .AddText(title)
-                .AddText(string.IsNullOrWhiteSpace(body) ? "Nowa wiadomość" : body)
-                .BuildNotification();
+                .AddText(string.IsNullOrWhiteSpace(body) ? "Nowa wiadomość" : body);
+            if (canReply && channelId != 0)
+            {
+                // odpowiedź prosto z dymka (jak w komunikatorach na telefonie)
+                b.AddTextBox("odp", "Napisz odpowiedź…", "")
+                 .AddButton(new AppNotificationButton("Wyślij").AddArgument("a", "reply").AddArgument("c", channelId.ToString()).SetInputId("odp"))
+                 .AddButton(new AppNotificationButton("Przeczytane").AddArgument("a", "read").AddArgument("c", channelId.ToString()));
+            }
+            var n = b.BuildNotification();
             n.Group = group;
             AppNotificationManager.Default.Show(n);
         }
