@@ -52,7 +52,10 @@ public static class Demo
             case "srvroles": sh.Go(Eg, Ogolne); sh.ShowServerSettings(Eg, "roles", selectRole: 1); break;
             case "srvmembers": sh.Go(Eg, Ogolne); sh.ShowServerSettings(Eg, "members"); break;
             case "setapp": sh.Go(Eg, Ogolne); sh.ShowSettings("app"); break;
-            case "forest": sh.W.ApplyTheme("forest"); break;
+            case "forest":
+                if (Theme.Name != "forest") sh.W.ApplyTheme("forest"); // przebudowa okna — nowe okno wróci tutaj i przejdzie na kanał
+                else sh.Go(Eg, Ogolne);
+                break;
             case "dmcall":
                 sh.C.Store.Voice[DmOla] = [new VoiceMember { UserId = OlaId, Video = true }];
                 sh.C.DemoSpeaker = OlaId;
