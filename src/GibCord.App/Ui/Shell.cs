@@ -33,6 +33,7 @@ public sealed class Shell : Grid
     ChatView? _chat;
     ChatView? _thread;
     SearchPanel? _search;
+    InboxPanel? _inbox;
     Task _openTask = Task.CompletedTask;
     bool _jumping;
     readonly Border _threadHost = new() { Width = 440, Background = Theme.Members, BorderBrush = Theme.Line, BorderThickness = U.Th(1, 0, 0, 0), Visibility = Visibility.Collapsed };
@@ -91,6 +92,7 @@ public sealed class Shell : Grid
 
         Accel(VirtualKey.K, VirtualKeyModifiers.Control, OpenSwitcher);
         Accel(VirtualKey.F, VirtualKeyModifiers.Control, () => OpenSearch());
+        Accel(VirtualKey.I, VirtualKeyModifiers.Control, () => OpenInbox());
         KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape && FocusMode) { e.Handled = true; ToggleFocus(); Dirty(voice: true); } };
         Accel(VirtualKey.Left, VirtualKeyModifiers.Menu, Back);
         Accel(VirtualKey.Right, VirtualKeyModifiers.Menu, Forward);
@@ -127,6 +129,7 @@ public sealed class Shell : Grid
         _chat?.Dispose(); _chat = null;
         _thread?.Dispose(); _thread = null;
         _ideas?.Dispose(); _ideas = null;
+        _inbox?.Dispose(); _inbox = null;
         Tones.StopRing();
     }
 
@@ -379,6 +382,7 @@ public sealed class Shell : Grid
             _main.Children.Add(_chat);
             _openTask = C.OpenChannel(ChannelId);
             Toasts.ClearFor(ChannelId);
+            Inbox.SeenChannel(ChannelId);
         }
         else if (ServerId == 0)
         {
@@ -405,7 +409,7 @@ public sealed class Shell : Grid
 
     // ───────────────────────── wątki (panel z boku) ─────────────────────────
 
-    public bool ThreadOpen => _thread is not null || _search is not null;
+    public bool ThreadOpen => _thread is not null || _search is not null || _inbox is not null;
     public ChatView? CurrentChat => _chat;
 
     // ── wyszukiwarka (ten sam panel z prawej co wątek) ──
@@ -415,6 +419,7 @@ public sealed class Shell : Grid
         if (!S.Loaded) return;
         if (_search is not null) { _search.Focus(text); return; }
         CloseThread(refresh: false);
+        CloseInbox();
         _search = new SearchPanel(this, text);
         _threadHost.Child = _search;
         _threadHost.Visibility = Visibility.Visible;
@@ -431,7 +436,30 @@ public sealed class Shell : Grid
         if (refresh) { _members.Refresh(); _chat?.RefreshHeader(); _chat?.FocusComposer(); }
     }
 
-    public void CloseSidePanel() { CloseSearch(refresh: true); CloseThread(); }
+    public void CloseSidePanel() { CloseInbox(); CloseSearch(refresh: true); CloseThread(); }
+
+    // ── skrzynka (wzmianki, zapisane, przypomnienia) — ten sam panel z prawej ──
+    public void OpenInbox(string tab = "mentions")
+    {
+        if (!S.Loaded) return;
+        if (_inbox is not null) { CloseInbox(); return; }
+        CloseThread(refresh: false);
+        CloseSearch(refresh: false);
+        _inbox = new InboxPanel(this, tab);
+        _threadHost.Child = _inbox;
+        _threadHost.Visibility = Visibility.Visible;
+        _members.Refresh();
+    }
+
+    void CloseInbox()
+    {
+        if (_inbox is null) return;
+        _inbox.Dispose();
+        _inbox = null;
+        _threadHost.Child = null;
+        _threadHost.Visibility = Visibility.Collapsed;
+        _members.Refresh();
+    }
     public bool SearchOpen => _search is not null;
 
     /// <summary>Skok do wiadomości z wyniku wyszukiwania (albo linku): kanał / rozmowa, a dla wiadomości w wątku — panel wątku.</summary>
@@ -468,6 +496,7 @@ public sealed class Shell : Grid
         if (_thread?.Tid == tid) { if (jumpTo > 0) await _thread.JumpTo(jumpTo); _thread.FocusComposer(); return; }
         CloseThread(refresh: false);
         CloseSearch(refresh: false);
+        CloseInbox();
         var view = new ChatView(this, t.ChannelId, tid);
         _thread = view;
         _threadHost.Child = view;

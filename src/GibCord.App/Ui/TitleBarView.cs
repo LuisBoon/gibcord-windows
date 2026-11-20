@@ -10,6 +10,8 @@ public sealed class TitleBarView : Grid
     readonly MainWindow _w;
     readonly Button _back, _fwd;
     readonly Border _search;
+    readonly Button _inbox;
+    readonly Border _inboxDot = new() { Width = 9, Height = 9, CornerRadius = new CornerRadius(5), Background = Theme.Red, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = U.Th(0, 3, 4, 0), IsHitTestVisible = false, Visibility = Visibility.Collapsed };
     readonly TextBlock _name;
     public Grid DragArea => this;
 
@@ -39,14 +41,19 @@ public sealed class TitleBarView : Grid
         _search.Tapped += (_, _) => _w.CurrentShell?.OpenSwitcher();
         _search.Tip("Szybkie przejście do kanału, rozmowy albo osoby (Ctrl+K)");
         this.Add(_search.At(0, 3));
+
+        _inbox = U.IconButton("\uE715", "Skrzynka: wzmianki, zapisane, przypomnienia (Ctrl+I)", () => _w.CurrentShell?.OpenInbox(), 13, 28);
+        var inboxBox = new Grid { HorizontalAlignment = HorizontalAlignment.Right, Margin = U.Th(0, 0, 8, 0) }.Add(_inbox, _inboxDot);
+        this.Add(inboxBox.At(0, 4));
+        Inbox.Changed += () => _w.DispatcherQueue.TryEnqueue(() => _inboxDot.Visibility = Inbox.Unseen > 0 ? Visibility.Visible : Visibility.Collapsed);
     }
 
-    public IEnumerable<FrameworkElement> Interactive() => [_back, _fwd, _search];
+    public IEnumerable<FrameworkElement> Interactive() => [_back, _fwd, _search, _inbox];
 
     public void SetShellMode(bool on)
     {
         var v = on ? Visibility.Visible : Visibility.Collapsed;
-        _back.Visibility = _fwd.Visibility = _search.Visibility = v;
+        _back.Visibility = _fwd.Visibility = _search.Visibility = _inbox.Visibility = v;
         _w.UpdateTitleBarRegions();
     }
 

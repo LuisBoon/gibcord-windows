@@ -107,6 +107,23 @@ public sealed class MainWindow : Window
         _keys = new GlobalKeys(Client);
         Client.SessionEnded += why => ShowLogin(why);
         Client.EmailGateRequired += ShowEmailGate;
+        Client.Mentioned += m => Inbox.AddMention(m, Client.Store);
+        // skrzynka jest osobna dla każdego konta — wczytujemy ją, gdy znamy „ja”
+        long inboxFor = 0;
+        Client.Store.Changed += c => { if (c.Kind is ChangeKind.All && Client.Store.Me.Id != inboxFor) { inboxFor = Client.Store.Me.Id; Inbox.Load(inboxFor); } };
+        // przypomnienia „przypomnij mi o tej wiadomości”
+        var remindTimer = Dq.CreateTimer();
+        remindTimer.Interval = TimeSpan.FromSeconds(20);
+        remindTimer.Tick += (_, _) =>
+        {
+            foreach (var r in Inbox.TakeDue())
+            {
+                var key = r.ThreadId is long t ? -t : r.ChannelId;
+                Toasts.Show("⏰ Przypomnienie · " + r.Where, $"{Client.Store.NameOf(r.AuthorId)}: {r.Text}", key, "rem" + r.MessageId);
+                _shell?.Info("⏰ Przypomnienie: " + (r.Text.Length > 80 ? r.Text[..80] + "…" : r.Text));
+            }
+        };
+        remindTimer.Start();
         Client.Birthday += uid =>
         {
             var me = uid == Client.Store.Me.Id;

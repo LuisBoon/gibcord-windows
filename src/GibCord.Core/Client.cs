@@ -52,6 +52,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     public event Action<GatewayStatus, TimeSpan?>? StatusChanged;
     public event Action<Message>? Notify;
+    /// <summary>Ktoś mnie oznaczył (każda wzmianka, niezależnie od powiadomień) — do skrzynki „Wzmianki”.</summary>
+    public event Action<Message>? Mentioned;
     public event Action<User>? FriendRequest;
     public event Action<string>? SessionEnded;
     /// <summary>Zmiana na tablicy pomysłów (id kanału).</summary>
@@ -219,6 +221,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
                 if (m.ChannelId == ActiveChannelId && WindowActive && m.AuthorId != Store.Me.Id && m.ThreadId is null) ScheduleRead(m.ChannelId);
                 if (m.ThreadId is long mt && mt == ActiveThreadId && WindowActive && m.AuthorId != Store.Me.Id) ScheduleRead(m.Key);
                 if (Store.ShouldNotify(m, ActiveChannelId, WindowActive, ActiveThreadId)) Notify?.Invoke(m);
+                if (m.AuthorId != Store.Me.Id && m.Type == "default" && !Store.Blocked.Contains(m.AuthorId) && Store.MentionsMe(m)) Mentioned?.Invoke(m);
                 SaveSoon(m.Key);
                 break;
             }

@@ -571,6 +571,7 @@ public sealed class SettingsPage : Grid
         _body.Add(Card(Label("Skróty klawiszowe"),
             Shortcut("Ctrl+K", "Szybkie przejście do kanału, osoby albo serwera"),
             Shortcut("Ctrl+F", "Szukaj wiadomości"),
+            Shortcut("Ctrl+I", "Skrzynka: wzmianki, zapisane, przypomnienia"),
             Shortcut("Alt+↑ / Alt+↓", "Poprzedni / następny kanał"),
             Shortcut("Alt+← / Alt+→", "Wstecz / dalej"),
             Shortcut("↑ w pustym polu", "Edytuj ostatnią wiadomość"),

@@ -549,6 +549,16 @@ public sealed partial class MessageView : Grid
             Sidebar.Copy(Srv is { } sv ? (m.ThreadId is long th ? $"{b}/kanal/{sv.Id}/{m.ChannelId}/watek/{th}" : $"{b}/kanal/{sv.Id}/{m.ChannelId}/{m.Id}") : $"{b}/dm/{m.ChannelId}/{m.Id}");
             _v.Sh.Info("Skopiowano link do wiadomości");
         }));
+        f.Items.Add(M.Item(Inbox.IsSaved(m.Id) ? "Usuń z zapisanych" : "Zapisz wiadomość", "\uE8A4", () =>
+        {
+            Inbox.ToggleSaved(m, S);
+            _v.Sh.Info(Inbox.IsSaved(m.Id) ? "Zapisano — znajdziesz ją w Skrzynce (Ctrl+I)" : "Usunięto z zapisanych");
+        }));
+        var remind = new MenuFlyoutSubItem { Text = "Przypomnij mi", Icon = new FontIcon { Glyph = "\uE823" } };
+        var tomorrow = new DateTimeOffset(DateTime.Today.AddDays(1).AddHours(9)).ToUnixTimeMilliseconds();
+        foreach (var (label, at) in new[] { ("Za 20 minut", Format.NowMs() + 20 * 60_000L), ("Za godzinę", Format.NowMs() + 3_600_000L), ("Za 3 godziny", Format.NowMs() + 3 * 3_600_000L), ("Jutro o 9:00", tomorrow) })
+            remind.Items.Add(M.Item(label, "", () => { Inbox.Remind(m, S, at); _v.Sh.Info("Przypomnę: " + Format.When(at)); }));
+        f.Items.Add(remind);
         if (m.AuthorId != S.Me.Id) f.Items.Add(M.Item("Zgłoś wiadomość", "\uE7BA", () => UserMenu.Report(_v.Sh, m)));
         if (m.AuthorId == S.Me.Id || _v.CanManage)
         {
