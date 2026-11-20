@@ -127,6 +127,7 @@ public sealed partial class ChatView : Grid, IDisposable
 
     public void Dispose()
     {
+        _composer.CancelRecording();
         _composer.SaveDraft();
         _stage?.Dispose();
         _disposed = true;

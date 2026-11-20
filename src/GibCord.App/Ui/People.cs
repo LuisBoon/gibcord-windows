@@ -133,18 +133,26 @@ static class People
                 }, 11, 26).At(0, 2));
             members.Add(new Border { Child = g, Padding = U.Th(6, 4) });
         }
-        var add = d.UserIds.Count < 10 ? U.Ghost("+ Dodaj osoby", async () =>
+        // akcje, które otwierają kolejne okienko, wykonujemy dopiero po zamknięciu tego (dwa ContentDialogi naraz = wyjątek)
+        Func<Task>? after = null;
+        var add = d.UserIds.Count < 10 ? U.Ghost("+ Dodaj osoby", () =>
         {
+            after = async () =>
+            {
+                var ids = await Pick(sh, "Dodaj do grupy", 10 - d.UserIds.Count, n => n == 0 ? "Dodaj" : $"Dodaj ({n})", d.UserIds);
+                if (ids is null) return;
+                foreach (var id in ids) { try { await sh.C.Api.AddToGroup(dmId, id); } catch (Exception ex) { sh.Info(GibCordClient.Friendly(ex), true); break; } }
+            };
             dlg?.Hide();
-            var ids = await Pick(sh, "Dodaj do grupy", 10 - d.UserIds.Count, n => n == 0 ? "Dodaj" : $"Dodaj ({n})", d.UserIds);
-            if (ids is null) return;
-            foreach (var id in ids) { try { await sh.C.Api.AddToGroup(dmId, id); } catch (Exception ex) { sh.Info(GibCordClient.Friendly(ex), true); break; } }
         }, 32) : null;
-        var leave = U.Ghost("Opuść grupę", async () =>
+        var leave = U.Ghost("Opuść grupę", () =>
         {
+            after = async () =>
+            {
+                if (!await M.Confirm(sh, "Opuścić grupę?", "Nie zobaczysz już nowych wiadomości. Wrócić możesz tylko, gdy ktoś Cię doda.", "Opuść")) return;
+                try { await sh.C.Api.RemoveFromGroup(dmId, 0); sh.Go(0, 0); } catch (Exception ex) { sh.Info(GibCordClient.Friendly(ex), true); }
+            };
             dlg?.Hide();
-            if (!await M.Confirm(sh, "Opuścić grupę?", "Nie zobaczysz już nowych wiadomości. Wrócić możesz tylko, gdy ktoś Cię doda.", "Opuść")) return;
-            try { await sh.C.Api.RemoveFromGroup(dmId, 0); sh.Go(0, 0); } catch (Exception ex) { sh.Info(GibCordClient.Friendly(ex), true); }
         }, 32).With(b => ((TextBlock)b.Content).Foreground = Theme.Red);
         dlg = new ContentDialog
         {
@@ -159,7 +167,9 @@ static class People
             },
             PrimaryButtonText = "Zapisz nazwę", CloseButtonText = "Zamknij", DefaultButton = ContentDialogButton.Primary, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,
         };
-        if (await dlg.ShowAsync() == ContentDialogResult.Primary && name.Text.Trim() != (d.Name ?? ""))
+        var res = await dlg.ShowAsync();
+        if (after is not null) { await after(); return; }
+        if (res == ContentDialogResult.Primary && name.Text.Trim() != (d.Name ?? ""))
         {
             try { await sh.C.Api.RenameGroup(dmId, name.Text); } catch (Exception ex) { sh.Info(GibCordClient.Friendly(ex), true); }
         }

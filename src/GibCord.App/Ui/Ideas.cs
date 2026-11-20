@@ -115,6 +115,7 @@ public sealed class IdeasView : Grid, IDisposable
         panel.Add(U.T($"{S.NameOf(i.Long("authorId") ?? 0)} · {Format.When(i.Long("createdAt") ?? 0)}", 12, null, Theme.Mu));
         if (!string.IsNullOrWhiteSpace(i.Str("body"))) panel.Add(RichText.Build(i.Str("body")!, new RichText.Ctx(S, Api, S.ServerOfChannel(_cid), null, 13.5)));
         ContentDialog? d = null;
+        Func<Task>? after = null; // akcja z kolejnym okienkiem — dopiero po zamknięciu tego
         if (mod)
         {
             var st = new ComboBox { Header = U.T("Status", 12.5, U.Semi, Theme.Mu) };
@@ -128,12 +129,15 @@ public sealed class IdeasView : Grid, IDisposable
         }
         if (own || mod)
             panel.Add(U.H(8,
-                U.Ghost("Edytuj", () => { d?.Hide(); Edit(i); }, 30),
-                U.Ghost("Usuń", async () =>
+                U.Ghost("Edytuj", () => { after = () => { Edit(i); return Task.CompletedTask; }; d?.Hide(); }, 30),
+                U.Ghost("Usuń", () =>
                 {
+                    after = async () =>
+                    {
+                        if (!await M.Confirm(_sh, "Usunąć pomysł?", "Zniknie razem z głosami i komentarzami.", "Usuń")) return;
+                        try { await Api.DeleteJson($"ideas/{id}"); _ = Load(); } catch (Exception ex) { _sh.Info(GibCordClient.Friendly(ex), true); }
+                    };
                     d?.Hide();
-                    if (!await M.Confirm(_sh, "Usunąć pomysł?", "Zniknie razem z głosami i komentarzami.", "Usuń")) return;
-                    try { await Api.DeleteJson($"ideas/{id}"); _ = Load(); } catch (Exception ex) { _sh.Info(GibCordClient.Friendly(ex), true); }
                 }, 30)));
         panel.Add(U.HLine(.1));
         var comments = r.Prop("comments").EnumerateArray().ToList();
@@ -148,7 +152,9 @@ public sealed class IdeasView : Grid, IDisposable
             Title = "Pomysł", Content = new ScrollViewer { Content = panel, MaxHeight = 560 }, CloseButtonText = "Zamknij",
             PrimaryButtonText = r.Bool("canComment") == true ? "Wyślij komentarz" : "", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
         };
-        if (await d.ShowAsync() == ContentDialogResult.Primary && box.Text.Trim().Length > 0)
+        var res = await d.ShowAsync();
+        if (after is not null) { await after(); return; }
+        if (res == ContentDialogResult.Primary && box.Text.Trim().Length > 0)
         {
             try { await Api.PostJson($"ideas/{id}/comments", new { content = box.Text.Trim() }); Open(id); }
             catch (Exception ex) { _sh.Info(GibCordClient.Friendly(ex), true); }

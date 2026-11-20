@@ -238,6 +238,7 @@ public sealed class MainWindow : Window
 
     public void ShowShell()
     {
+        _shell?.Detach();
         _host.Children.Clear();
         _shell = new Shell(this);
         _host.Children.Add(_shell);

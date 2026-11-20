@@ -332,7 +332,7 @@ public sealed partial class ServerSettingsPage
             if (_exprTab == "emoji") n = new string(n.ToLowerInvariant().Replace('ł', 'l').Normalize(System.Text.NormalizationForm.FormD).Where(c => char.IsAsciiLetterOrDigit(c) || c == '_').ToArray());
             var q = "?name=" + Uri.EscapeDataString(n);
             if (_exprTab == "sounds") q += "&emoji=" + Uri.EscapeDataString(emo.Text.Trim()) + "&volume=" + (vol.Value / 100).ToString(System.Globalization.CultureInfo.InvariantCulture);
-            if (await Run(() => Api.PostImage($"servers/{_sid}/{_exprTab}{q}", d, f.Mime), "Dodano")) name.Text = "";
+            if (await Run(() => Api.PostImage($"servers/{_sid}/{(_exprTab == "emoji" ? "emojis" : _exprTab)}{q}", d, f.Mime), "Dodano")) name.Text = "";
         }, 36).With(b => b.Width = 220);
         var form = U.H(10, name, _exprTab == "sounds" ? emo : null, _exprTab == "sounds" ? vol : null, upload);
         _body.Add(Card(Label("Dodaj"), form, U.T(hint, 11.5, null, Theme.Mu2)));

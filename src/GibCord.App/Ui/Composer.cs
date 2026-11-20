@@ -28,7 +28,8 @@ public sealed partial class Composer : StackPanel
     readonly List<Pending> _pending = [];
     readonly Dictionary<string, long> _mentions = [];
     readonly Dictionary<string, long> _roleMentions = [];
-    bool _restoring, _draftDirty;
+    bool _restoring, _draftDirty, _submitting;
+    string? _restoredText;
     Button _mic = null!;
     VoiceRecorder? _rec;
     readonly Border _recBar = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(14), Background = U.Alpha("#ff4d6a", .14), BorderBrush = U.Alpha("#ff4d6a", .5), BorderThickness = U.Th(1), Padding = U.Th(14, 8), MinHeight = 50 };
@@ -104,6 +105,7 @@ public sealed partial class Composer : StackPanel
         {
             _restoring = true;
             _box.Text = Decode(draft);
+            _restoredText = _box.Text; // TextChanged przychodzi później — po tym poznamy, że to nie pisanie
             _box.SelectionStart = _box.Text.Length;
             _restoring = false;
         }
@@ -174,6 +176,8 @@ public sealed partial class Composer : StackPanel
     void OnText()
     {
         if (_restoring) return;
+        if (_restoredText is not null && _box.Text == _restoredText) { _restoredText = null; return; } // szkic wczytany przy wejściu na kanał
+        _restoredText = null;
         if (_box.Text.Length > 0 && _editing is null) _v.Sh.C.Typing(_v.Key);
         if (_editing is null)
         {
@@ -354,6 +358,17 @@ public sealed partial class Composer : StackPanel
     // ───────────────────────── wysyłanie ─────────────────────────
 
     async Task Submit()
+    {
+        if (_submitting) return; // drugi Enter, gdy pliki jeszcze się wysyłają
+        _submitting = true;
+        try { await SubmitCore(); }
+        finally { _submitting = false; }
+    }
+
+    /// <summary>Wyjście z kanału w trakcie nagrywania: nagranie przepada (nic się nie wysyła).</summary>
+    public void CancelRecording() { if (_rec is not null) _ = StopRecording(false); }
+
+    async Task SubmitCore()
     {
         HideSuggest();
         var text = Encode(_box.Text).Trim();

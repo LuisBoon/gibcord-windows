@@ -55,7 +55,7 @@ public static class Picker
         var s = v.S;
         var api = sh.C.Api;
         Flyout fly = new() { Placement = FlyoutPlacementMode.TopEdgeAlignedRight };
-        fly.FlyoutPresenterStyle = new Style(typeof(FlyoutPresenter)) { Setters = { new Setter(FrameworkElement.MaxWidthProperty, 480), new Setter(Control.PaddingProperty, new Thickness(10)) } };
+        fly.FlyoutPresenterStyle = new Style(typeof(FlyoutPresenter)) { Setters = { new Setter(FrameworkElement.MaxWidthProperty, 480.0), new Setter(Control.PaddingProperty, new Thickness(10)) } };
         var stickers = s.Servers.Where(x => x.Stickers.Count > 0).OrderByDescending(x => x.Id == v.Srv?.Id).ToList();
         var gifsOn = sh.C.Info?.Has("gifs") != false;
 

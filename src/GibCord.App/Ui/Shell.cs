@@ -68,6 +68,7 @@ public sealed class Shell : Grid
         _overlay.At(0, 0, colSpan: 5);
         _overlay.IsHitTestVisible = true;
         _overlay.Background = null;
+        Canvas.SetZIndex(_overlay, 100); // dzwonek, Ctrl+K i komunikaty nad ustawieniami i panelem admina
         this.Add(_overlay);
 
         _refresh = DispatcherQueue.CreateTimer();
@@ -77,7 +78,7 @@ public sealed class Shell : Grid
 
         S.Changed += OnChange;
         C.StatusChanged += OnStatus;
-        C.Error += msg => Info(msg, error: true);
+        C.Error += OnError;
         C.VoiceChanged += OnVoiceChanged;
         C.VoiceInfo += OnVoiceInfo;
         C.CallRing += OnCallRing;
@@ -107,16 +108,26 @@ public sealed class Shell : Grid
         KeyboardAccelerators.Add(k);
     }
 
+    void OnError(string msg) => Info(msg, error: true);
+
+    /// <summary>Odpięcie od klienta i zwolnienie widoków (wylogowanie, bramka, zmiana motywu — inaczej stary widok żyje dalej w tle).</summary>
     public void Detach()
     {
         S.Changed -= OnChange;
         C.StatusChanged -= OnStatus;
+        C.Error -= OnError;
         C.VoiceChanged -= OnVoiceChanged;
         C.VoiceInfo -= OnVoiceInfo;
         C.CallRing -= OnCallRing;
         C.CallEnded -= OnCallEnded;
         _talk.Stop();
-        _voice?.Dispose();
+        _refresh.Stop();
+        _soundTimer?.Stop();
+        _voice?.Dispose(); _voice = null;
+        _chat?.Dispose(); _chat = null;
+        _thread?.Dispose(); _thread = null;
+        _ideas?.Dispose(); _ideas = null;
+        Tones.StopRing();
     }
 
     // ───────────────────────── rozmowy ─────────────────────────
@@ -540,7 +551,7 @@ public sealed class Shell : Grid
         dim.Add(content.With(c => { c.HorizontalAlignment = HorizontalAlignment.Center; c.VerticalAlignment = VerticalAlignment.Top; c.Margin = U.Th(0, 70, 0, 0); }));
         dim.Tapped += (_, e) => { if (ReferenceEquals(e.OriginalSource, dim)) CloseOverlay(); };
         dim.KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape) { CloseOverlay(); e.Handled = true; } };
-        _overlay.Children.Insert(0, dim);
+        _overlay.Children.Insert(Math.Max(0, _overlay.Children.IndexOf(_toasts)), dim);
         focus?.Invoke();
     }
 
@@ -662,6 +673,7 @@ public sealed class Shell : Grid
                         panel.Add(new Grid().Cols("36", "*").Add(U.T(it.Str("icon") ?? "•", 18).At(0, 0),
                             U.V(2, U.T(it.Str("title") ?? "", 13.5, U.Bold, wrap: true), U.T(it.Str("text") ?? "", 12.5, null, Theme.Mu, wrap: true)).At(0, 1)));
             }
+            await M.WaitNoDialog(XamlRoot);
             var d = new ContentDialog
             {
                 Title = "Co nowego w GibCordzie", Content = new ScrollViewer { Content = panel, MaxHeight = 520 }, PrimaryButtonText = "Super!",

@@ -266,7 +266,9 @@ public sealed partial class MessageView : Grid
             var url = m.Groups[1].Value;
             if (url.StartsWith("/uploads/") && !System.Text.RegularExpressions.Regex.IsMatch(url, @"\.(gif|webp|png|jpe?g)(\?|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) return null;
             if (url.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)) return null;
-            return (url, m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : 0, m.Groups[3].Success ? int.Parse(m.Groups[3].Value) : 0);
+            static int Dim(System.Text.RegularExpressions.Group g) => g.Success && int.TryParse(g.Value, out var v) && v is > 0 and <= 10000 ? v : 0; // złośliwe #99999999999x1 nie wywróci listy
+            var gw = Dim(m.Groups[2]); var gh = Dim(m.Groups[3]);
+            return (url, gw > 0 && gh > 0 ? gw : 0, gw > 0 && gh > 0 ? gh : 0);
         }
         if (t.Contains(' ') || t.Contains('\n') || !Uri.TryCreate(t, UriKind.Absolute, out var u) || u.Scheme != "https") return null;
         return u.AbsolutePath.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) ? (t, 0, 0) : null;

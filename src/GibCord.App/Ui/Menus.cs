@@ -29,8 +29,16 @@ static class M
         return i;
     }
 
+    /// <summary>Czeka, aż zamknie się inne okienko (dwa ContentDialogi naraz = wyjątek).</summary>
+    public static async Task WaitNoDialog(XamlRoot? root)
+    {
+        for (var i = 0; i < 150 && root is not null && Microsoft.UI.Xaml.Media.VisualTreeHelper.GetOpenPopupsForXamlRoot(root).Any(p => p.Child is ContentDialog); i++)
+            await Task.Delay(100);
+    }
+
     public static async Task<bool> Confirm(Shell sh, string title, string text, string ok)
     {
+        await WaitNoDialog(sh.XamlRoot);
         var d = new ContentDialog
         {
             Title = title, Content = U.T(text, 14, null, null, wrap: true), PrimaryButtonText = ok, CloseButtonText = "Anuluj",

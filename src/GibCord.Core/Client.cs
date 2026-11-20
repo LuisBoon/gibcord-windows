@@ -313,9 +313,10 @@ public sealed partial class GibCordClient : IAsyncDisposable
             var msgs = await Api.GetMessages(ch, around: last.Id, limit: 100, thread: th);
             var newer = msgs.Where(x => x.Id > last.Id).ToList();
             var newest = cid < 0 ? Store.ThreadById(-cid)?.LastMessageId ?? 0 : Store.LastIdOf(cid);
-            var atTail = newer.Count < 50 || (newer.Count > 0 && newer[^1].Id >= newest);
+            // serwer przy around=X&limit=100 daje najwyżej 49 nowszych niż X — koniec poznajemy po najnowszej znanej wiadomości
+            var atTail = newer.Count == 0 || newer[^1].Id >= newest;
             _ui(() => Store.AppendNewer(cid, newer, atTail));
-            if (atTail && WindowActive && cid == ActiveChannelId) ScheduleRead(cid, 0);
+            if (atTail && WindowActive && (cid < 0 ? -cid == ActiveThreadId : cid == ActiveChannelId)) ScheduleRead(cid, 0);
             return newer.Count;
         }
         catch (Exception ex) { _ui(() => Error?.Invoke(Friendly(ex))); return 0; }

@@ -291,14 +291,18 @@ public sealed class AdminPage : Grid
         var pick = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var c in chans) pick.Items.Add("# " + c.Name);
         var list = new StackPanel { Spacing = 6 };
+        var armed = new HashSet<long>();
+        var seq = 0;
         async void Load()
         {
+            var my = ++seq;
             list.Children.Clear();
             if (pick.SelectedIndex < 0) return;
             var cid = chans[pick.SelectedIndex].Id;
             try
             {
                 var msgs = await Api.GetJson($"admin/channels/{cid}/messages?limit=50");
+                if (my != seq) return; // w międzyczasie wybrano inny kanał
                 foreach (var m in msgs.EnumerateArray().Reverse())
                 {
                     var mid = m.Long("id") ?? 0;
@@ -307,7 +311,9 @@ public sealed class AdminPage : Grid
                         U.T(m.Str("content") is { Length: > 0 } t ? t : "(załącznik)", 12.5, null, Theme.Fg, wrap: true)).At(0, 0),
                         U.IconButton("", "Usuń wiadomość (moderacja)", async () =>
                         {
-                            if (await M.Confirm(_sh, "Usunąć wiadomość?", "Zniknie u wszystkich. Akcja trafi do dziennika admina.", "Usuń") && await Run(() => Api.DeleteJson($"admin/messages/{mid}"), "Usunięto")) Load();
+                            // potwierdzenie w miejscu (to okienko jest już otwarte — drugiego nie da się pokazać)
+                            if (!armed.Remove(mid)) { armed.Add(mid); _sh.Info("Kliknij kosz jeszcze raz, żeby usunąć tę wiadomość u wszystkich."); return; }
+                            if (await Run(() => Api.DeleteJson($"admin/messages/{mid}"), "Usunięto")) Load();
                         }, 11, 26).At(0, 1));
                     list.Add(row);
                 }
