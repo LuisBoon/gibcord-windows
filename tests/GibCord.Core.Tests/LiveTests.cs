@@ -349,6 +349,31 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
     }
 
     [LiveFact]
+    public async Task WspolneOgladanie()
+    {
+        var (a, b) = (p.A, p.B);
+        var srv = a.Store.Servers.First(s => s.Channels.Any(c => c.Name == "pogaduchy"));
+        var vc = srv.Channels.FirstOrDefault(c => c.IsVoice && c.Name == "kino")?.Id
+            ?? (await a.Api.PostJson($"servers/{srv.Id}/channels", new { name = "kino", type = "voice" })).Long("id")!.Value;
+        await p.Until(() => a.Store.ChannelById(vc) is not null && b.Store.ChannelById(vc) is not null, "kanał kino");
+        await a.JoinVoice(vc);
+        await b.JoinVoice(vc);
+        await p.Until(() => (a.Store.Voice.GetValueOrDefault(vc)?.Count ?? 0) == 2, "dwie osoby na kanale");
+        a.Watch(new { t = "watch_set", videoId = "jNQXAC9IVRw", title = "Zoo" });
+        await p.Until(() => b.Store.Watches.GetValueOrDefault(vc) is { VideoId: "jNQXAC9IVRw", State: "playing" }, "film u B");
+        b.Watch(new { t = "watch_ctl", action = "pause", position = 5.5 });
+        await p.Until(() => a.Store.Watches.GetValueOrDefault(vc) is { State: "paused" } w && Math.Abs(w.Position - 5.5) < .01, "pauza u A");
+        b.Watch(new { t = "watch_queue", videoId = "aqz-KE-bpKQ", title = "Królik" });
+        await p.Until(() => a.Store.Watches.GetValueOrDefault(vc)?.Queue.Count == 1, "kolejka u A");
+        a.Watch(new { t = "watch_skip" });
+        await p.Until(() => b.Store.Watches.GetValueOrDefault(vc) is { VideoId: "aqz-KE-bpKQ" } w && w.Queue.Count == 0, "następny film u B");
+        a.Watch(new { t = "watch_stop" });
+        await p.Until(() => !b.Store.Watches.ContainsKey(vc), "koniec oglądania u B");
+        await a.LeaveVoice();
+        await b.LeaveVoice();
+    }
+
+    [LiveFact]
     public async Task PisanieZalacznikIStarszeWiadomosci()
     {
         var (a, b) = (p.A, p.B);
