@@ -101,6 +101,10 @@ public sealed class VoiceEngine : IAsyncDisposable
     AudioSource? _screenAudioSrc;
     LocalAudioTrack? _screenAudioTrack;
     string? _screenAudioSid;
+    // kamera
+    VideoSource? _camSrc;
+    LocalVideoTrack? _camTrack;
+    string? _camSid;
 
     public VoiceOptions Options { get; set; } = new();
     public VoiceState State { get; private set; } = VoiceState.Idle;
@@ -122,6 +126,7 @@ public sealed class VoiceEngine : IAsyncDisposable
     public double Threshold => Options.AutoSens ? Math.Clamp(_noiseFloor + 14, -62, -24) : Options.Sens;
     public bool Transmitting => Environment.TickCount64 - Interlocked.Read(ref _micLoudAt) < SpeakHoldMs && !Muted && CanSpeak;
     public bool ScreenSharing => _screenTrack is not null;
+    public bool CameraOn => _camTrack is not null;
     public IReadOnlyCollection<long> Watching { get { lock (_gate) return [.. _watching]; } }
     public IEnumerable<VideoFeed> Feeds => _feeds.Values;
     public int RemoteAudioCount => _audio.Count;
@@ -189,6 +194,8 @@ public sealed class VoiceEngine : IAsyncDisposable
         lock (_gate) _watching.Clear();
         _micTrack = null; _micSid = null;
         _screenTrack = null; _screenSid = null; _screenAudioTrack = null; _screenAudioSid = null;
+        var cam = _camSrc; _camSrc = null; _camTrack = null; _camSid = null;
+        try { cam?.Dispose(); } catch { }
         var src = _src; _src = null;
         var ss = _screenSrc; _screenSrc = null;
         var sas = _screenAudioSrc; _screenAudioSrc = null;
@@ -565,6 +572,41 @@ public sealed class VoiceEngine : IAsyncDisposable
     }
 
     public bool ScreenAudio => _screenAudioTrack is not null;
+
+    // ───────────────────────── kamera ─────────────────────────
+
+    /// <summary>Włącza kamerę w rozmowie: zwraca funkcję, do której okno podaje klatki BGRA.</summary>
+    public async Task<Action<byte[], int, int>?> StartCamera(int width, int height)
+    {
+        var room = _room;
+        if (room?.LocalParticipant is not { } lp) return null;
+        await StopCamera().ConfigureAwait(false);
+        var src = new VideoSource(width, height, isScreencast: false);
+        var track = LocalVideoTrack.Create("camera", src);
+        var pub = await lp.PublishTrackAsync(track, new TrackPublishOptions
+        {
+            Source = TrackSource.SourceCamera, Simulcast = false,
+            VideoEncoding = new VideoEncodingOptions { MaxBitrate = 600_000, MaxFramerate = 24 },
+        }).ConfigureAwait(false);
+        _camSrc = src; _camTrack = track; _camSid = pub.Sid;
+        Raise();
+        return (bgra, w, h) =>
+        {
+            var s = _camSrc;
+            if (s is null) return;
+            try { s.CaptureFrame(new VideoFrame(w, h, VideoBufferType.Bgra, bgra)); } catch { }
+        };
+    }
+
+    public async Task StopCamera()
+    {
+        var lp = _room?.LocalParticipant;
+        var sid = _camSid; var src = _camSrc;
+        _camSrc = null; _camTrack = null; _camSid = null;
+        if (lp is not null && sid is not null) { try { await lp.UnpublishTrackAsync(sid).ConfigureAwait(false); } catch { } }
+        try { src?.Dispose(); } catch { }
+        Raise();
+    }
 
     public async Task StopScreenShare()
     {

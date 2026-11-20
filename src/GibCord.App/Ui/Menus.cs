@@ -152,6 +152,13 @@ static class SettingsMenu
         f.Items.Add(M.Toggle("Dźwięki rozmów", p.Sounds, v => { p.Sounds = v; p.Save(); }));
         f.Items.Add(M.Toggle("Pokazuj, w co grasz", p.GameDetection, v => { p.GameDetection = v; p.Save(); }));
         f.Items.Add(M.Toggle("Pokazuj, czego słuchasz w Spotify", p.MusicDetection, v => { p.MusicDetection = v; p.Save(); }));
+        var ov = new MenuFlyoutSubItem { Text = "Nakładka w grze (Ctrl+Shift+O)", Icon = new FontIcon { Glyph = "\uE7FC" } };
+        foreach (var (mode, label) in new[] { ("off", "Wyłączona"), ("game", "Tylko gdy grasz"), ("always", "Zawsze w rozmowie") })
+            ov.Items.Add(M.Radio(label, "ovmode", p.OverlayMode == mode, () => { p.OverlayMode = mode; p.Save(); }));
+        ov.Items.Add(new MenuFlyoutSeparator());
+        foreach (var (corner, label) in new[] { ("tl", "Lewy górny róg"), ("tr", "Prawy górny róg"), ("bl", "Lewy dolny róg"), ("br", "Prawy dolny róg") })
+            ov.Items.Add(M.Radio(label, "ovcorner", p.OverlayCorner == corner, () => { p.OverlayCorner = corner; p.Save(); }));
+        f.Items.Add(ov);
         f.Items.Add(new MenuFlyoutSeparator());
         f.Items.Add(M.Toggle("Powiadomienia na pulpicie", p.Notifications, v => { p.Notifications = v; p.Save(); }));
         f.Items.Add(M.Toggle("Zamykanie do zasobnika (obok zegara)", p.CloseToTray, v => { p.CloseToTray = v; p.Save(); }));

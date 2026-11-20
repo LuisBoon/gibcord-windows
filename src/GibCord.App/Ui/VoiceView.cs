@@ -81,6 +81,17 @@ static class VoiceUi
         sh.RefreshVoice();
     }
 
+    /// <summary>Kamera w rozmowie: włącz / wyłącz.</summary>
+    public static async void ToggleCamera(Shell sh)
+    {
+        var cam = sh.W.Cam;
+        if (cam is null) return;
+        if (cam.Active) { cam.Stop(); sh.RefreshVoice(); return; }
+        var err = await cam.Start();
+        if (err is not null) sh.Info(err, true);
+        sh.RefreshVoice();
+    }
+
     /// <summary>Przyciski mikrofon / słuchawki w panelu „ja” — działają też poza rozmową (jak na stronie).</summary>
     public static (Button Mic, Button Deaf) MuteButtons(Shell sh)
     {
@@ -304,7 +315,11 @@ public sealed class VoiceView : Grid, IDisposable
             var screen = U.IconButton(G.Screen, sharing ? "Zakończ transmisję" : "Udostępnij ekran", () => VoiceUi.ToggleScreen(_sh), 16, 44, sharing ? U.B("#ffffff") : null);
             screen.Background = sharing ? Theme.Red2 : U.W(.1); screen.CornerRadius = new CornerRadius(22);
             if (C.Offline || _sh.W.Screen is null) screen.Visibility = Visibility.Collapsed;
-            _controls.Child = U.H(12, mic, deaf, screen, settings, leave).With(p => p.HorizontalAlignment = HorizontalAlignment.Center);
+            var camOn = _sh.W.Cam?.Active == true;
+            var cam = U.IconButton(G.Camera, camOn ? "Wyłącz kamerę" : "Włącz kamerę", () => VoiceUi.ToggleCamera(_sh), 16, 44, camOn ? U.B("#ffffff") : null);
+            cam.Background = camOn ? U.B("#2fa66a") : U.W(.1); cam.CornerRadius = new CornerRadius(22);
+            if (C.Offline || _sh.W.Cam is null) cam.Visibility = Visibility.Collapsed;
+            _controls.Child = U.H(12, mic, deaf, cam, screen, settings, leave).With(p => p.HorizontalAlignment = HorizontalAlignment.Center);
         }
         else
         {

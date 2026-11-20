@@ -164,9 +164,16 @@ jobs:
           (Get-Content src\GibCord.App\Package.appxmanifest -Raw) -replace 'Version="6\.0\.0\.0"', 'Version="${{ steps.ver.outputs.msix }}"' | Set-Content src\GibCord.App\Package.appxmanifest -Encoding utf8
           dotnet publish src/GibCord.App -c Release -r win-x64 -p:Platform=x64 -p:WindowsPackageType=MSIX -p:GenerateAppxPackageOnBuild=true `
             -p:AppxPackageSigningEnabled=false -p:AppxBundle=Never -p:UapAppxPackageBuildMode=SideloadOnly -p:AppxPackageDir="$pwd\sklep\" `
+            -p:AppxGeneratePriEnabled=true -p:ProjectPriFileName=resources.pri `
             -p:Version=${{ steps.ver.outputs.msix }} -p:PublishReadyToRun=true
           $msix = Get-ChildItem sklep -Recurse -Filter *.msix | Select-Object -First 1
           if (-not $msix) { throw 'Brak paczki .msix' }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($msix.FullName)
+          $pri = $zip.Entries | Where-Object { $_.FullName -like '*.pri' } | ForEach-Object { "$($_.FullName) ($($_.Length))" }
+          $zip.Dispose()
+          Write-Host "Pliki .pri w paczce: $($pri -join ', ')"
+          if (-not ($pri -match '^resources\.pri')) { Write-Host '::error::W paczce nie ma resources.pri — WinUI nie znajdzie swoich zasobów' }
           Copy-Item $msix.FullName "GibCord-Sklep-${{ steps.ver.outputs.msix }}.msix"
           Write-Host ("Paczka: {0} ({1:N1} MB)" -f $msix.Name, ($msix.Length / 1MB))
 

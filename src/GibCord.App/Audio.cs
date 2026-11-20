@@ -269,11 +269,13 @@ public sealed class VoiceHost
     [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
 
     readonly ScreenShare? _screen;
+    readonly Camera? _cam;
 
-    public VoiceHost(GibCordClient c, DispatcherQueue dq, ScreenShare? screen = null)
+    public VoiceHost(GibCordClient c, DispatcherQueue dq, ScreenShare? screen = null, Camera? cam = null)
     {
         _c = c;
         _screen = screen;
+        _cam = cam;
         _io = new AudioIo(c.Voice);
         _ptt = dq.CreateTimer();
         _ptt.Interval = TimeSpan.FromMilliseconds(15);
@@ -319,6 +321,7 @@ public sealed class VoiceHost
         if (inCall && !_ptt.IsRunning) _ptt.Start();
         if (!inCall && _ptt.IsRunning) { _ptt.Stop(); _c.Voice.PttDown = false; }
         if (!inCall && _screen?.Active == true) _screen.Stop(silent: true);
+        if (!inCall && _cam?.Active == true) _cam.Stop();
         if (_c.VoiceChannelId != _room)
         {
             if (_room == 0 && _c.VoiceChannelId != 0) Tones.Play("join");

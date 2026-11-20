@@ -27,6 +27,9 @@ public sealed class Presence
 
     public void Stop() => _cts.Cancel();
 
+    /// <summary>Czy właśnie wykryliśmy grę (nakładka w trybie „tylko w grze”).</summary>
+    public bool InGame => _game is not null;
+
     async Task Loop(CancellationToken ct)
     {
         await Task.Delay(8000, ct).ConfigureAwait(false);

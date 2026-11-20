@@ -92,6 +92,9 @@ public sealed class Prefs
     /// <summary>Pokazuj innym, w co grasz (wykrywanie po procesach) i czego słuchasz w Spotify.</summary>
     public bool GameDetection { get; set; } = true;
     public bool MusicDetection { get; set; } = true;
+    /// <summary>Nakładka w grze: "off", "game" (tylko gdy wykryto grę), "always" (zawsze w rozmowie); róg: tl, tr, bl, br.</summary>
+    public string OverlayMode { get; set; } = "game";
+    public string OverlayCorner { get; set; } = "tl";
     public bool MembersPanel { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)
