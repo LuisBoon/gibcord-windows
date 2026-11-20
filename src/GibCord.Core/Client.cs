@@ -512,7 +512,18 @@ public sealed partial class GibCordClient : IAsyncDisposable
     /// <summary>Szuka wiadomości. Osoby z wyników trafiają do stanu (żeby były nazwy i awatary).</summary>
     public async Task<(SearchResult? Result, string? Error)> Search(SearchQuery q, CancellationToken ct = default)
     {
-        if (Offline) return (new SearchResult(), null);
+        if (Offline)
+        {
+            // tryb pokazowy: szukanie w tym, co jest w pamięci
+            var f = Fold(q.Text);
+            var hits = Store.Windows.Values.SelectMany(w => w.Items).Where(m => m.Send == SendState.Sent && !m.IsSystem
+                && (f.Length == 0 || Fold(m.Content).Contains(f)) && (q.AuthorId is null || m.AuthorId == q.AuthorId)
+                && (q.ChannelId is null || m.ChannelId == q.ChannelId) && (q.ServerId is null || Store.ServerOfChannel(m.ChannelId)?.Id == q.ServerId)
+                && (!q.Dms || Store.IsDm(m.ChannelId))
+                && (q.Has switch { "image" => m.Attachments.Any(a => a.IsImage), "file" => m.Attachments.Count > 0, "link" => m.Content.Contains("http"), "pinned" => m.PinnedAt is not null, _ => true }))
+                .DistinctBy(m => m.Id).OrderByDescending(m => m.Id).ToList();
+            return (new SearchResult { Total = hits.Count, Messages = hits.Skip(q.Offset).Take(25).ToList() }, null);
+        }
         try
         {
             var r = await Api.Search(q, ct);

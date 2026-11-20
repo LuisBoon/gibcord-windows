@@ -40,6 +40,7 @@ public static class Demo
             case "dm": sh.Go(0, DmOla); break;
             case "voice": sh.C.DemoSpeaker = OlaId; sh.JoinVoiceChannel(Eg, Pogaduchy); break;
             case "thread": sh.Go(Eg, Ogolne); sh.OpenThread(1); break;
+            case "search": sh.Go(Eg, Ogolne); sh.OpenSearch("sobot"); break;
             default: sh.Go(Eg, Ogolne); break;
         }
     }
