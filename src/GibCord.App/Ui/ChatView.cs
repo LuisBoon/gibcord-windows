@@ -52,6 +52,7 @@ public sealed class ChatView : Grid, IDisposable
     readonly TextBlock _typing;
     readonly Composer _composer;
     readonly Border _pill;
+    readonly CallBar? _call;
     readonly DispatcherQueueTimer _typingTimer;
     readonly long _lastReadAtOpen;
     bool _stick = true;
@@ -88,7 +89,9 @@ public sealed class ChatView : Grid, IDisposable
         _typing = U.T("", 11.5, null, Theme.Mu);
         _typing.Margin = U.Th(18, 0, 0, 0);
         _composer = new Composer(this);
-        var listArea = new Grid().Add(_sv, _pill);
+        var listArea = new Grid().Rows("auto", "*");
+        if (S.DmById(cid) is not null) { _call = new CallBar(sh, cid); listArea.Add(_call.At(0)); }
+        listArea.Add(_sv.At(1), _pill.At(1));
         this.Add(_header.At(0), listArea.At(1), _typing.At(2), _composer.At(3));
 
         AllowDrop = true;
@@ -117,6 +120,10 @@ public sealed class ChatView : Grid, IDisposable
     }
 
     public void FocusComposer() => _composer.FocusBox();
+
+    /// <summary>Pasek rozmowy (DM): kto rozmawia, dołącz / rozłącz.</summary>
+    public void RefreshCall() { if (_disposed) return; _call?.Refresh(); RefreshHeader(); }
+    public void TickTalk() => _call?.Tick();
 
     // ───────────────────────── nagłówek ─────────────────────────
 
@@ -149,6 +156,7 @@ public sealed class ChatView : Grid, IDisposable
             }
         }
         var icons = U.H(2,
+            DmObj is not null ? U.IconButton(G.Phone, Sh.C.VoiceChannelId == Cid ? "Jesteś w tej rozmowie" : "Zadzwoń", () => Sh.StartCall(Cid), 16, 32, Sh.C.VoiceChannelId == Cid ? Theme.Green : null) : null,
             U.IconButton("", "Przypięte wiadomości", ShowPins, 16, 32),
             U.IconButton("", Sh.MembersVisible ? "Schowaj listę osób" : "Pokaż listę osób", Sh.ToggleMembers, 16, 32, Sh.MembersVisible ? Theme.Fg : Theme.Mu));
         g.Add(icons.At(0, 3));

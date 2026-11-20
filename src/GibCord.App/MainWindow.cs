@@ -20,6 +20,8 @@ namespace GibCord.App;
 public sealed class MainWindow : Window
 {
     public GibCordClient Client { get; private set; } = null!;
+    /// <summary>Mikrofon, głośniki i „naciśnij, aby mówić” dla rozmów (poza trybem pokazowym).</summary>
+    public VoiceHost? Voice { get; private set; }
     public IntPtr Hwnd { get; }
     public DispatcherQueue Dq { get; }
     readonly Grid _root;
@@ -83,12 +85,15 @@ public sealed class MainWindow : Window
         if (Options.Demo)
         {
             Client = Demo.CreateClient(UiRun);
+            Client.Voice.Options = App.Prefs.Voice;
             if (Options.View == "login") ShowLogin(null); else ShowShell();
             Activate();
             if (Options.Screenshot is { } path) _ = Screenshot(path);
             return;
         }
         Client = new GibCordClient(new Uri(Options.Server), new DpapiTokenStore(Path.Combine(App.DataDir, "sesja.bin")), new DiskCache(Path.Combine(App.DataDir, "pamiec")), UiRun);
+        Client.Voice.Options = App.Prefs.Voice;
+        Voice = new VoiceHost(Client, Dq);
         Client.SessionEnded += why => ShowLogin(why);
         Client.Notify += OnNotify;
         Client.FriendRequest += u => { if (App.Prefs.Notifications) Toasts.Show("Zaproszenie do znajomych", $"{u.Name} chce dodać Cię do znajomych", 0, "fr" + u.Id); };

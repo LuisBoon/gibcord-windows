@@ -88,7 +88,9 @@ public sealed class Sidebar : Grid
     readonly StackPanel _list = new() { Padding = U.Th(0, 6, 0, 10) };
     readonly ScrollViewer _scroll;
     readonly Grid _me = new() { Height = 56, Padding = U.Th(10, 0, 6, 0), Background = Theme.Rail };
+    readonly Border _voice = new();
     readonly HashSet<long> _collapsed = [];
+    readonly List<(long Uid, Avatar Av)> _talk = [];
 
     public Sidebar(Shell sh)
     {
@@ -96,9 +98,9 @@ public sealed class Sidebar : Grid
         Background = Theme.Side;
         BorderBrush = Theme.Line;
         BorderThickness = U.Th(0, 0, 1, 0);
-        this.Rows("48", "*", "auto");
+        this.Rows("48", "*", "auto", "auto");
         _scroll = U.Scroll(_list);
-        this.Add(_header.At(0), _scroll.At(1), _me.At(2));
+        this.Add(_header.At(0), _scroll.At(1), _voice.At(2), _me.At(3));
     }
 
     Store S => _sh.S;
@@ -108,6 +110,8 @@ public sealed class Sidebar : Grid
         if (!S.Loaded) return;
         var offset = _scroll.VerticalOffset;
         _list.Children.Clear();
+        _talk.Clear();
+        _voice.Child = VoiceUi.Panel(_sh);
         if (_sh.ServerId > 0 && S.ServerById(_sh.ServerId) is { } srv) BuildServer(srv);
         else BuildHome();
         BuildMe();
@@ -172,7 +176,7 @@ public sealed class Sidebar : Grid
             g.Add(U.T($"{S.Voice[c.Id].Count}/{c.UserLimit}", 11, null, Theme.Mu2).At(0, 2));
         if (unread && !sel && !muted)
             g.Add(new Ellipse { Width = 6, Height = 6, Fill = Theme.Fg, HorizontalAlignment = HorizontalAlignment.Left, Margin = U.Th(-14, 0, 0, 0) }.At(0, 0));
-        var row = U.Row(g, () => { if (c.IsVoice) _sh.VoiceSoon(); else _sh.Go(srv.Id, c.Id); }, sel);
+        var row = U.Row(g, () => { if (c.IsVoice) _sh.JoinVoiceChannel(srv.Id, c.Id); else _sh.Go(srv.Id, c.Id); }, sel);
         if (!string.IsNullOrEmpty(c.Topic)) row.Tip(c.Topic!);
         var menu = new MenuFlyout();
         if (!c.IsVoice)
@@ -189,6 +193,7 @@ public sealed class Sidebar : Grid
     FrameworkElement VoiceMemberRow(VoiceMember vm, Server srv)
     {
         var av = new Avatar(22).Set(S, _sh.C.Api, vm.UserId, srv);
+        _talk.Add((vm.UserId, av));
         var icons = U.H(4);
         if (vm.Streaming) icons.Add(U.Box(U.T("NA ŻYWO", 9, U.Bold, U.B("#ffffff")), Theme.Red2, 4, U.Th(4, 0)));
         if (vm.Video) icons.Add(U.I("", 12, Theme.Mu));
@@ -196,8 +201,13 @@ public sealed class Sidebar : Grid
         if (vm.Deafened || vm.ServerDeafened) icons.Add(U.I("", 12, Theme.Red));
         var g = new Grid { Height = 28, Margin = U.Th(28, 0, 0, 0) }.Cols("auto", "*", "auto").Add(
             av.At(0, 0), U.T(S.NameOf(vm.UserId, srv), 13, null, U.W(.78)).With(t => t.Margin = U.Th(8, 0, 4, 0)).At(0, 1), icons.At(0, 2));
-        return U.Row(g, () => _sh.ShowProfile(vm.UserId, g));
+        var row = U.Row(g, () => _sh.ShowProfile(vm.UserId, g));
+        if (vm.UserId != S.Me.Id) row.ContextFlyout = VoiceUi.VolumeFlyout(_sh, vm.UserId, srv);
+        return row;
     }
+
+    /// <summary>Zielone obwódki osób, które właśnie mówią (co ~0,15 s, bez przebudowy listy).</summary>
+    public void TickTalk() { foreach (var (uid, av) in _talk) av.Talking = _sh.C.IsSpeaking(uid); }
 
     // ── rozmowy prywatne ──
 
@@ -283,8 +293,7 @@ public sealed class Sidebar : Grid
         leftBtn.Tip("Zmień status");
         leftBtn.ContextFlyout = StatusMenu.Build(_sh);
         leftBtn.Tapped += (_, _) => leftBtn.ContextFlyout.ShowAt(leftBtn);
-        var mic = U.IconButton("", "Mikrofon — rozmowy głosowe w etapie 2", _sh.VoiceSoon, 15, 30);
-        var hp = U.IconButton("", "Słuchawki — rozmowy głosowe w etapie 2", _sh.VoiceSoon, 15, 30);
+        var (mic, hp) = VoiceUi.MuteButtons(_sh);
         var cog = U.IconButton("", "Ustawienia", () => { }, 15, 30);
         cog.Flyout = SettingsMenu.Build(_sh);
         _me.Add(leftBtn.At(0, 0, colSpan: 2), U.H(0, mic, hp, cog).At(0, 2));

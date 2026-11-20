@@ -92,6 +92,8 @@ public sealed class Prefs
     public bool MembersPanel { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)
+    /// <summary>Ustawienia głosu: urządzenia, czułość, „naciśnij, aby mówić”, głośność osób.</summary>
+    public Voice.VoiceOptions Voice { get; set; } = new();
 
     static string? _path;
     public static Prefs Load(string dir)

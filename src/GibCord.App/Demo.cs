@@ -34,6 +34,7 @@ public static class Demo
         {
             case "friends": sh.Go(0, 0); break;
             case "dm": sh.Go(0, DmOla); break;
+            case "voice": sh.C.DemoSpeaker = OlaId; sh.JoinVoiceChannel(Eg, Pogaduchy); break;
             default: sh.Go(Eg, Ogolne); break;
         }
     }

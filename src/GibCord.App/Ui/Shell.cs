@@ -31,7 +31,10 @@ public sealed class Shell : Grid
     readonly DispatcherQueueTimer _refresh;
     ChatView? _chat;
     FriendsView? _friends;
-    bool _dirtyRail, _dirtySide, _dirtyMembers, _dirtyMain, _navigated;
+    VoiceView? _voice;
+    readonly DispatcherQueueTimer _talk;
+    long _ringCid;
+    bool _dirtyRail, _dirtySide, _dirtyMembers, _dirtyMain, _dirtyVoice, _navigated;
 
     public long ServerId { get; private set; } = -1; // 0 = rozmowy prywatne
     public long ChannelId { get; private set; }      // 0 w rozmowach prywatnych = Znajomi
@@ -65,6 +68,15 @@ public sealed class Shell : Grid
         S.Changed += OnChange;
         C.StatusChanged += OnStatus;
         C.Error += msg => Info(msg, error: true);
+        C.VoiceChanged += OnVoiceChanged;
+        C.VoiceInfo += OnVoiceInfo;
+        C.CallRing += OnCallRing;
+        C.CallEnded += OnCallEnded;
+
+        _talk = DispatcherQueue.CreateTimer();
+        _talk.Interval = TimeSpan.FromMilliseconds(150);
+        _talk.Tick += (_, _) => { _side.TickTalk(); _chat?.TickTalk(); };
+        _talk.Start();
 
         Accel(VirtualKey.K, VirtualKeyModifiers.Control, OpenSwitcher);
         Accel(VirtualKey.Left, VirtualKeyModifiers.Menu, Back);
@@ -87,7 +99,47 @@ public sealed class Shell : Grid
     {
         S.Changed -= OnChange;
         C.StatusChanged -= OnStatus;
+        C.VoiceChanged -= OnVoiceChanged;
+        C.VoiceInfo -= OnVoiceInfo;
+        C.CallRing -= OnCallRing;
+        C.CallEnded -= OnCallEnded;
+        _talk.Stop();
+        _voice?.Dispose();
     }
+
+    // ───────────────────────── rozmowy ─────────────────────────
+
+    void OnVoiceChanged() => Dirty(side: true, voice: true);
+    void OnVoiceInfo(string msg, bool error) => Info(msg, error);
+
+    void OnCallRing(long cid, long from)
+    {
+        if (C.VoiceChannelId == cid) return;
+        _ringCid = cid;
+        CloseOverlay();
+        ShowOverlay(VoiceUi.RingCard(this, cid, from));
+        Tones.StartRing();
+        if (!W.AppWindow.IsVisible) Toasts.Show($"{S.NameOf(from, null)} dzwoni", "Kliknij, żeby odebrać w GibCordzie", cid, "call" + cid);
+    }
+
+    void OnCallEnded(long cid)
+    {
+        if (_ringCid != cid) return;
+        _ringCid = 0;
+        Tones.StopRing();
+        CloseOverlay();
+    }
+
+    /// <summary>Klik w kanał głosowy: wejście do rozmowy i widok kanału.</summary>
+    public void JoinVoiceChannel(long serverId, long cid)
+    {
+        if (C.VoiceChannelId != cid) _ = C.JoinVoice(cid);
+        Go(serverId, cid);
+    }
+
+    public void StartCall(long dmId) { if (C.VoiceChannelId != dmId) _ = C.StartCall(dmId); }
+
+    public void RefreshVoice() => Dirty(voice: true, side: true);
 
     void ShowLoading()
     {
@@ -139,7 +191,7 @@ public sealed class Shell : Grid
                 Dirty(side: ServerId == 0, main: ServerId == 0 && ChannelId == 0, rail: true);
                 return;
             case ChangeKind.Voice:
-                Dirty(side: S.ServerOfChannel(c.Id)?.Id == ServerId);
+                Dirty(side: S.ServerOfChannel(c.Id)?.Id == ServerId || c.Id == C.VoiceChannelId, voice: c.Id == ChannelId);
                 return;
             case ChangeKind.Notify or ChangeKind.Blocked:
                 Dirty(rail: true, side: true, main: c.Kind == ChangeKind.Blocked);
@@ -147,9 +199,9 @@ public sealed class Shell : Grid
         }
     }
 
-    void Dirty(bool rail = false, bool side = false, bool members = false, bool main = false)
+    void Dirty(bool rail = false, bool side = false, bool members = false, bool main = false, bool voice = false)
     {
-        _dirtyRail |= rail; _dirtySide |= side; _dirtyMembers |= members; _dirtyMain |= main;
+        _dirtyRail |= rail; _dirtySide |= side; _dirtyMembers |= members; _dirtyMain |= main; _dirtyVoice |= voice;
         if (!_refresh.IsRunning) _refresh.Start();
     }
 
@@ -159,7 +211,8 @@ public sealed class Shell : Grid
         if (_dirtySide) _side.Refresh();
         if (_dirtyMembers) _members.Refresh();
         if (_dirtyMain) { _chat?.RefreshHeader(); _friends?.Refresh(); }
-        _dirtyRail = _dirtySide = _dirtyMembers = _dirtyMain = false;
+        if (_dirtyVoice) { _voice?.Refresh(); _chat?.RefreshCall(); }
+        _dirtyRail = _dirtySide = _dirtyMembers = _dirtyMain = _dirtyVoice = false;
     }
 
     void OnStatus(GatewayStatus s, TimeSpan? delay)
@@ -194,7 +247,7 @@ public sealed class Shell : Grid
         {
             var srv = S.ServerById(serverId);
             if (srv is null) { serverId = 0; channelId = 0; }
-            else if (channelId == 0 || S.ChannelById(channelId) is not { IsVoice: false })
+            else if (channelId == 0 || S.ChannelById(channelId) is null)
                 channelId = (App.Prefs.LastChannel.TryGetValue(serverId, out var lc) && S.ChannelById(lc) is { IsVoice: false } ? lc : S.FirstTextChannel(srv)?.Id) ?? 0;
         }
         else if (channelId != 0 && S.DmById(channelId) is null) channelId = 0;
@@ -211,13 +264,13 @@ public sealed class Shell : Grid
         }
         W.TitleBar.SetNav(_hi > 0, _hi < _hist.Count - 1);
 
-        if (serverId > 0) { App.Prefs.LastServer = serverId; if (channelId != 0) App.Prefs.LastChannel[serverId] = channelId; }
+        if (serverId > 0) { App.Prefs.LastServer = serverId; if (channelId != 0 && S.ChannelById(channelId) is { IsVoice: false }) App.Prefs.LastChannel[serverId] = channelId; }
         else { App.Prefs.LastServer = 0; App.Prefs.LastDm = channelId; }
         App.Prefs.Save();
 
         _rail.Refresh();
         _side.Refresh();
-        if (same && _main.Children.Count > 0 && (_chat is not null || _friends is not null)) { _chat?.FocusComposer(); return; }
+        if (same && _main.Children.Count > 0 && (_chat is not null || _friends is not null || _voice is not null)) { _chat?.FocusComposer(); return; }
         ShowMain();
         _members.Refresh();
     }
@@ -226,9 +279,17 @@ public sealed class Shell : Grid
     {
         _chat?.Dispose();
         _chat = null;
+        _voice?.Dispose();
+        _voice = null;
         _friends = null;
         _main.Children.Clear();
-        if (ChannelId != 0)
+        if (ChannelId != 0 && S.ChannelById(ChannelId) is { IsVoice: true })
+        {
+            C.CloseChannel();
+            _voice = new VoiceView(this, ChannelId);
+            _main.Children.Add(_voice);
+        }
+        else if (ChannelId != 0)
         {
             _chat = new ChatView(this, ChannelId);
             _main.Children.Add(_chat);
@@ -365,5 +426,4 @@ public sealed class Shell : Grid
             ShowOverlay(new Border { Child = card, Background = U.B("#FA2a2147"), CornerRadius = new CornerRadius(14) });
     }
 
-    public void VoiceSoon() => Info("Rozmowy głosowe wejdą w następnej wersji bety (etap 2). Na razie wejdź na kanał głosowy przez stronę albo obecną aplikację.");
 }

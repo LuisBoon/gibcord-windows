@@ -42,19 +42,21 @@ jobs:
           "version=$v" >> $env:GITHUB_OUTPUT
           Write-Host "Wersja: $v"
 
-      - name: Serwer głosu do testów (LiveKit --dev)
+      # LiveKit w tym samym kroku co testy — Windows zamyka procesy uruchomione w kroku po jego końcu
+      - name: Testy rdzenia (z głosem przez lokalny LiveKit)
+        timeout-minutes: 12
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://github.com/livekit/livekit/releases/download/v$env:LIVEKIT_VERSION/livekit_$($env:LIVEKIT_VERSION)_windows_amd64.zip" -OutFile lk.zip
           Expand-Archive lk.zip -DestinationPath lk
           $exe = Get-ChildItem lk -Recurse -Filter livekit-server.exe | Select-Object -First 1
-          Start-Process -FilePath $exe.FullName -ArgumentList '--dev','--bind','127.0.0.1' -RedirectStandardOutput lk-out.txt -RedirectStandardError lk-err.txt
+          $lk = Start-Process -FilePath $exe.FullName -ArgumentList '--dev','--bind','127.0.0.1' -RedirectStandardOutput lk-out.txt -RedirectStandardError lk-err.txt -PassThru
           for ($i = 0; $i -lt 30; $i++) { try { Invoke-WebRequest http://127.0.0.1:7880 -UseBasicParsing -TimeoutSec 2 | Out-Null; break } catch { Start-Sleep 1 } }
-          Write-Host 'LiveKit działa'
-
-      - name: Testy rdzenia (z głosem przez LiveKit)
-        timeout-minutes: 10
-        run: dotnet test tests/GibCord.Core.Tests -c Release --logger "console;verbosity=normal"
+          dotnet test tests/GibCord.Core.Tests -c Release --logger "console;verbosity=normal"
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { Write-Host '--- LiveKit ---'; Get-Content lk-err.txt -Tail 30 }
+          Stop-Process -Id $lk.Id -Force -ErrorAction SilentlyContinue
+          exit $code
         env:
           GC_LK_URL: ws://127.0.0.1:7880
           GC_LK_KEY: devkey
@@ -75,7 +77,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force zrzuty | Out-Null
-          foreach ($v in 'chat','dm','friends','login','switcher','profile') {
+          foreach ($v in 'chat','dm','friends','login','switcher','profile','voice') {
             $out = Join-Path $pwd "zrzuty\$v.png"
             $p = Start-Process -FilePath publish\GibCord.exe -ArgumentList '--demo','--view',$v,'--screenshot',"`"$out`"" -PassThru
             if (-not $p.WaitForExit(45000)) { $p.Kill(); Write-Host "::warning::Zrzut ${v} - przekroczony czas" }
