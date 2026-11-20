@@ -398,6 +398,34 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
         Assert.Equal(System.Text.Json.JsonValueKind.Array, c.Prop("devices").ValueKind);
         if (c.Prop("days").GetArrayLength() > 0) Assert.False(string.IsNullOrEmpty(c.Prop("days")[0].Str("date")));
     }
+
+    [LiveFact]
+    public async Task PocztaSkrzynkiIWysylka()
+    {
+        var a = p.A;
+        // skrzynka: utworzenie, aliasy i podpis, usunięcie (AdminMail2.cs)
+        var lp = "test" + Guid.NewGuid().ToString("N")[..6];
+        var box = await a.Api.PostJson("admin/mail/boxes", new Dictionary<string, object?> { ["localPart"] = lp, ["displayName"] = "Testowa" });
+        var id = box.Long("id")!.Value;
+        Assert.StartsWith(lp + "@", box.Str("address"));
+        var upd = await a.Api.PatchJson($"admin/mail/boxes/{id}", new { displayName = "Testowa 2", signature = "Pozdrawiam\nTest", aliases = new[] { lp + "-alias" } });
+        Assert.Equal("Testowa 2", upd.Str("displayName"));
+        Assert.Contains(upd.Prop("aliases").EnumerateArray(), x => x.GetString() == lp + "-alias");
+        await a.Api.DeleteJson($"admin/mail/boxes/{id}");
+        var meta = await a.Api.GetJson("admin/mail");
+        Assert.DoesNotContain(meta.Prop("boxes").EnumerateArray(), b => b.Long("id") == id);
+        Assert.True(meta.Prop("quota").Prop("day").Long("limit") > 0);
+        Assert.Equal(System.Text.Json.JsonValueKind.Object, meta.Prop("stats").ValueKind);
+        // mail testowy → wpis w dzienniku wysyłki
+        await a.Api.PostJson("admin/mail/test", new { to = "test@example.com" });
+        var log = await a.Api.GetJson("admin/mail/log?limit=5");
+        var e = log.Prop("entries").EnumerateArray().First();
+        Assert.False(string.IsNullOrEmpty(e.Str("kind")));
+        Assert.True(e.Long("createdAt") > 0);
+        Assert.True(e.Prop("ok").ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False);
+        var unv = await a.Api.GetJson("admin/mail/unverified");
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, unv.ValueKind);
+    }
     [LiveFact]
     public async Task PocztaAdmina()
     {

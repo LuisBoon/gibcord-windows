@@ -13,7 +13,7 @@ namespace GibCord.App.Ui;
 /// HTML maila przychodzi oczyszczony z serwera, a i tak pokazujemy go w WebView2 bez skryptów i z CSP blokującym
 /// zdalne zasoby, dopóki ktoś nie kliknie „Pokaż obrazki”. Linki otwierają się w przeglądarce.
 /// </summary>
-public sealed class AdminMail : Grid
+public sealed partial class AdminMail : Grid
 {
     sealed class Addr { public string Address { get; set; } = ""; public string? Name { get; set; } }
     sealed class Att { public long Id { get; set; } public string Filename { get; set; } = ""; public string? ContentType { get; set; } public long Size { get; set; } public string Url { get; set; } = ""; }
@@ -104,7 +104,7 @@ public sealed class AdminMail : Grid
         var mid = _mid = new Grid { BorderBrush = Theme.Line, BorderThickness = U.Th(0, 0, 1, 0) }.Rows("auto", "*");
         mid.Add(midHead.At(0), U.Scroll(_rows).At(1));
 
-        this.Add(left.At(0, 0), mid.At(0, 1), _read.At(0, 2));
+        this.Add(left.At(0, 0), mid.At(0, 1), _read.At(0, 2), _tools.At(0, 1, colSpan: 2));
         SizeChanged += (_, e) => { var n = e.NewSize.Width < 980; if (n != _narrow) { _narrow = n; Layout(); DrawRead(); } };
         DrawRead();
         Loaded += async (_, _) => { await LoadMeta(); await LoadList(); };
@@ -119,8 +119,10 @@ public sealed class AdminMail : Grid
         ColumnDefinitions[2].Width = _narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         var showRead = _narrow && _cur is not null;
         Grid.SetColumn(_read, _narrow ? 1 : 2);
-        _mid.Visibility = showRead ? Visibility.Collapsed : Visibility.Visible;
-        _read.Visibility = !_narrow || showRead ? Visibility.Visible : Visibility.Collapsed;
+        var tool = _view != "folder";
+        _tools.Visibility = tool ? Visibility.Visible : Visibility.Collapsed;
+        _mid.Visibility = tool || showRead ? Visibility.Collapsed : Visibility.Visible;
+        _read.Visibility = !tool && (!_narrow || showRead) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ───────────────────────── dane ─────────────────────────
@@ -139,6 +141,7 @@ public sealed class AdminMail : Grid
             var r = Options.Demo ? Demo("meta") : await Api.GetJson("admin/mail");
             if (ver != _metaVer) return; // nowsze zapytanie już w drodze — liczniki z niego
             _domain = r.Str("domain") ?? "";
+            _meta = r;
             _boxes = r.Prop("boxes").To<List<Box>>() ?? [];
             if (_box == 0 || _boxes.All(b => b.Id != _box)) _box = (_boxes.FirstOrDefault(b => !b.System) ?? _boxes.FirstOrDefault())?.Id ?? 0;
             DrawLeft();
@@ -308,18 +311,23 @@ public sealed class AdminMail : Grid
             {
                 var k = key;
                 var bid = b.Id;
-                var on = _box == b.Id && _folder == key && _q.Length == 0;
+                var on = _view == "folder" && _box == b.Id && _folder == key && _q.Length == 0;
                 var n = key is "inbox" or "spam" ? UnreadOf(b, key) : 0;
                 var row = new Grid().Cols("26", "*", "auto").Add(
                     U.I(glyph, 13, on ? Theme.Fg : Theme.Mu).At(0, 0),
                     U.T(name, 13, on || n > 0 ? U.Bold : U.Semi, on ? Theme.Fg : Theme.Mu).At(0, 1),
                     n > 0 ? U.Badge(n).At(0, 2) : null);
-                _left.Add(U.Row(row, () => { _box = bid; _folder = k; _q = ""; _search.Text = ""; _cur = null; _thread = []; _openVer++; DrawLeft(); DrawRead(); _ = LoadList(); }, on, 8, U.Th(8, 0), U.Th(0, 1)).With(r => r.Height = 32));
+                _left.Add(U.Row(row, () => { _view = "folder"; _box = bid; _folder = k; _q = ""; _search.Text = ""; _cur = null; _thread = []; _openVer++; DrawLeft(); DrawRead(); _ = LoadList(); }, on, 8, U.Th(8, 0), U.Th(0, 1)).With(r => r.Height = 32));
             }
         }
         _left.Add(U.HLine(.08).With(l => l.Margin = U.Th(4, 12)));
-        _left.Add(U.Row(U.H(8, U.I("", 13, Theme.Mu), U.T("Wysyłka, skrzynki i test (strona)", 12.5, U.Semi, Theme.Mu)),
-            () => _ = Launcher.LaunchUriAsync(new Uri(Api.BaseUri, "admin/poczta/wysylka")), false, 8, U.Th(8, 0), U.Th(0, 1)).With(r => r.Height = 32));
+        void Tool(string key, string glyph, string label)
+        {
+            var on = _view == key;
+            _left.Add(U.Row(U.H(8, U.I(glyph, 13, on ? Theme.Fg : Theme.Mu), U.T(label, 12.5, on ? U.Bold : U.Semi, on ? Theme.Fg : Theme.Mu)), () => ShowTool(key), on, 8, U.Th(8, 0), U.Th(0, 1)).With(r => r.Height = 32));
+        }
+        Tool("log", "\uE9D2", "Wysyłka i adresy");
+        Tool("boxes", "\uE713", "Skrzynki i podpisy");
     }
 
     void DrawListTitle()
