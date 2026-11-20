@@ -261,6 +261,29 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
     }
 
     [LiveFact]
+    public async Task ProfilSesje2FA()
+    {
+        var a = p.A;
+        var me = await a.Api.PatchMe(new Dictionary<string, object?>
+        {
+            ["displayName"] = "Tester", ["pronouns"] = "on/jego", ["bio"] = "test profilu z aplikacji", ["color"] = "#7cc7ff", ["banner"] = "#b69cff",
+            ["birthday"] = "2008-05-17", ["birthdayShowAge"] = true,
+        });
+        Assert.Equal("on/jego", me.Pronouns);
+        Assert.Equal("#7cc7ff", me.Color);
+        Assert.Equal("2008-05-17", me.Birthday);
+        Assert.True(me.BirthdayShowAge);
+        await p.Until(() => p.B.Store.U(a.Store.Me.Id)?.Pronouns == "on/jego", "profil u B");
+        var sessions = await a.Api.GetJson("sessions");
+        Assert.Contains(sessions.EnumerateArray(), x => x.Bool("current") == true && (x.Str("userAgent") ?? "").Contains("GibCord-Windows"));
+        var setup = await a.Api.PostJson("mfa/setup", new { password = LivePair.Pass });
+        Assert.StartsWith("<svg", setup.Str("qr") ?? "");
+        Assert.False(string.IsNullOrEmpty(setup.Str("secret")));
+        var check = await a.Api.PostJson("password/check", new { password = "123456789" });
+        Assert.False(check.Bool("ok"));
+    }
+
+    [LiveFact]
     public async Task PisanieZalacznikIStarszeWiadomosci()
     {
         var (a, b) = (p.A, p.B);
