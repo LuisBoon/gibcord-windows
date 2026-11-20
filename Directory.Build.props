@@ -3,7 +3,7 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>6.0.0-beta.3</Version>
+    <Version>6.0.0-beta.4</Version>
     <Authors>LuisBoon</Authors>
     <Product>GibCord</Product>
     <Copyright>GibCord</Copyright>
