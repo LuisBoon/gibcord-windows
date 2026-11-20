@@ -574,6 +574,8 @@ public sealed class SettingsPage : Grid
             Shortcut("Alt+← / Alt+→", "Wstecz / dalej"),
             Shortcut("↑ w pustym polu", "Edytuj ostatnią wiadomość"),
             Shortcut("Ctrl+Shift+O", "Nakładka w grze"),
+            Shortcut("Ctrl+Shift+M", "Wycisz / włącz mikrofon (działa też w grze)"),
+            Shortcut("Ctrl+Shift+D", "Wyłącz / włącz dźwięk (działa też w grze)"),
             Shortcut("Esc", "Zamknij okienko, wątek, odpowiedź")));
         _body.Add(Card(Label("Strona"), U.Ghost("Otwórz GibCorda w przeglądarce", () => _ = Launcher.LaunchUriAsync(Api.BaseUri), 34).With(b => b.HorizontalAlignment = HorizontalAlignment.Left)));
     }

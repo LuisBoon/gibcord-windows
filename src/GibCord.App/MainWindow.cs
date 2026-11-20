@@ -104,6 +104,7 @@ public sealed class MainWindow : Window
         Voice = new VoiceHost(Client, Dq, Screen, Cam);
         _presence = new Presence(Client);
         _overlay = new GameOverlay(Client, Dq, () => _presence.InGame);
+        _keys = new GlobalKeys(Client);
         Client.SessionEnded += why => ShowLogin(why);
         Client.EmailGateRequired += ShowEmailGate;
         Client.Birthday += uid =>
@@ -223,6 +224,8 @@ public sealed class MainWindow : Window
         var t = Client.Store.Me.Settings.Str("theme");
         if (t is not null && t != Theme.Name && t != "light") ApplyTheme(t);
     }
+
+    GlobalKeys? _keys;
 
     public void ShowEmailGate()
     {
