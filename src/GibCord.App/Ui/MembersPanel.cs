@@ -70,6 +70,7 @@ public sealed class MembersPanel : Grid
             var g = new Grid { Height = 44 }.Cols("auto", "*").Add(av.At(0, 0), ((FrameworkElement)text).With(t => t.Margin = U.Th(10, 0, 0, 0)).At(0, 1));
             var row = U.Row(g, null, false, 8, U.Th(6, 0), U.Th(0, 1));
             row.Tapped += (_, _) => _sh.ShowProfile(id, row);
+            row.RightTapped += (_, e) => { e.Handled = true; UserMenu.Build(_sh, id, srv, _sh.CurrentChat, row).ShowAt(row, e.GetPosition(row)); };
             if (dim) row.Opacity = .45;
             _list.Children.Add(row);
         }

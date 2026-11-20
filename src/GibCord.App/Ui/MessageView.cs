@@ -46,7 +46,7 @@ public sealed partial class MessageView : Grid
         var stack = new StackPanel();
         if (row.DaySep) stack.Children.Add(DaySeparator(m.CreatedAt));
         if (row.NewMarker) stack.Children.Add(NewSeparator());
-        stack.Children.Add(m.IsSystem ? SystemLine(m) : Normal(m, row));
+        stack.Children.Add(m.IsSystem ? SystemLine(m) : S.Blocked.Contains(m.AuthorId) && !_v.Revealed.Contains(m.Id) ? BlockedLine(m, row) : Normal(m, row));
         _body.Children.Add(stack);
         Opacity = m.Send == SendState.Pending ? .55 : 1;
     }
@@ -59,6 +59,17 @@ public sealed partial class MessageView : Grid
     static FrameworkElement NewSeparator() => new Grid { Margin = U.Th(16, 6, 16, 2) }.Cols("*", "auto").Add(
         new Rectangle { Height = 1, Fill = Theme.Red, VerticalAlignment = VerticalAlignment.Center }.At(0, 0),
         U.Box(U.T("NOWE", 9.5, U.Bold, U.B("#ffffff")), Theme.Red, 4, U.Th(5, 1)).At(0, 1));
+
+    // ── wiadomość od zablokowanej osoby: schowana, „Pokaż” odsłania ──
+
+    FrameworkElement BlockedLine(Message m, Row row)
+    {
+        var show = new HyperlinkButton { Content = U.T("Pokaż", 12.5, U.Bold, Theme.Accent), Padding = U.Th(4, 0) };
+        show.Click += (_, _) => { _v.Revealed.Add(m.Id); Bind(row); };
+        return new Grid { Padding = U.Th(16, 4, 16, 4) }.Cols("56", "*").Add(
+            U.I("\uE8F8", 13, Theme.Mu2).With(i => i.HorizontalAlignment = HorizontalAlignment.Center).At(0, 0),
+            U.H(4, U.T("Wiadomość od zablokowanej osoby", 12.5, null, Theme.Mu2), show).At(0, 1));
+    }
 
     // ── wiadomość systemowa ──
 
@@ -123,9 +134,11 @@ public sealed partial class MessageView : Grid
             av.VerticalAlignment = VerticalAlignment.Top;
             av.Margin = U.Th(0, 2, 0, 0);
             av.Tapped += (_, e) => { e.Handled = true; _v.Sh.ShowProfile(m.AuthorId, av); };
+            av.RightTapped += (_, e) => { e.Handled = true; UserMenu.Build(_v.Sh, m.AuthorId, Srv, _v, av).ShowAt(av, e.GetPosition(av)); };
             grid.Add(av.At(r, 0));
             var name = U.T(S.NameOf(m.AuthorId, Srv), 14.5, U.Bold, U.B(S.NameColor(m.AuthorId, Srv)));
             name.Tapped += (_, e) => { e.Handled = true; _v.Sh.ShowProfile(m.AuthorId, name); };
+            name.RightTapped += (_, e) => { e.Handled = true; UserMenu.Build(_v.Sh, m.AuthorId, Srv, _v, name).ShowAt(name, e.GetPosition(name)); };
             var head = U.H(8, name);
             if (S.U(m.AuthorId) is { Staff: true }) head.Add(U.Box(U.T("GC", 9, U.Bold, Theme.OnAccent), U.B("#f2a93b"), 5, U.Th(4, 1)).With(b => b.Tip("Właściciel GibCorda")));
             if (S.RolesOf(Srv, m.AuthorId).FirstOrDefault(x => !string.IsNullOrEmpty(x.Icon) && !x.Icon!.StartsWith('/') && !x.Icon.StartsWith("http")) is { } ri)
@@ -306,8 +319,12 @@ public sealed partial class MessageView : Grid
         var p = m.Poll;
         var options = p.Prop("options").ValueKind == JsonValueKind.Array ? p.Prop("options").EnumerateArray().ToList() : [];
         var total = options.Sum(o => o.Prop("userIds").ValueKind == JsonValueKind.Array ? o.Prop("userIds").GetArrayLength() : 0);
-        var closed = p.Bool("closed") == true;
+        var closed = p.Bool("closed") == true || (p.Long("endsAt") is long ea && ea <= Format.NowMs());
+        var multi = p.Bool("multi") == true;
+        var myVotes = options.Where(o => o.Prop("userIds").ValueKind == JsonValueKind.Array && o.Prop("userIds").EnumerateArray().Any(x => x.GetInt64() == S.Me.Id))
+            .Select(o => o.Long("id") ?? 0).ToList();
         var panel = U.V(8, U.T("📊 " + (p.Str("question") ?? "Ankieta"), 14.5, U.Bold, wrap: true));
+        if (multi && !closed) panel.Add(U.T("Możesz wybrać kilka odpowiedzi", 11.5, null, Theme.Mu2).With(t => t.Margin = U.Th(0, -4, 0, 0)));
         foreach (var o in options)
         {
             var votes = o.Prop("userIds").ValueKind == JsonValueKind.Array ? o.Prop("userIds").EnumerateArray().Select(x => x.GetInt64()).ToList() : [];
@@ -321,11 +338,21 @@ public sealed partial class MessageView : Grid
             if (!closed && o.Long("id") is long oid)
                 bar.Tapped += async (_, _) =>
                 {
-                    try { await Api.VotePoll(m.Id, mine ? [] : [oid]); } catch (Exception ex) { _v.Sh.Info(GibCordClient.Friendly(ex), true); }
+                    List<long> next = multi ? (mine ? myVotes.Where(x => x != oid).ToList() : [.. myVotes, oid]) : mine ? [] : [oid];
+                    try { await Api.VotePoll(m.Id, next); } catch (Exception ex) { _v.Sh.Info(GibCordClient.Friendly(ex), true); }
                 };
             panel.Add(bar);
         }
-        panel.Add(U.T(closed ? $"Zakończona · {total} {Format.Plural(total, "głos", "głosy", "głosów")}" : $"{total} {Format.Plural(total, "głos", "głosy", "głosów")} · kliknij, żeby zagłosować", 11.5, null, Theme.Mu2));
+        var voters = options.SelectMany(o => o.Prop("userIds").ValueKind == JsonValueKind.Array ? o.Prop("userIds").EnumerateArray().Select(x => x.GetInt64()) : []).Distinct().Count();
+        var ends = !closed && p.Long("endsAt") is long e2 ? " · koniec " + Format.When(e2) : "";
+        panel.Add(U.T(closed ? $"Zakończona · {voters} {Format.Plural(voters, "osoba", "osoby", "osób")} {Format.Plural(voters, "głosowała", "głosowały", "głosowało")}"
+            : $"{voters} {Format.Plural(voters, "osoba", "osoby", "osób")}{ends} · kliknij, żeby zagłosować", 11.5, null, Theme.Mu2));
+        if (!closed && (m.AuthorId == S.Me.Id || _v.CanManage))
+        {
+            var end = new HyperlinkButton { Content = U.T("Zakończ ankietę", 11.5, U.Bold, Theme.Accent), Padding = U.Th(0) };
+            end.Click += async (_, _) => { try { await Api.ClosePoll(m.Id); } catch (Exception ex) { _v.Sh.Info(GibCordClient.Friendly(ex), true); } };
+            panel.Add(end);
+        }
         return U.Box(panel, Theme.Card, 12, U.Th(14, 12), Theme.Line, 1).With(b => { b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = U.Th(0, 4, 0, 0); });
     }
 
@@ -442,7 +469,14 @@ public sealed partial class MessageView : Grid
         if (m.AuthorId == S.Me.Id) f.Items.Add(M.Item("Edytuj", "\uE70F", () => _v.Edit(m)));
         if (_v.CanPin) f.Items.Add(M.Item(m.PinnedAt is null ? "Przypnij" : "Odepnij", "", () => _v.TogglePin(m)));
         f.Items.Add(M.Item("Kopiuj tekst", "", () => Sidebar.Copy(m.Content)));
-        f.Items.Add(M.Item("Wspomnij autora", "", () => _v.InsertMention(m.AuthorId)));
+        f.Items.Add(M.Item("Wspomnij autora", "\uE910", () => _v.InsertMention(m.AuthorId)));
+        f.Items.Add(M.Item("Kopiuj link do wiadomości", "\uE71B", () =>
+        {
+            var b = _v.Sh.C.Api.BaseUri.AbsoluteUri.TrimEnd('/');
+            Sidebar.Copy(Srv is { } sv ? $"{b}/kanal/{sv.Id}/{m.ChannelId}/{m.Id}" : $"{b}/dm/{m.ChannelId}/{m.Id}");
+            _v.Sh.Info("Skopiowano link do wiadomości");
+        }));
+        if (m.AuthorId != S.Me.Id) f.Items.Add(M.Item("Zgłoś wiadomość", "\uE7BA", () => UserMenu.Report(_v.Sh, m)));
         if (m.AuthorId == S.Me.Id || _v.CanManage)
         {
             f.Items.Add(new MenuFlyoutSeparator());

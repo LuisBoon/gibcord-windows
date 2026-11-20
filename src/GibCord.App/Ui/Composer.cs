@@ -27,6 +27,8 @@ public sealed partial class Composer : StackPanel
     readonly StackPanel _suggestList = new() { Padding = U.Th(6) };
     readonly List<Pending> _pending = [];
     readonly Dictionary<string, long> _mentions = [];
+    readonly Dictionary<string, long> _roleMentions = [];
+    bool _restoring, _draftDirty;
     ReplyRef? _reply;
     Message? _editing;
     List<(string Label, string Insert)> _sugg = [];
@@ -83,6 +85,23 @@ public sealed partial class Composer : StackPanel
         _suggest.Child = new Border { Child = _suggestList, Background = U.B("#F5281f40"), CornerRadius = new CornerRadius(12), BorderBrush = U.W(.14), BorderThickness = U.Th(1), Width = 320 };
         Loaded += (_, _) => _suggest.XamlRoot = XamlRoot;
         RefreshState();
+        // szkic z poprzedniej wizyty na tym kanale
+        if (App.Prefs.Drafts.TryGetValue(_v.Key, out var draft) && !string.IsNullOrEmpty(draft))
+        {
+            _restoring = true;
+            _box.Text = Decode(draft);
+            _box.SelectionStart = _box.Text.Length;
+            _restoring = false;
+        }
+    }
+
+    /// <summary>Szkic zapisuje się na dysk przy wyjściu z kanału (w pamięci — na bieżąco).</summary>
+    public void SaveDraft()
+    {
+        if (!_draftDirty) return;
+        _draftDirty = false;
+        if (App.Prefs.Drafts.Count > 60) foreach (var k in App.Prefs.Drafts.Keys.Take(App.Prefs.Drafts.Count - 60).ToList()) App.Prefs.Drafts.Remove(k);
+        App.Prefs.Save();
     }
 
     Store S => _v.S;
@@ -139,7 +158,15 @@ public sealed partial class Composer : StackPanel
 
     void OnText()
     {
+        if (_restoring) return;
         if (_box.Text.Length > 0 && _editing is null) _v.Sh.C.Typing(_v.Key);
+        if (_editing is null)
+        {
+            var t = _box.Text.Trim();
+            if (t.Length > 0) App.Prefs.Drafts[_v.Key] = Encode(_box.Text);
+            else App.Prefs.Drafts.Remove(_v.Key);
+            _draftDirty = true;
+        }
         UpdateSuggest();
     }
 
@@ -178,6 +205,15 @@ public sealed partial class Composer : StackPanel
             .Take(7)
             .Select(x => ($"{x.Name}  ·  @{x.User}", "@" + x.Name + "|" + x.Id))
             .ToList();
+        if (_v.Srv is { } rs)
+        {
+            var all = S.Can(_v.Cid, Perm.MentionEveryone);
+            foreach (var r in rs.Roles.Where(r => r.Name != "@everyone" && (r.Mentionable || all) && (Fold(r.Name).StartsWith(q) || (q.Length >= 2 && Fold(r.Name).Contains(q)))).Take(4))
+            {
+                var n = rs.Members.Count(m => m.RoleIds.Contains(r.Id));
+                _sugg.Add(($"@{r.Name}  ·  rola ({n} {Format.Plural(n, "osoba", "osoby", "osób")})", "@" + r.Name + "|r" + r.Id));
+            }
+        }
         if (_v.Srv is not null && S.Can(_v.Cid, Perm.MentionEveryone) && ("wszyscy".StartsWith(q) || "everyone".StartsWith(q)))
             _sugg.Add(("@wszyscy — powiadamia wszystkich na kanale", "@everyone|0"));
         if (_sugg.Count == 0) { HideSuggest(); return; }
@@ -199,8 +235,10 @@ public sealed partial class Composer : StackPanel
         {
             var idx = i;
             var (label, ins) = _sugg[i];
-            var uid = long.Parse(ins[(ins.LastIndexOf('|') + 1)..]);
-            UIElement icon = uid == 0 ? U.I("", 16) : new Avatar(24).Set(S, _v.Sh.C.Api, uid, _v.Srv);
+            var key = ins[(ins.LastIndexOf('|') + 1)..];
+            UIElement icon;
+            if (key.StartsWith('r')) icon = new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 14, Height = 14, Margin = U.Th(5, 0), Fill = U.B(S.RoleById(long.Parse(key[1..]))?.Color ?? "#8b8599") };
+            else { var uid = long.Parse(key); icon = uid == 0 ? U.I("\uE716", 16) : new Avatar(24).Set(S, _v.Sh.C.Api, uid, _v.Srv); }
             var row = U.Row(U.H(10, icon, U.T(label, 13.5, U.Semi)), () => Accept(idx), i == _suggIdx, 8, U.Th(8, 0), U.Th(0, 1));
             row.Height = 34;
             _suggestList.Children.Add(row);
@@ -215,8 +253,9 @@ public sealed partial class Composer : StackPanel
         var ins = _sugg[i].Insert;
         var bar = ins.LastIndexOf('|');
         var name = ins[..bar];
-        var uid = long.Parse(ins[(bar + 1)..]);
-        if (uid != 0) _mentions[name] = uid;
+        var key = ins[(bar + 1)..];
+        if (key.StartsWith('r')) _roleMentions[name] = long.Parse(key[1..]);
+        else if (long.Parse(key) is var uid && uid != 0) _mentions[name] = uid;
         var end = _box.SelectionStart;
         _box.Text = _box.Text[.._atStart] + name + " " + _box.Text[end..];
         _box.SelectionStart = _atStart + name.Length + 1;
@@ -234,18 +273,30 @@ public sealed partial class Composer : StackPanel
     /// <summary>„@Ola” wybrane z podpowiedzi → &lt;@id&gt; w wysyłanej treści.</summary>
     string Encode(string text)
     {
+        foreach (var (name, id) in _roleMentions.OrderByDescending(kv => kv.Key.Length))
+            text = text.Replace(name, $"<@&{id}>");
         foreach (var (name, id) in _mentions.OrderByDescending(kv => kv.Key.Length))
             text = text.Replace(name, $"<@{id}>");
         return text;
     }
 
-    string Decode(string content) => Markup.Parse(content).Count == 0 ? content : Regex.Replace(content, @"<@(\d+)>", m =>
+    string Decode(string content)
     {
-        var id = long.Parse(m.Groups[1].Value);
-        var name = "@" + S.NameOf(id, _v.Srv);
-        _mentions[name] = id;
-        return name;
-    });
+        content = Regex.Replace(content, @"<@&(\d+)>", m =>
+        {
+            var id = long.Parse(m.Groups[1].Value);
+            var name = "@" + (S.RoleById(id)?.Name ?? "rola");
+            _roleMentions[name] = id;
+            return name;
+        });
+        return Regex.Replace(content, @"<@(\d+)>", m =>
+        {
+            var id = long.Parse(m.Groups[1].Value);
+            var name = "@" + S.NameOf(id, _v.Srv);
+            _mentions[name] = id;
+            return name;
+        });
+    }
 
     // ───────────────────────── odpowiedź / edycja ─────────────────────────
 
@@ -312,6 +363,9 @@ public sealed partial class Composer : StackPanel
         var reply = _reply;
         _box.Text = "";
         _mentions.Clear();
+        _roleMentions.Clear();
+        App.Prefs.Drafts.Remove(_v.Key);
+        _draftDirty = true;
         CancelBar();
         ClearFiles();
         _v.Sh.C.StoppedTyping(_v.Key);

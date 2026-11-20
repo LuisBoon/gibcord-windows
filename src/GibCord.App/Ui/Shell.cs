@@ -28,6 +28,7 @@ public sealed class Shell : Grid
     readonly Border _connBar;
     readonly TextBlock _connText;
     readonly Border _updateBar;
+    readonly Border _annBar = new() { Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Top };
     readonly DispatcherQueueTimer _refresh;
     ChatView? _chat;
     ChatView? _thread;
@@ -57,7 +58,7 @@ public sealed class Shell : Grid
         _connText = U.T("Łączenie z GibCordem…", 12.5, U.Semi, Theme.OnAccent);
         _connBar = new Border { Background = Theme.Yellow, Padding = U.Th(12, 4), Child = _connText, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Top };
         _updateBar = new Border { Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Top };
-        var center = new Grid().Rows("auto", "auto", "*").Add(_connBar.At(0), _updateBar.At(1), _main.At(2));
+        var center = new Grid().Rows("auto", "auto", "auto", "*").Add(_connBar.At(0), _updateBar.At(1), _annBar.At(2), _main.At(3));
         _threadHost.KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape && !e.Handled) { e.Handled = true; CloseSidePanel(); } };
         // panel wątku: szeroki w dużym oknie, węższy w małym (kanał obok ma zostać czytelny)
         SizeChanged += (_, e) => _threadHost.Width = Math.Clamp(e.NewSize.Width - 68 - 240 - 440, 320, 480);
@@ -207,6 +208,7 @@ public sealed class Shell : Grid
                 if (ServerId > 0 && S.ServerById(ServerId) is null) { Go(0, 0); return; }
                 if (ChannelId != 0 && S.ChannelById(ChannelId) is null && S.DmById(ChannelId) is null) { Go(ServerId, 0); return; }
                 Dirty(rail: true, side: true, members: true, main: true);
+                DrawAnnouncement();
                 return;
             case ChangeKind.MessageAdded or ChangeKind.MessageUpdated or ChangeKind.MessageRemoved or ChangeKind.MessagesReset or ChangeKind.Typing:
                 if (c.ChannelId == ChannelId) _chat?.OnChange(c);
@@ -245,7 +247,11 @@ public sealed class Shell : Grid
                 Dirty(side: S.ServerOfChannel(c.Id)?.Id == ServerId || c.Id == C.VoiceChannelId, voice: c.Id == ChannelId);
                 return;
             case ChangeKind.Notify or ChangeKind.Blocked:
-                Dirty(rail: true, side: true, main: c.Kind == ChangeKind.Blocked);
+                Dirty(rail: true, side: true, main: c.Kind == ChangeKind.Blocked, members: c.Kind == ChangeKind.Blocked);
+                if (c.Kind == ChangeKind.Blocked) { _chat?.Rerender(); _thread?.Rerender(); }
+                return;
+            case ChangeKind.Announcement:
+                DrawAnnouncement();
                 return;
         }
     }
@@ -375,6 +381,7 @@ public sealed class Shell : Grid
     // ───────────────────────── wątki (panel z boku) ─────────────────────────
 
     public bool ThreadOpen => _thread is not null || _search is not null;
+    public ChatView? CurrentChat => _chat;
 
     // ── wyszukiwarka (ten sam panel z prawej co wątek) ──
 
@@ -543,6 +550,41 @@ public sealed class Shell : Grid
         while (_toasts.Children.Count > 3) _toasts.Children.RemoveAt(0);
         var t = DispatcherQueue.CreateTimer();
         t.Interval = TimeSpan.FromSeconds(error ? 6 : 3.5);
+        t.IsRepeating = false;
+        t.Tick += (_, _) => _toasts.Children.Remove(b);
+        t.Start();
+    }
+
+    /// <summary>Ogłoszenie właścicieli GibCorda (pasek u góry, zamykany krzyżykiem — do następnego ogłoszenia).</summary>
+    void DrawAnnouncement()
+    {
+        var a = S.Announcement;
+        if (a is null || string.IsNullOrWhiteSpace(a.Text) || App.Prefs.AnnouncementSeen == (a.At ?? 0)) { _annBar.Visibility = Visibility.Collapsed; return; }
+        var warn = a.Level == "warn";
+        _annBar.Background = warn ? U.B("#E6b8364f") : U.B("#E62a5a6e");
+        _annBar.Padding = U.Th(14, 6, 6, 6);
+        _annBar.Child = new Grid().Cols("auto", "*", "auto").Add(
+            U.I("\uE789", 15).With(i => i.Margin = U.Th(0, 0, 10, 0)).At(0, 0),
+            new TextBlock { TextWrapping = TextWrapping.Wrap, FontFamily = Theme.Font, FontSize = 13, Foreground = Theme.Fg, VerticalAlignment = VerticalAlignment.Center }
+                .With(t => { t.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = "Ogłoszenie GibCorda: ", FontWeight = U.Bold }); t.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = a.Text }); }).At(0, 1),
+            U.IconButton(G.Close, "Zamknij", () => { App.Prefs.AnnouncementSeen = a.At ?? 0; App.Prefs.Save(); _annBar.Visibility = Visibility.Collapsed; }, 12, 28).At(0, 2));
+        _annBar.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Komunikat z przyciskiem (np. „Cofnij”) — dłużej na ekranie.</summary>
+    public void InfoUndo(string msg, string action, Action a)
+    {
+        var btn = new HyperlinkButton { Content = U.T(action, 13, U.Bold, Theme.Accent), Padding = U.Th(6, 0) };
+        var b = new Border
+        {
+            Background = U.B("#F02a2147"), CornerRadius = new CornerRadius(12), Padding = U.Th(16, 8), BorderBrush = U.W(.14), BorderThickness = U.Th(1), MaxWidth = 520,
+            Child = U.H(10, U.T(msg, 13.5, U.Semi), btn),
+        };
+        btn.Click += (_, _) => { _toasts.Children.Remove(b); a(); };
+        _toasts.Children.Add(b);
+        while (_toasts.Children.Count > 3) _toasts.Children.RemoveAt(0);
+        var t = DispatcherQueue.CreateTimer();
+        t.Interval = TimeSpan.FromSeconds(7);
         t.IsRepeating = false;
         t.Tick += (_, _) => _toasts.Children.Remove(b);
         t.Start();

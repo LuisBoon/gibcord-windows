@@ -133,6 +133,7 @@ public sealed class GibCordApi : IDisposable
     public Task PinMessage(long id, CancellationToken ct = default) => Send(HttpMethod.Put, $"messages/{id}/pin", ct: ct);
     public Task UnpinMessage(long id, CancellationToken ct = default) => Send(HttpMethod.Delete, $"messages/{id}/pin", ct: ct);
     public Task VotePoll(long id, IReadOnlyList<long> optionIds, CancellationToken ct = default) => Send(HttpMethod.Put, $"messages/{id}/poll", new { optionIds }, ct);
+    public Task ClosePoll(long id, CancellationToken ct = default) => Send(HttpMethod.Post, $"messages/{id}/poll/close", ct: ct);
     public Task<List<Message>> GetPins(long channelId, CancellationToken ct = default) => Send<List<Message>>(HttpMethod.Get, $"channels/{channelId}/pins", ct: ct);
 
     /// <summary>Wysyła plik (surowe bajty). Zwraca załącznik do dołączenia do wiadomości.</summary>
@@ -143,6 +144,20 @@ public sealed class GibCordApi : IDisposable
         var e = await SendRaw(HttpMethod.Post, "uploads?name=" + Uri.EscapeDataString(name), content, ct).ConfigureAwait(false);
         return e.To<Attachment>()!;
     }
+
+    // ── blokady, zgłoszenia, moderacja ──
+    public Task Block(long userId, CancellationToken ct = default) => Send(HttpMethod.Post, "blocks", new { userId }, ct);
+    public Task Unblock(long userId, CancellationToken ct = default) => Send(HttpMethod.Delete, $"blocks/{userId}", ct: ct);
+    public Task Report(long messageId, string reason, string? note, CancellationToken ct = default) =>
+        Send(HttpMethod.Post, "reports", new { messageId, reason, note = string.IsNullOrWhiteSpace(note) ? null : note.Trim() }, ct);
+    public Task Timeout(long serverId, long userId, int minutes, CancellationToken ct = default) => Send(HttpMethod.Post, $"servers/{serverId}/members/{userId}/timeout", new { minutes }, ct);
+    public Task Kick(long serverId, long userId, CancellationToken ct = default) => Send(HttpMethod.Delete, $"servers/{serverId}/members/{userId}", ct: ct);
+    public Task Ban(long serverId, long userId, string? reason, int deleteMessagesHours, CancellationToken ct = default) =>
+        Send(HttpMethod.Post, $"servers/{serverId}/bans", new { userId, reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(), deleteMessagesHours }, ct);
+    public Task VoiceModerate(long serverId, long userId, object action, CancellationToken ct = default) => Send(HttpMethod.Post, $"servers/{serverId}/voice-moderation/{userId}", action, ct);
+    public Task SetNick(long serverId, long userId, string? nick, CancellationToken ct = default) =>
+        Send(HttpMethod.Patch, $"servers/{serverId}/members/{(userId == 0 ? "@me" : userId.ToString())}", new Dictionary<string, object?> { ["nick"] = string.IsNullOrWhiteSpace(nick) ? null : nick.Trim() }, ct);
+    public Task UnhideDm(long dmId, CancellationToken ct = default) => Send(HttpMethod.Delete, $"dms/{dmId}/hide", ct: ct);
 
     // ── wyszukiwarka ──
     public Task<SearchResult> Search(SearchQuery q, CancellationToken ct = default) => Send<SearchResult>(HttpMethod.Get, "search?" + q.ToQueryString(), ct: ct);

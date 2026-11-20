@@ -102,6 +102,8 @@ public sealed class Prefs
     public Voice.VoiceOptions Voice { get; set; } = new();
     /// <summary>Ostatnio użyte emoji (najnowsze pierwsze; zwykłe albo &lt;:nazwa:id&gt;).</summary>
     public List<string> RecentEmoji { get; set; } = [];
+    /// <summary>Ogłoszenie adminów zamknięte krzyżykiem (jego czas „at”).</summary>
+    public long AnnouncementSeen { get; set; }
     /// <summary>Szkice wiadomości na kanałach (klucz listy → tekst).</summary>
     public Dictionary<long, string> Drafts { get; set; } = [];
 

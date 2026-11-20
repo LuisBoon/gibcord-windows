@@ -141,6 +141,15 @@ public sealed class Store
         return Perm.All;
     }
     public bool Can(long cid, long perm) => (PermsIn(cid) & perm) == perm;
+
+    /// <summary>Uprawnienie na poziomie serwera (właściciel i administrator mogą wszystko).</summary>
+    public bool CanServer(Server? s, long perm)
+    {
+        if (s is null) return false;
+        if (s.OwnerId == Me.Id) return true;
+        var p = s.MyPerms?.Server ?? 0;
+        return (p & Perm.Admin) != 0 || (p & perm) == perm;
+    }
     public long? TimedOutUntil(Server? s)
     {
         var t = MemberOf(s, Me.Id)?.TimeoutUntil;

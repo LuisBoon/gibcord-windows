@@ -184,7 +184,8 @@ public sealed class Sidebar : Grid
             menu.Items.Add(Item("Oznacz jako przeczytane", "", () => _sh.C.MarkRead(c.Id)));
             menu.Items.Add(new MenuFlyoutSeparator());
         }
-        menu.Items.Add(Item(muted ? "Wyłącz wyciszenie" : "Wycisz kanał", muted ? "" : "", () => NotifyMenu.SetMute(_sh, "channel", c.Id, !muted)));
+        if (!c.IsVoice) menu.Items.Add(NotifyMenu.Sub(_sh, "channel", c.Id, S.Notify.Channels.GetValueOrDefault(c.Id)));
+        else menu.Items.Add(Item(muted ? "Wyłącz wyciszenie" : "Wycisz kanał", muted ? "\uE767" : "\uE74F", () => NotifyMenu.SetMute(_sh, "channel", c.Id, !muted)));
         menu.Items.Add(Item("Kopiuj nazwę kanału", "", () => Copy("#" + c.Name)));
         row.ContextFlyout = menu;
         return row;
@@ -257,19 +258,38 @@ public sealed class Sidebar : Grid
         }
         var name = U.T(S.DmTitle(d), 14, unread ? U.Bold : U.Semi, sel || unread ? Theme.Fg : Theme.Mu);
         var text = string.IsNullOrEmpty(sub) ? (UIElement)name : U.V(0, name, U.T(sub, 11.5, null, Theme.Mu2));
-        var close = U.IconButton("", "Zamknij rozmowę (wróci, gdy ktoś napisze)", async () =>
+        async void CloseDm()
         {
             d.HiddenAt = d.LastMessageId ?? 0;
             Refresh();
             if (_sh.ChannelId == d.Id) _sh.Go(0, 0);
-            try { await _sh.C.Api.HideDm(d.Id); } catch { }
-        }, 10, 22);
+            try { await _sh.C.Api.HideDm(d.Id); } catch { return; }
+            _sh.InfoUndo("Rozmowa zamknięta", "Cofnij", async () =>
+            {
+                try { await _sh.C.Api.UnhideDm(d.Id); d.HiddenAt = null; Refresh(); } catch (Exception ex) { _sh.Info(GibCordClient.Friendly(ex), true); }
+            });
+        }
+        var close = U.IconButton("\uE711", "Zamknij rozmowę (wróci, gdy ktoś napisze)", CloseDm, 10, 22);
         close.Visibility = Visibility.Collapsed;
         var g = new Grid { Height = 44 }.Cols("auto", "*", "auto").Add(av.At(0, 0), ((FrameworkElement)text).With(t => t.Margin = U.Th(10, 0, 4, 0)).At(0, 1));
         var mentions = S.MentionsIn(d.Id);
         if (unread && !sel) g.Add(U.Badge(Math.Max(1, mentions)).At(0, 2));
         else g.Add(close.At(0, 2));
         var row = U.Row(g, () => _sh.Go(0, d.Id), sel, pad: U.Th(8, 0));
+        var dmMenu = new MenuFlyout();
+        if (S.IsUnread(d.Id)) dmMenu.Items.Add(Item("Oznacz jako przeczytane", "\uE8FB", () => _sh.C.MarkRead(d.Id)));
+        dmMenu.Items.Add(NotifyMenu.Sub(_sh, "dm", d.Id, S.Notify.Dms.GetValueOrDefault(d.Id)));
+        if (!d.IsGroup && S.DmOther(d) is { } du)
+        {
+            dmMenu.Items.Add(new MenuFlyoutSeparator());
+            var um = UserMenu.Build(_sh, du.Id, null);
+            var items = um.Items.ToList();
+            um.Items.Clear();
+            foreach (var it in items) dmMenu.Items.Add(it);
+        }
+        dmMenu.Items.Add(new MenuFlyoutSeparator());
+        dmMenu.Items.Add(Item("Zamknij rozmowę", "\uE711", CloseDm));
+        row.ContextFlyout = dmMenu;
         row.PointerEntered += (_, _) => close.Visibility = Visibility.Visible;
         row.PointerExited += (_, _) => close.Visibility = Visibility.Collapsed;
         return row;

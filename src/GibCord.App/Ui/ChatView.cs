@@ -47,6 +47,8 @@ public sealed partial class ChatView : Grid, IDisposable
     public bool IsThread => Tid != 0;
     public ThreadInfo? Thread => Tid != 0 ? S.ThreadById(Tid) : null;
     Message? _starter;
+    /// <summary>Wiadomości zablokowanych osób odsłonięte przyciskiem „Pokaż”.</summary>
+    public HashSet<long> Revealed { get; } = [];
     public Store S => Sh.S;
     public Server? Srv { get; }
     public Channel? Ch => S.ChannelById(Cid);
@@ -124,6 +126,7 @@ public sealed partial class ChatView : Grid, IDisposable
 
     public void Dispose()
     {
+        _composer.SaveDraft();
         _stage?.Dispose();
         _disposed = true;
         _typingTimer.Stop();
@@ -131,6 +134,9 @@ public sealed partial class ChatView : Grid, IDisposable
     }
 
     public void FocusComposer() => _composer.FocusBox();
+
+    /// <summary>Przerysowanie wszystkich wiadomości (np. po zablokowaniu / odblokowaniu osoby).</summary>
+    public void Rerender() { if (_disposed) return; _rows.Clear(); Sync(); }
 
     /// <summary>Pasek rozmowy (DM): kto rozmawia, dołącz / rozłącz.</summary>
     public void RefreshCall() { if (_disposed) return; _call?.Refresh(); UpdateStage(); RefreshHeader(); }

@@ -189,6 +189,12 @@ public static class ProfileCard
                 _ => null,
             };
             if (fb is not null) btns.Add(fb.With(b => { b.HorizontalAlignment = HorizontalAlignment.Stretch; b.Height = 36; }).At(0, 1));
+            else if (s.Blocked.Contains(uid)) btns.Add(U.Ghost("Odblokuj", () => { close(); UserMenu.SetBlocked(sh, uid, false); }).With(b => { b.HorizontalAlignment = HorizontalAlignment.Stretch; b.Height = 36; }).At(0, 1));
+            btns.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var more = U.IconButton("\uE712", "Więcej", () => { }, 15, 36);
+            more.Background = U.W(.1);
+            more.Flyout = UserMenu.Build(sh, uid, srv, sh.CurrentChat);
+            btns.Add(more.At(0, 2));
             body.Add(btns);
         }
         return new Grid { Width = 320 }.Rows("auto", "auto", "auto").Add(banner.At(0), av.At(1), body.At(2));
