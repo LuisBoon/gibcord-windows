@@ -103,6 +103,8 @@ public sealed class Prefs
     public string Theme { get; set; } = "glass";
     /// <summary>Skróty Ctrl+Shift+M / Ctrl+Shift+D działające w całym systemie (tylko w trakcie rozmowy).</summary>
     public bool GlobalShortcuts { get; set; } = true;
+    /// <summary>Rozmiar tekstu wiadomości: 13 (mały), 14.5 (zwykły), 16.5 (duży), 18 (bardzo duży).</summary>
+    public double MessageFontSize { get; set; } = 14.5;
     public bool MembersPanel { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)

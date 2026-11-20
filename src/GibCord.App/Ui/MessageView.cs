@@ -208,7 +208,7 @@ public sealed partial class MessageView : Grid
         else if (_v.Ch is { IsCardChannel: true } && Markup.ParseAnnouncement(m.Content) is { } ann) { body.Children.Add(AnnouncementCard(ann)); cardDone = true; }
         if (!cardDone && GifOnly(m.Content) is { } gif) body.Children.Add(GifImage(gif));
         else if (!cardDone && !string.IsNullOrEmpty(m.Content))
-            body.Children.Add(RichText.Build(m.Content, new RichText.Ctx(S, Api, Srv, uid => _v.Sh.ShowProfile(uid, this)), m.EditedAt is not null));
+            body.Children.Add(RichText.Build(m.Content, new RichText.Ctx(S, Api, Srv, uid => _v.Sh.ShowProfile(uid, this), App.Prefs.MessageFontSize), m.EditedAt is not null));
         if (m.Sticker is { } st)
             body.Children.Add(new Image { Source = Images.Get(Api.Abs(st.Url), 320), Width = 160, Height = 160, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left }.With(i => i.Tip(st.Name)));
         if (m.Poll.ValueKind == JsonValueKind.Object) body.Children.Add(Poll(m));

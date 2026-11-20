@@ -545,6 +545,12 @@ public sealed class SettingsPage : Grid
             themes.Children.Add(card);
         }
         _body.Add(Card(Label("Motyw"), themes, U.T("Motyw zapisuje się na koncie — strona i telefon też go dostaną.", 11.5, null, Theme.Mu2, wrap: true)));
+        var fontSize = new ComboBox { Header = U.T("Rozmiar tekstu wiadomości", 13.5, U.Semi), Width = 220 };
+        var sizes = new[] { 13.0, 14.5, 16.5, 18.0 };
+        foreach (var label in new[] { "Mały", "Zwykły", "Duży", "Bardzo duży" }) fontSize.Items.Add(label);
+        fontSize.SelectedIndex = Math.Max(0, Array.IndexOf(sizes, p.MessageFontSize));
+        fontSize.SelectionChanged += (_, _) => { p.MessageFontSize = sizes[Math.Max(0, fontSize.SelectedIndex)]; p.Save(); _sh.CurrentChat?.Rerender(); };
+        _body.Add(Card(Label("Wygląd wiadomości"), fontSize, U.T("Zmiana działa od razu w otwartej rozmowie.", 11.5, null, Theme.Mu2)));
         _body.Add(Card(Label("Okno"),
             Toggle("Zamykanie do zasobnika (obok zegara)", p.CloseToTray, v => { p.CloseToTray = v; p.Save(); }),
             Toggle("Uruchamiaj razem z Windowsem", AutoStart.Enabled, AutoStart.Set),
