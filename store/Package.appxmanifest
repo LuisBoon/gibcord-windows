@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- GibCord 6 w Microsoft Store: ta sama tożsamość co dotychczasowy produkt „GibCord” w Partner Center
+     (GibCord.GibCord), więc nowa wersja zastępuje starą aplikację u wszystkich ze Sklepu.
+     Plik kopiowany do src/GibCord.App przy budowaniu paczki (CI → zadanie „sklep”). -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap5 desktop com rescap">
+
+  <Identity Name="GibCord.GibCord" Publisher="CN=04559352-DF71-4AA3-A4CF-B55AA03F9922" Version="6.0.0.0" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>GibCord</DisplayName>
+    <PublisherDisplayName>GibCord</PublisherDisplayName>
+    <Logo>Images\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="pl-PL" />
+  </Resources>
+
+  <Applications>
+    <Application Id="GibCord" Executable="GibCord.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="GibCord" Description="GibCord — czat, rozmowy głosowe i transmisje ze znajomymi"
+        BackgroundColor="transparent" Square150x150Logo="Images\Square150x150Logo.png" Square44x44Logo="Images\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Images\Wide310x150Logo.png" Square71x71Logo="Images\SmallTile.png" Square310x310Logo="Images\LargeTile.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <uap5:Extension Category="windows.startupTask">
+          <uap5:StartupTask TaskId="GibCordStartup" Enabled="false" DisplayName="GibCord" />
+        </uap5:Extension>
+        <uap:Extension Category="windows.protocol">
+          <uap:Protocol Name="gibcord"><uap:DisplayName>GibCord</uap:DisplayName></uap:Protocol>
+        </uap:Extension>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:ExeServer Executable="GibCord.exe" DisplayName="GibCord" Arguments="----AppNotificationActivated:">
+              <com:Class Id="e5bd1946-176a-4e96-a9a9-12060b1613ee" />
+            </com:ExeServer>
+          </com:ComServer>
+        </com:Extension>
+        <desktop:Extension Category="windows.toastNotificationActivation">
+          <desktop:ToastNotificationActivation ToastActivatorCLSID="e5bd1946-176a-4e96-a9a9-12060b1613ee" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <DeviceCapability Name="microphone" />
+    <DeviceCapability Name="webcam" />
+  </Capabilities>
+</Package>

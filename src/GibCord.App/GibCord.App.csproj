@@ -46,4 +46,9 @@
   <ItemGroup>
     <Content Include="Assets\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- paczka do Microsoft Store (CI, zadanie „sklep”): manifest i grafiki kafelków kopiowane ze store/ -->
+  <ItemGroup Condition="'$(WindowsPackageType)' == 'MSIX'">
+    <AppxManifest Include="Package.appxmanifest" />
+    <Content Include="Images\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -219,12 +219,33 @@ static class AutoStart
 {
     const string Key = @"Software\Microsoft\Windows\CurrentVersion\Run";
     const string Name = "GibCord6";
+    const string TaskId = "GibCordStartup"; // wersja ze Sklepu: zadanie startowe z manifestu (store/Package.appxmanifest)
+
     public static bool Enabled
     {
-        get { try { using var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(Key); return k?.GetValue(Name) is string; } catch { return false; } }
+        get
+        {
+            if (Platform.IsPackaged)
+            {
+                try { var t = Windows.ApplicationModel.StartupTask.GetAsync(TaskId).AsTask().GetAwaiter().GetResult(); return t.State is Windows.ApplicationModel.StartupTaskState.Enabled or Windows.ApplicationModel.StartupTaskState.EnabledByPolicy; }
+                catch { return false; }
+            }
+            try { using var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(Key); return k?.GetValue(Name) is string; } catch { return false; }
+        }
     }
-    public static void Set(bool on)
+
+    public static async void Set(bool on)
     {
+        if (Platform.IsPackaged)
+        {
+            try
+            {
+                var t = await Windows.ApplicationModel.StartupTask.GetAsync(TaskId);
+                if (on) await t.RequestEnableAsync(); else t.Disable();
+            }
+            catch (Exception ex) { App.Log("Autostart (Sklep): " + ex.Message); }
+            return;
+        }
         try
         {
             using var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(Key, true);
@@ -233,5 +254,21 @@ static class AutoStart
             else k.DeleteValue(Name, false);
         }
         catch { }
+    }
+}
+
+/// <summary>Skąd jest ta kopia aplikacji: instalator (Velopack) czy Microsoft Store (paczka MSIX z tożsamością).</summary>
+static class Platform
+{
+    static bool? _packaged;
+    public static bool IsPackaged
+    {
+        get
+        {
+            if (_packaged is { } p) return p;
+            try { _ = Windows.ApplicationModel.Package.Current.Id; _packaged = true; }
+            catch { _packaged = false; }
+            return _packaged.Value;
+        }
     }
 }
