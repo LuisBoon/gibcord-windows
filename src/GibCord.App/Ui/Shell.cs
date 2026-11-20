@@ -30,6 +30,8 @@ public sealed class Shell : Grid
     readonly Border _updateBar;
     readonly DispatcherQueueTimer _refresh;
     ChatView? _chat;
+    ChatView? _thread;
+    readonly Border _threadHost = new() { Width = 440, Background = Theme.Members, BorderBrush = Theme.Line, BorderThickness = U.Th(1, 0, 0, 0), Visibility = Visibility.Collapsed };
     FriendsView? _friends;
     VoiceView? _voice;
     readonly DispatcherQueueTimer _talk;
@@ -44,7 +46,7 @@ public sealed class Shell : Grid
     public Shell(MainWindow w)
     {
         W = w;
-        this.Cols("68", "240", "*", "auto");
+        this.Cols("68", "240", "*", "auto", "auto");
         _rail = new ServerRail(this);
         _side = new Sidebar(this);
         _members = new MembersPanel(this);
@@ -53,9 +55,10 @@ public sealed class Shell : Grid
         _connBar = new Border { Background = Theme.Yellow, Padding = U.Th(12, 4), Child = _connText, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Top };
         _updateBar = new Border { Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Top };
         var center = new Grid().Rows("auto", "auto", "*").Add(_connBar.At(0), _updateBar.At(1), _main.At(2));
-        this.Add(_rail.At(0, 0), _side.At(0, 1), center.At(0, 2), _members.At(0, 3));
+        _threadHost.KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape && !e.Handled) { e.Handled = true; CloseThread(); } };
+        this.Add(_rail.At(0, 0), _side.At(0, 1), center.At(0, 2), _threadHost.At(0, 3), _members.At(0, 4));
         _overlay.Add(_toasts);
-        _overlay.At(0, 0, colSpan: 4);
+        _overlay.At(0, 0, colSpan: 5);
         _overlay.IsHitTestVisible = true;
         _overlay.Background = null;
         this.Add(_overlay);
@@ -164,7 +167,12 @@ public sealed class Shell : Grid
                 return;
             case ChangeKind.MessageAdded or ChangeKind.MessageUpdated or ChangeKind.MessageRemoved or ChangeKind.MessagesReset or ChangeKind.Typing:
                 if (c.ChannelId == ChannelId) _chat?.OnChange(c);
+                else if (_thread is not null && c.ChannelId == _thread.Key) _thread.OnChange(c);
                 if (c.Kind == ChangeKind.MessageAdded) Dirty(rail: true, side: true);
+                return;
+            case ChangeKind.Thread:
+                if (_thread is not null && c.Id == _thread.Tid && S.ThreadById(c.Id) is null) { CloseThread(); Info("Ten wątek został usunięty."); return; }
+                if (c.ChannelId == ChannelId || c.Id == _thread?.Tid) Dirty(main: true);
                 return;
             case ChangeKind.Reads:
                 Dirty(rail: true, side: true);
@@ -210,7 +218,7 @@ public sealed class Shell : Grid
         if (_dirtyRail) _rail.Refresh();
         if (_dirtySide) _side.Refresh();
         if (_dirtyMembers) _members.Refresh();
-        if (_dirtyMain) { _chat?.RefreshHeader(); _friends?.Refresh(); }
+        if (_dirtyMain) { _chat?.RefreshHeader(); _thread?.RefreshHeader(); _friends?.Refresh(); }
         if (_dirtyVoice) { _voice?.Refresh(); _chat?.RefreshCall(); }
         _dirtyRail = _dirtySide = _dirtyMembers = _dirtyMain = _dirtyVoice = false;
     }
@@ -253,6 +261,7 @@ public sealed class Shell : Grid
         else if (channelId != 0 && S.DmById(channelId) is null) channelId = 0;
 
         var same = serverId == ServerId && channelId == ChannelId;
+        if (!same && _thread is not null && _thread.Cid != channelId) CloseThread(refresh: false);
         ServerId = serverId;
         ChannelId = channelId;
         if (record && !same)
@@ -318,6 +327,51 @@ public sealed class Shell : Grid
     }
 
     public void OpenFriends() => Go(0, 0);
+
+    // ───────────────────────── wątki (panel z boku) ─────────────────────────
+
+    public bool ThreadOpen => _thread is not null;
+    public long OpenThreadId => _thread?.Tid ?? 0;
+
+    /// <summary>Otwiera wątek w panelu obok kanału (przechodzi na kanał-rodzica, jeśli trzeba). Opcjonalnie skacze do wiadomości.</summary>
+    public async void OpenThread(long tid, long jumpTo = 0)
+    {
+        var t = S.ThreadById(tid);
+        if (t is null || t.ChannelId == 0)
+        {
+            try { var (ft, _) = await C.Api.GetThread(tid); t = S.MergeThread(ft); }
+            catch (Exception ex) { Info(GibCordClient.Friendly(ex), true); return; }
+        }
+        if (S.ServerOfChannel(t.ChannelId) is not { } srv) { Info("Nie masz dostępu do tego kanału.", true); return; }
+        if (ChannelId != t.ChannelId) Go(srv.Id, t.ChannelId);
+        if (_thread?.Tid == tid) { if (jumpTo > 0) await _thread.JumpTo(jumpTo); _thread.FocusComposer(); return; }
+        CloseThread(refresh: false);
+        var view = new ChatView(this, t.ChannelId, tid);
+        _thread = view;
+        _threadHost.Child = view;
+        _threadHost.Visibility = Visibility.Visible;
+        _members.Refresh();
+        Toasts.ClearFor(-tid);
+        var (_, starter, err) = await C.OpenThread(tid);
+        if (_thread != view) return;
+        if (err is not null) { Info(err, true); CloseThread(); return; }
+        view.SetStarter(starter);
+        view.RefreshHeader();
+        if (jumpTo > 0) await view.JumpTo(jumpTo);
+    }
+
+    public void CloseThread() => CloseThread(refresh: true);
+
+    void CloseThread(bool refresh)
+    {
+        if (_thread is null) return;
+        _thread.Dispose();
+        _thread = null;
+        _threadHost.Child = null;
+        _threadHost.Visibility = Visibility.Collapsed;
+        C.CloseThread();
+        if (refresh) { _members.Refresh(); _chat?.FocusComposer(); }
+    }
 
     /// <summary>Kanał specjalny (np. „changelog” = #co-nowego na serwerze społeczności).</summary>
     public void OpenChannelByKind(string kind)

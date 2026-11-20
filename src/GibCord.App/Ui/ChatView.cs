@@ -34,11 +34,19 @@ sealed class MessageFactory(ChatView v) : IElementFactory
     }
 }
 
-/// <summary>Kanał albo rozmowa: nagłówek, wiadomości, „pisze…”, pole wpisywania.</summary>
-public sealed class ChatView : Grid, IDisposable
+/// <summary>Kanał albo rozmowa: nagłówek, wiadomości, „pisze…”, pole wpisywania. Z <c>tid</c> — wątek w panelu z boku.</summary>
+public sealed partial class ChatView : Grid, IDisposable
 {
     public Shell Sh { get; }
+    /// <summary>Kanał (w wątku: kanał-rodzic — od niego zależą uprawnienia).</summary>
     public long Cid { get; }
+    /// <summary>Wątek (0 = zwykły kanał / rozmowa).</summary>
+    public long Tid { get; }
+    /// <summary>Klucz listy wiadomości w stanie: kanał albo −id wątku.</summary>
+    public long Key => Tid != 0 ? -Tid : Cid;
+    public bool IsThread => Tid != 0;
+    public ThreadInfo? Thread => Tid != 0 ? S.ThreadById(Tid) : null;
+    Message? _starter;
     public Store S => Sh.S;
     public Server? Srv { get; }
     public Channel? Ch => S.ChannelById(Cid);
@@ -62,12 +70,13 @@ public sealed class ChatView : Grid, IDisposable
     double _lastOffset;
     long _progUntil;
 
-    public ChatView(Shell sh, long cid)
+    public ChatView(Shell sh, long cid, long tid = 0)
     {
         Sh = sh;
         Cid = cid;
+        Tid = tid;
         Srv = S.ServerOfChannel(cid);
-        _lastReadAtOpen = S.Reads.GetValueOrDefault(cid);
+        _lastReadAtOpen = tid != 0 ? S.ThreadById(tid)?.LastRead ?? 0 : S.Reads.GetValueOrDefault(cid);
         this.Rows("48", "*", "20", "auto");
 
         _rep = new ItemsRepeater { ItemsSource = _rows, ItemTemplate = new MessageFactory(this), Layout = new StackLayout { Spacing = 0 } };
@@ -84,13 +93,13 @@ public sealed class ChatView : Grid, IDisposable
             Background = Theme.AccentGradient(), CornerRadius = new CornerRadius(14), Padding = U.Th(14, 6), Visibility = Visibility.Collapsed,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = U.Th(0, 0, 0, 12),
         };
-        _pill.Tapped += async (_, _) => { if (!S.Window(Cid).AtTail) await Sh.C.JumpToPresent(Cid); _stick = true; ScrollToBottom(); _pill.Visibility = Visibility.Collapsed; };
+        _pill.Tapped += async (_, _) => { if (!S.Window(Key).AtTail) await Sh.C.JumpToPresent(Key); _stick = true; ScrollToBottom(); _pill.Visibility = Visibility.Collapsed; };
 
         _typing = U.T("", 11.5, null, Theme.Mu);
         _typing.Margin = U.Th(18, 0, 0, 0);
         _composer = new Composer(this);
         var listArea = new Grid().Rows("auto", "*");
-        if (S.DmById(cid) is not null) { _call = new CallBar(sh, cid); listArea.Add(_call.At(0)); }
+        if (tid == 0 && S.DmById(cid) is not null) { _call = new CallBar(sh, cid); listArea.Add(_call.At(0)); }
         listArea.Add(_sv.At(1), _pill.At(1));
         this.Add(_header.At(0), listArea.At(1), _typing.At(2), _composer.At(3));
 
@@ -116,7 +125,7 @@ public sealed class ChatView : Grid, IDisposable
     {
         _disposed = true;
         _typingTimer.Stop();
-        Sh.C.StoppedTyping(Cid);
+        Sh.C.StoppedTyping(Key);
     }
 
     public void FocusComposer() => _composer.FocusBox();
@@ -130,6 +139,7 @@ public sealed class ChatView : Grid, IDisposable
     public void RefreshHeader()
     {
         if (_disposed) return;
+        if (IsThread) { ThreadHeader(); _composer.RefreshState(); return; }
         var g = new Grid().Cols("auto", "auto", "*", "auto");
         if (Ch is { } c)
         {
@@ -155,8 +165,10 @@ public sealed class ChatView : Grid, IDisposable
                     U.T(StatusLine(o), 12.5, null, Theme.Mu).With(t => t.Margin = U.Th(12, 0, 0, 0)).At(0, 2));
             }
         }
+        var threads = Ch is { Type: "text" } tc && tc.Kind != "ideas" ? ThreadsButton() : null;
         var icons = U.H(2,
             DmObj is not null ? U.IconButton(G.Phone, Sh.C.VoiceChannelId == Cid ? "Jesteś w tej rozmowie" : "Zadzwoń", () => Sh.StartCall(Cid), 16, 32, Sh.C.VoiceChannelId == Cid ? Theme.Green : null) : null,
+            threads,
             U.IconButton("", "Przypięte wiadomości", ShowPins, 16, 32),
             U.IconButton("", Sh.MembersVisible ? "Schowaj listę osób" : "Pokaż listę osób", Sh.ToggleMembers, 16, 32, Sh.MembersVisible ? Theme.Fg : Theme.Mu));
         g.Add(icons.At(0, 3));
@@ -224,7 +236,7 @@ public sealed class ChatView : Grid, IDisposable
     /// <summary>Pełne odświeżenie (albo dopisanie starszych na górze bez skakania).</summary>
     void Sync()
     {
-        var w = S.Window(Cid);
+        var w = S.Window(Key);
         var items = w.Items;
         var fresh = BuildRows(items);
         if (_rows.Count > 0 && items.Count > _rows.Count)
@@ -257,6 +269,21 @@ public sealed class ChatView : Grid, IDisposable
         }
         if (w.Items.Count == 0 && w.HasOlder) return; // jeszcze się wczytuje
         // początek rozmowy
+        if (IsThread)
+        {
+            if (_starter is { } st)
+            {
+                var mv = new MessageView(this) { IsStarter = true };
+                mv.Bind(new Row(st));
+                _top.Add(mv.With(x => x.Margin = U.Th(-16, 0, -16, 0)));
+            }
+            else _top.Add(U.T("Pierwsza wiadomość wątku została usunięta.", 13, null, Theme.Mu, wrap: true));
+            var n = Thread?.Count ?? w.Items.Count;
+            _top.Add(new Grid { Margin = U.Th(0, 12, 0, 4) }.Cols("auto", "*").Add(
+                U.T(n > 0 ? $"{n} {Format.Plural(n, "odpowiedź", "odpowiedzi", "odpowiedzi")}" : "Napisz pierwszą odpowiedź", 12, U.Bold, Theme.Mu).At(0, 0),
+                U.HLine(.1).With(l => l.Margin = U.Th(10, 0, 0, 0)).At(0, 1)));
+            return;
+        }
         if (Ch is { } c)
         {
             _top.Add(new Border { Width = 64, Height = 64, CornerRadius = new CornerRadius(32), Background = U.W(.1), HorizontalAlignment = HorizontalAlignment.Left, Child = U.T("#", 34, U.Semi).With(t => t.HorizontalAlignment = HorizontalAlignment.Center) },
@@ -282,7 +309,7 @@ public sealed class ChatView : Grid, IDisposable
                 break;
             case ChangeKind.MessageAdded when c.Message is { } m:
             {
-                var items = S.Window(Cid).Items;
+                var items = S.Window(Key).Items;
                 var idx = items.FindIndex(x => ReferenceEquals(x, m) || x.Id == m.Id);
                 if (idx < 0) break;
                 if (idx != _rows.Count) { Sync(); break; }
@@ -330,7 +357,7 @@ public sealed class ChatView : Grid, IDisposable
     void UpdateTyping()
     {
         if (_disposed) return;
-        var ids = S.TypingIn(Cid).Where(id => !S.Blocked.Contains(id)).ToList();
+        var ids = S.TypingIn(Key).Where(id => !S.Blocked.Contains(id)).ToList();
         _typing.Text = ids.Count switch
         {
             0 => "",
@@ -345,19 +372,19 @@ public sealed class ChatView : Grid, IDisposable
         var off = _sv.VerticalOffset;
         var atBottom = _sv.ScrollableHeight - off < 80;
         // „przyklejenie” do dołu puszcza tylko przewinięcie w górę przez człowieka (lista rośnie przy wczytywaniu)
-        if (atBottom) _stick = S.Window(Cid).AtTail;
+        if (atBottom) _stick = S.Window(Key).AtTail;
         else if (off < _lastOffset - 1 && Environment.TickCount64 > _progUntil) _stick = false;
         _lastOffset = off;
-        if (_stick && _pill.Visibility == Visibility.Visible && S.Window(Cid).AtTail) _pill.Visibility = Visibility.Collapsed;
-        if (_sv.VerticalOffset < 600 && !_loadingOlder && S.Window(Cid).HasOlder && _rows.Count > 0) _ = LoadOlder();
+        if (_stick && _pill.Visibility == Visibility.Visible && S.Window(Key).AtTail) _pill.Visibility = Visibility.Collapsed;
+        if (_sv.VerticalOffset < 600 && !_loadingOlder && S.Window(Key).HasOlder && _rows.Count > 0) _ = LoadOlder();
     }
 
     async Task LoadOlder()
     {
         _loadingOlder = true;
-        UpdateTop(S.Window(Cid));
-        try { await Sh.C.LoadOlder(Cid); }
-        finally { _loadingOlder = false; if (!_disposed) UpdateTop(S.Window(Cid)); }
+        UpdateTop(S.Window(Key));
+        try { await Sh.C.LoadOlder(Key); }
+        finally { _loadingOlder = false; if (!_disposed) UpdateTop(S.Window(Key)); }
     }
 
     void ScrollToBottom()
@@ -379,7 +406,7 @@ public sealed class ChatView : Grid, IDisposable
 
     void UpdatePill()
     {
-        if (!S.Window(Cid).AtTail) ShowPill("Oglądasz starsze wiadomości · Wróć na dół  ↓");
+        if (!S.Window(Key).AtTail) ShowPill("Oglądasz starsze wiadomości · Wróć na dół  ↓");
         else _pill.Visibility = Visibility.Collapsed;
     }
 
@@ -392,7 +419,7 @@ public sealed class ChatView : Grid, IDisposable
     /// <summary>Przewija do wiadomości (wczytuje jej okolicę, jeśli trzeba) i ją podświetla.</summary>
     public async Task JumpTo(long messageId)
     {
-        if (!await Sh.C.JumpTo(Cid, messageId)) { Sh.Info("Tej wiadomości już nie ma.", true); return; }
+        if (!await Sh.C.JumpTo(Key, messageId)) { Sh.Info("Tej wiadomości już nie ma.", true); return; }
         var i = IndexOf(messageId);
         if (i < 0) return;
         _stick = false;
@@ -437,10 +464,13 @@ public sealed class ChatView : Grid, IDisposable
         catch (Exception ex) { Sh.Info(GibCordClient.Friendly(ex), true); }
     }
 
-    public bool CanPin => DmObj is not null || S.Can(Cid, Perm.ManageMessages);
+    public bool CanPin => !IsThread && (DmObj is not null || S.Can(Cid, Perm.ManageMessages));
+    /// <summary>Wątek z wiadomości: kanał tekstowy serwera (nie tablica pomysłów), zwykła wiadomość bez wątku.</summary>
+    public bool CanStartThread(Message m) => !IsThread && Ch is { Type: "text" } c && c.Kind != "ideas" && m.Type == "default" && m.ThreadId is null && m.Send == SendState.Sent
+        && S.Can(Cid, Perm.SendMessages) && S.TimedOutUntil(Srv) is null;
     public bool CanManage => DmObj is null && S.Can(Cid, Perm.ManageMessages);
     public bool CanReact => S.Can(Cid, Perm.AddReactions) && S.TimedOutUntil(Srv) is null;
 
     /// <summary>Ostatnia własna wiadomość (strzałka w górę w pustym polu = edycja).</summary>
-    public Message? LastOwn() => S.Window(Cid).Items.LastOrDefault(m => m.AuthorId == S.Me.Id && m.Send == SendState.Sent && !m.IsSystem);
+    public Message? LastOwn() => S.Window(Key).Items.LastOrDefault(m => m.AuthorId == S.Me.Id && m.Send == SendState.Sent && !m.IsSystem);
 }

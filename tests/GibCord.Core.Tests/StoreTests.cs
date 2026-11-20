@@ -208,4 +208,52 @@ public class StoreTests
         s.Apply(Ev("message_create", new { message = t }));
         Assert.Single(s.Window(10).Items);
     }
+
+    [Fact]
+    public void WatkiOsobneOknoIZnaczek()
+    {
+        var s = Make();
+        s.SetWindow(10, [Msg(5, 10, 2, "zaczynam")], hasOlder: false);
+        // wątek przy wiadomości 5: znaczek pod wiadomością na kanale
+        s.Apply(Ev("thread_update", new { thread = new ThreadInfo { Id = 3, ChannelId = 10, ServerId = 100, MessageId = 5, Name = "Plan", Count = 0 } }));
+        Assert.Equal("Plan", s.Window(10).Items[0].Thread.Str("name"));
+        // wiadomość z wątku nie trafia na kanał; okno wątku dopiero po otwarciu
+        var t1 = Msg(6, 10, 2, "w wątku"); t1.ThreadId = 3;
+        s.Apply(Ev("message_create", new { message = t1 }));
+        Assert.Single(s.Window(10).Items);
+        Assert.False(s.Windows.ContainsKey(-3));
+        Assert.Equal(6, s.ThreadById(3)!.LastMessageId);
+        s.SetWindow(-3, [t1, Msg(5, 10, 2)], hasOlder: false); // tylko wiadomości tego wątku
+        Assert.Single(s.Window(-3).Items);
+        var t2 = Msg(7, 10, 2, "dalej"); t2.ThreadId = 3;
+        s.Apply(Ev("message_create", new { message = t2 }));
+        Assert.Equal(2, s.Window(-3).Items.Count);
+        Assert.Equal(5, s.LastIdOf(10)); // wątek nie przesuwa „ostatniej” kanału
+        // „pisze…” w wątku osobno
+        s.Apply(Ev("typing", new { channelId = 10, userId = 2, threadId = 3 }));
+        Assert.Contains(2L, s.TypingIn(-3));
+        Assert.Empty(s.TypingIn(10));
+        // obserwowanie i nieprzeczytane
+        s.Apply(Ev("thread_follow", new { threadId = 3, channelId = 10, following = true, lastRead = 6 }));
+        Assert.True(s.ThreadById(3)!.Unread);
+        Assert.Equal(1, s.UnreadThreadsIn(10));
+        // thread_update bez „following” nie kasuje obserwowania
+        s.Apply(Ev("thread_update", new { thread = new ThreadInfo { Id = 3, ChannelId = 10, ServerId = 100, MessageId = 5, Name = "Plan B", Count = 2, LastMessageId = 7 } }));
+        Assert.True(s.ThreadById(3)!.Following);
+        s.MarkThreadReadLocal(3, 7);
+        Assert.False(s.ThreadById(3)!.Unread);
+        // edycja, reakcja i usunięcie w wątku
+        var ed = Msg(7, 10, 2, "poprawione"); ed.ThreadId = 3;
+        s.Apply(Ev("message_update", new { message = ed }));
+        Assert.Equal("poprawione", s.Window(-3).Items[^1].Content);
+        s.Apply(Ev("reaction_update", new { messageId = 7, channelId = 10, reactions = new[] { new { emoji = "👍", userIds = new[] { 1 } } } }));
+        Assert.Single(s.Window(-3).Items[^1].Reactions);
+        s.Apply(Ev("message_delete", new { id = 7, channelId = 10, threadId = 3 }));
+        Assert.Single(s.Window(-3).Items);
+        // usunięcie wątku: znika okno i znaczek
+        s.Apply(Ev("thread_delete", new { threadId = 3, channelId = 10, messageId = 5 }));
+        Assert.Null(s.ThreadById(3));
+        Assert.False(s.Windows.ContainsKey(-3));
+        Assert.Equal(JsonValueKind.Undefined, s.Window(10).Items[0].Thread.ValueKind);
+    }
 }

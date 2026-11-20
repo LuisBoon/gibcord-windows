@@ -110,15 +110,17 @@ public sealed class GibCordApi : IDisposable
     public Task<User> GetUser(long id, CancellationToken ct = default) => Send<User>(HttpMethod.Get, $"users/{id}", ct: ct);
 
     // ── wiadomości ──
-    public Task<List<Message>> GetMessages(long channelId, long? before = null, long? around = null, int limit = 50, CancellationToken ct = default)
+    public Task<List<Message>> GetMessages(long channelId, long? before = null, long? around = null, int limit = 50, long? thread = null, CancellationToken ct = default)
     {
         var q = $"channels/{channelId}/messages?limit={limit}";
+        if (thread is long th) q += $"&thread={th}";
         if (before is long b) q += $"&before={b}";
         else if (around is long a) q += $"&around={a}";
         return Send<List<Message>>(HttpMethod.Get, q, ct: ct);
     }
-    public Task<Message> SendMessage(long channelId, string content, long? replyTo = null, IReadOnlyList<long>? attachments = null, string? nonce = null, CancellationToken ct = default) =>
-        Send<Message>(HttpMethod.Post, $"channels/{channelId}/messages", new { content, replyTo, attachments = attachments is { Count: > 0 } ? attachments : null, nonce }, ct);
+    public Task<Message> SendMessage(long channelId, string content, long? replyTo = null, IReadOnlyList<long>? attachments = null, string? nonce = null,
+        long? threadId = null, long? stickerId = null, CancellationToken ct = default) =>
+        Send<Message>(HttpMethod.Post, $"channels/{channelId}/messages", new { content, replyTo, attachments = attachments is { Count: > 0 } ? attachments : null, nonce, threadId, stickerId }, ct);
     public Task<Message> EditMessage(long id, string content, CancellationToken ct = default) =>
         Send<Message>(HttpMethod.Patch, $"messages/{id}", new { content }, ct);
     public Task DeleteMessage(long id, CancellationToken ct = default) => Send(HttpMethod.Delete, $"messages/{id}", ct: ct);
@@ -141,6 +143,24 @@ public sealed class GibCordApi : IDisposable
         var e = await SendRaw(HttpMethod.Post, "uploads?name=" + Uri.EscapeDataString(name), content, ct).ConfigureAwait(false);
         return e.To<Attachment>()!;
     }
+
+    // ── wątki (serwer 5.10) ──
+    public async Task<(ThreadInfo Thread, Message? Starter)> GetThread(long id, CancellationToken ct = default)
+    {
+        var e = await Send(HttpMethod.Get, $"threads/{id}", ct: ct).ConfigureAwait(false);
+        return (e.Prop("thread").To<ThreadInfo>() ?? throw new ApiException(404, "Nie ma takiego wątku"), e.Prop("starter").To<Message>());
+    }
+    public Task<ThreadInfo> CreateThread(long messageId, string? name, CancellationToken ct = default) =>
+        Send<ThreadInfo>(HttpMethod.Post, $"messages/{messageId}/thread", new { name = string.IsNullOrWhiteSpace(name) ? null : name.Trim() }, ct);
+    public async Task<(List<ThreadInfo> Threads, int ArchivedCount)> GetThreads(long channelId, bool archived = false, CancellationToken ct = default)
+    {
+        var e = await Send(HttpMethod.Get, $"channels/{channelId}/threads" + (archived ? "?archived=1" : ""), ct: ct).ConfigureAwait(false);
+        return (e.Prop("threads").To<List<ThreadInfo>>() ?? [], (int)(e.Long("archivedCount") ?? 0));
+    }
+    public Task<ThreadInfo> PatchThread(long id, object changes, CancellationToken ct = default) => Send<ThreadInfo>(HttpMethod.Patch, $"threads/{id}", changes, ct);
+    public Task DeleteThread(long id, CancellationToken ct = default) => Send(HttpMethod.Delete, $"threads/{id}", ct: ct);
+    public Task<ThreadInfo> FollowThread(long id, bool on, CancellationToken ct = default) => Send<ThreadInfo>(on ? HttpMethod.Put : HttpMethod.Delete, $"threads/{id}/follow", ct: ct);
+    public Task MarkThreadRead(long id, long messageId, CancellationToken ct = default) => Send(HttpMethod.Post, $"threads/{id}/read", new { messageId }, ct);
 
     // ── rozmowy prywatne, znajomi ──
     public Task<Dm> OpenDm(long userId, CancellationToken ct = default) => Send<Dm>(HttpMethod.Post, "dms", new { userId }, ct);

@@ -5,7 +5,7 @@ namespace GibCord.Core;
 public enum ChangeKind
 {
     All, Me, Servers, Server, Members, Dms, User, Presence, Reads, Friends, Voice, Typing,
-    MessageAdded, MessageUpdated, MessageRemoved, MessagesReset, Notify, Blocked, Announcement,
+    MessageAdded, MessageUpdated, MessageRemoved, MessagesReset, Notify, Blocked, Announcement, Thread,
 }
 
 /// <summary>Co się zmieniło. <c>Id</c> = serwer / użytkownik / kanał, zależnie od rodzaju.</summary>
@@ -41,6 +41,8 @@ public sealed class Store
     public Announcement? Announcement { get; private set; }
     public Dictionary<long, int> Mentions { get; } = [];
     public Dictionary<long, MessageWindow> Windows { get; } = [];
+    /// <summary>Znane wątki (z wiadomości, list i zdarzeń). Okno wiadomości wątku: <c>Windows[-id]</c>.</summary>
+    public Dictionary<long, ThreadInfo> Threads { get; } = [];
     readonly Dictionary<long, Dictionary<long, long>> _typing = [];
     readonly Dictionary<long, (Channel C, Server S)> _chan = [];
     public bool Loaded { get; private set; }
@@ -210,12 +212,17 @@ public sealed class Store
     public int DmUnreadTotal() => Dms.Count(d => !DmHidden(d) && IsUnread(d.Id) && !ChannelMuted(d.Id));
 
     /// <summary>Czy pokazać powiadomienie Windows o tej wiadomości.</summary>
-    public bool ShouldNotify(Message m, long activeChannelId, bool windowActive)
+    public bool ShouldNotify(Message m, long activeChannelId, bool windowActive, long activeThreadId = 0)
     {
         if (m.AuthorId == Me.Id || m.Type != "default" || Blocked.Contains(m.AuthorId)) return false;
         if (Me.Status == "dnd") return false;
+        if (m.ThreadId is long tid)
+        {
+            // wątek: tylko obserwowany albo wzmianka (jak na stronie), i nie gdy właśnie go czytam
+            if (windowActive && tid == activeThreadId) return false;
+            return !ChannelMuted(m.ChannelId) && (MentionsMe(m) || Threads.GetValueOrDefault(tid)?.Following == true);
+        }
         if (windowActive && activeChannelId == m.ChannelId) return false;
-        if (m.ThreadId is not null) return MentionsMe(m) && !ChannelMuted(m.ChannelId);
         if (ChannelMuted(m.ChannelId)) return false;
         return NotifyLevel(m.ChannelId) switch { "all" => true, "none" => false, _ => MentionsMe(m) };
     }
@@ -223,6 +230,7 @@ public sealed class Store
     public string NotificationTitle(Message m)
     {
         var who = NameOf(m.AuthorId, ServerOfChannel(m.ChannelId));
+        if (m.ThreadId is long tid) return $"{who} · 🧵 {Threads.GetValueOrDefault(tid)?.Name ?? "wątek"}";
         if (DmById(m.ChannelId) is { } d) return d.IsGroup ? $"{who} ({DmTitle(d)})" : who;
         var c = ChannelById(m.ChannelId);
         var s = ServerOfChannel(m.ChannelId);
@@ -287,7 +295,7 @@ public sealed class Store
         var w = Window(cid);
         var pending = w.Items.Where(x => x.Send != SendState.Sent).ToList();
         w.Items.Clear();
-        w.Items.AddRange(msgs.Where(x => x.ThreadId is null).OrderBy(x => x.Id));
+        w.Items.AddRange(msgs.Where(x => x.Key == cid).OrderBy(x => x.Id));
         if (atTail) foreach (var p in pending) if (!w.Items.Any(x => x.Nonce is not null && x.Nonce == p.Nonce)) w.Items.Add(p);
         w.HasOlder = hasOlder;
         w.AtTail = atTail;
@@ -299,7 +307,7 @@ public sealed class Store
     {
         var w = Window(cid);
         var have = w.Items.Select(x => x.Id).ToHashSet();
-        w.Items.InsertRange(0, older.Where(x => x.ThreadId is null && !have.Contains(x.Id)).OrderBy(x => x.Id));
+        w.Items.InsertRange(0, older.Where(x => x.Key == cid && !have.Contains(x.Id)).OrderBy(x => x.Id));
         w.HasOlder = hasOlder;
         Raise(ChangeKind.MessagesReset, cid, cid);
     }
@@ -307,10 +315,10 @@ public sealed class Store
     /// <summary>Wiadomość wysyłana — od razu na liście, szara do potwierdzenia.</summary>
     public void AddPending(Message m)
     {
-        var w = Window(m.ChannelId);
+        var w = Window(m.Key);
         m.Send = SendState.Pending;
         w.Items.Add(m);
-        Raise(ChangeKind.MessageAdded, m.Id, m.ChannelId, m);
+        Raise(ChangeKind.MessageAdded, m.Id, m.Key, m);
     }
 
     public void FailPending(long cid, string nonce)
@@ -334,17 +342,22 @@ public sealed class Store
     /// <summary>Wiadomość z serwera (odpowiedź na POST albo message_create) — podmienia oczekującą o tym samym nonce.</summary>
     public void Upsert(Message m, bool live = true)
     {
-        if (m.ThreadId is not null) return; // wątki: osobny widok (etap 3)
-        BumpLast(m);
-        var w = Window(m.ChannelId);
+        var key = m.Key;
+        if (m.ThreadId is long tid)
+        {
+            if (Threads.TryGetValue(tid, out var th) && (th.LastMessageId ?? 0) < m.Id) { th.LastMessageId = m.Id; th.LastAt = Math.Max(th.LastAt, m.CreatedAt); }
+            if (!Windows.ContainsKey(key)) return; // wątek nie jest otwarty — dociągnie się przy otwarciu
+        }
+        else BumpLast(m);
+        var w = Window(key);
         var i = w.Items.FindIndex(x => x.Id == m.Id);
         if (i < 0 && m.Nonce is not null) i = w.Items.FindIndex(x => x.Send != SendState.Sent && x.Nonce == m.Nonce);
         if (i >= 0)
         {
             var old = w.Items[i];
             w.Items[i] = m;
-            if (old.Id != m.Id) { Raise(ChangeKind.MessageRemoved, old.Id, m.ChannelId, old); Raise(ChangeKind.MessageAdded, m.Id, m.ChannelId, m); }
-            else Raise(ChangeKind.MessageUpdated, m.Id, m.ChannelId, m);
+            if (old.Id != m.Id) { Raise(ChangeKind.MessageRemoved, old.Id, key, old); Raise(ChangeKind.MessageAdded, m.Id, key, m); }
+            else Raise(ChangeKind.MessageUpdated, m.Id, key, m);
             return;
         }
         if (!w.AtTail && live) { Raise(ChangeKind.Reads, m.ChannelId); return; }
@@ -352,7 +365,7 @@ public sealed class Store
         var at = w.Items.Count;
         while (at > 0 && (w.Items[at - 1].Send != SendState.Sent || w.Items[at - 1].Id > m.Id)) at--;
         w.Items.Insert(at, m);
-        Raise(ChangeKind.MessageAdded, m.Id, m.ChannelId, m);
+        Raise(ChangeKind.MessageAdded, m.Id, key, m);
     }
 
     void BumpLast(Message m)
@@ -371,6 +384,39 @@ public sealed class Store
         if (Reads.GetValueOrDefault(cid) < mid) Reads[cid] = mid;
         if (!IsUnread(cid)) Mentions.Remove(cid);
         Raise(ChangeKind.Reads, cid, cid);
+    }
+
+    // ───────────────────────── wątki ─────────────────────────
+
+    public ThreadInfo? ThreadById(long id) => Threads.GetValueOrDefault(id);
+
+    /// <summary>Nowe dane wątku (z listy, otwarcia albo thread_update). „Obserwuję” i „przeczytane” zostają, gdy ich brak.</summary>
+    public ThreadInfo MergeThread(ThreadInfo t)
+    {
+        if (Threads.TryGetValue(t.Id, out var old))
+        {
+            t.Following ??= old.Following;
+            t.LastRead ??= old.LastRead;
+        }
+        Threads[t.Id] = t;
+        // znaczek wątku pod wiadomością na kanale
+        if (Windows.GetValueOrDefault(t.ChannelId)?.Items.Find(x => x.Id == t.MessageId) is { } starter)
+        {
+            starter.Thread = JsonSerializer.SerializeToElement(t, Json.Options);
+            Raise(ChangeKind.MessageUpdated, starter.Id, t.ChannelId, starter);
+        }
+        Raise(ChangeKind.Thread, t.Id, t.ChannelId);
+        return t;
+    }
+
+    /// <summary>Wątki kanału, które obserwuję i mają coś nowego.</summary>
+    public int UnreadThreadsIn(long cid) => Threads.Values.Count(t => t.ChannelId == cid && t.Unread && !t.Archived);
+
+    public void MarkThreadReadLocal(long tid, long mid)
+    {
+        if (!Threads.TryGetValue(tid, out var t) || (t.LastRead ?? 0) >= mid) return;
+        t.LastRead = mid;
+        Raise(ChangeKind.Thread, tid, t.ChannelId);
     }
 
     // ───────────────────────── zdarzenia z WebSocket ─────────────────────────
@@ -394,7 +440,14 @@ public sealed class Store
                 var m = e.Prop("message").To<Message>();
                 if (m is null) break;
                 StopTyping(m.ChannelId, m.AuthorId);
-                if (m.ThreadId is not null) { if (m.AuthorId != Me.Id && MentionsMe(m)) { Mentions[m.ChannelId] = MentionsIn(m.ChannelId) + 1; Raise(ChangeKind.Reads, m.ChannelId, m.ChannelId); } break; }
+                if (m.ThreadId is long mt)
+                {
+                    StopTyping(m.Key, m.AuthorId);
+                    Upsert(m);
+                    if (m.AuthorId == Me.Id) MarkThreadReadLocal(mt, m.Id);
+                    else if (MentionsMe(m) && !Blocked.Contains(m.AuthorId)) { Mentions[m.ChannelId] = MentionsIn(m.ChannelId) + 1; Raise(ChangeKind.Reads, m.ChannelId, m.ChannelId); }
+                    break;
+                }
                 if (DmById(m.ChannelId) is { HiddenAt: not null } hd) hd.HiddenAt = null;
                 Upsert(m);
                 if (m.AuthorId == Me.Id) MarkReadLocal(m.ChannelId, m.Id);
@@ -408,28 +461,33 @@ public sealed class Store
             case "message_update":
             {
                 var m = e.Prop("message").To<Message>();
-                if (m is null || m.ThreadId is not null) break;
-                var w = Windows.GetValueOrDefault(m.ChannelId);
+                if (m is null) break;
+                var w = Windows.GetValueOrDefault(m.Key);
                 var i = w?.Items.FindIndex(x => x.Id == m.Id) ?? -1;
-                if (w is not null && i >= 0) { w.Items[i] = m; Raise(ChangeKind.MessageUpdated, m.Id, m.ChannelId, m); }
+                if (w is not null && i >= 0) { w.Items[i] = m; Raise(ChangeKind.MessageUpdated, m.Id, m.Key, m); }
                 break;
             }
             case "message_delete":
             {
-                if (e.Long("id") is long id && e.Long("channelId") is long cid) RemoveLocal(cid, id);
+                if (e.Long("id") is long id && e.Long("channelId") is long cid) RemoveLocal(e.Long("threadId") is long dt ? -dt : cid, id);
                 break;
             }
             case "reaction_update":
             {
                 if (e.Long("messageId") is not long mid || e.Long("channelId") is not long cid) break;
+                // reakcja w wątku przychodzi z id kanału-rodzica — szukamy też w otwartych wątkach
+                var key = cid;
                 var m = Windows.GetValueOrDefault(cid)?.Items.Find(x => x.Id == mid);
+                if (m is null)
+                    foreach (var (k, tw) in Windows)
+                        if (k < 0 && tw.Items.Find(x => x.Id == mid) is { } tm) { m = tm; key = k; break; }
                 if (m is null) break;
                 m.Reactions = e.Prop("reactions").To<List<Reaction>>() ?? [];
-                Raise(ChangeKind.MessageUpdated, mid, cid, m);
+                Raise(ChangeKind.MessageUpdated, mid, key, m);
                 break;
             }
             case "typing":
-                if (e.Long("channelId") is long tc && e.Long("userId") is long tu) Typing(tc, tu);
+                if (e.Long("channelId") is long tc && e.Long("userId") is long tu) Typing(e.Long("threadId") is long tt ? -tt : tc, tu);
                 break;
             case "read_state":
                 if (e.Long("channelId") is long rc && e.Long("messageId") is long rm) MarkReadLocal(rc, rm);
@@ -575,6 +633,29 @@ public sealed class Store
                 Blocked.Clear(); Blocked.UnionWith(e.Prop("blocked").To<List<long>>() ?? []);
                 Raise(ChangeKind.Blocked);
                 break;
+            case "thread_update":
+                if (e.Prop("thread").To<ThreadInfo>() is { } t) MergeThread(t);
+                break;
+            case "thread_delete":
+            {
+                if (e.Long("threadId") is not long dtid) break;
+                Threads.Remove(dtid);
+                Windows.Remove(-dtid);
+                if (e.Long("channelId") is long dc && e.Long("messageId") is long dm && Windows.GetValueOrDefault(dc)?.Items.Find(x => x.Id == dm) is { } starter)
+                { starter.Thread = default; Raise(ChangeKind.MessageUpdated, dm, dc, starter); }
+                Raise(ChangeKind.Thread, dtid, e.Long("channelId") ?? 0);
+                break;
+            }
+            case "thread_follow":
+            {
+                if (e.Long("threadId") is not long ftid) break;
+                if (!Threads.TryGetValue(ftid, out var ft))
+                    Threads[ftid] = ft = new ThreadInfo { Id = ftid, ChannelId = e.Long("channelId") ?? 0 };
+                ft.Following = e.Bool("following") == true;
+                ft.LastRead = e.Long("lastRead");
+                Raise(ChangeKind.Thread, ftid, ft.ChannelId);
+                break;
+            }
             case "announcement":
                 Announcement = e.Str("text") is null ? null : e.To<Announcement>();
                 Raise(ChangeKind.Announcement);

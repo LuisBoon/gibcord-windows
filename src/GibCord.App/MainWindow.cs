@@ -174,7 +174,7 @@ public sealed class MainWindow : Window
     {
         if (!App.Prefs.Notifications) return;
         var s = Client.Store;
-        Toasts.Show(s.NotificationTitle(m), s.PlainText(m), m.ChannelId, "c" + m.ChannelId);
+        Toasts.Show(s.NotificationTitle(m), s.PlainText(m), m.Key, "c" + m.Key);
         if (Native.GetForegroundWindow() != Hwnd) Native.Flash(Hwnd);
     }
 
@@ -182,6 +182,7 @@ public sealed class MainWindow : Window
     {
         BringToFront();
         if (cid == 0) _shell?.OpenFriends();
+        else if (cid < 0) _shell?.OpenThread(-cid);
         else _shell?.OpenChannel(cid);
     });
 

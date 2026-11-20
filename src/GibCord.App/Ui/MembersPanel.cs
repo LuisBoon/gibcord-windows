@@ -24,7 +24,7 @@ public sealed class MembersPanel : Grid
     public void Refresh()
     {
         var s = _sh.S;
-        var visible = s.Loaded && _sh.MembersVisible && _sh.ChannelId != 0;
+        var visible = s.Loaded && _sh.MembersVisible && _sh.ChannelId != 0 && !_sh.ThreadOpen;
         Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         if (!visible) return;
         _list.Children.Clear();

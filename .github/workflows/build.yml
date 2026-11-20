@@ -77,7 +77,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force zrzuty | Out-Null
-          foreach ($v in 'chat','dm','friends','login','switcher','profile','voice') {
+          foreach ($v in 'chat','dm','friends','login','switcher','profile','voice','thread') {
             $out = Join-Path $pwd "zrzuty\$v.png"
             $p = Start-Process -FilePath publish\GibCord.exe -ArgumentList '--demo','--view',$v,'--screenshot',"`"$out`"" -PassThru
             if (-not $p.WaitForExit(45000)) { $p.Kill(); Write-Host "::warning::Zrzut ${v} - przekroczony czas" }

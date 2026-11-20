@@ -17,15 +17,17 @@ public sealed class MessageView : Grid
     Border? _tools;
     readonly Grid _body = new();
     static readonly string[] Quick = ["👍", "❤️", "😂"];
+    /// <summary>Pierwsza wiadomość nad odpowiedziami w panelu wątku — bez paska akcji i znaczka wątku.</summary>
+    public bool IsStarter { get; init; }
 
     public MessageView(ChatView v)
     {
         _v = v;
         Background = Theme.Transparent;
         Children.Add(_body);
-        PointerEntered += (_, _) => ShowTools(true);
-        PointerExited += (_, _) => ShowTools(false);
-        RightTapped += (_, e) => { if (_row is not null && _row.M.Send == SendState.Sent && !_row.M.IsSystem) { Menu().ShowAt(this, e.GetPosition(this)); e.Handled = true; } };
+        PointerEntered += (_, _) => { if (!IsStarter) ShowTools(true); };
+        PointerExited += (_, _) => { if (!IsStarter) ShowTools(false); };
+        RightTapped += (_, e) => { if (!IsStarter && _row is not null && _row.M.Send == SendState.Sent && !_row.M.IsSystem) { Menu().ShowAt(this, e.GetPosition(this)); e.Handled = true; } };
     }
 
     Store S => _v.S;
@@ -149,7 +151,7 @@ public sealed class MessageView : Grid
         foreach (var a in m.Attachments) body.Children.Add(AttachmentView(a));
         foreach (var yt in Markup.YouTubeIds(m.Content)) body.Children.Add(YouTube(yt));
         if (m.Reactions.Count > 0) body.Children.Add(Reactions(m));
-        if (m.Thread.ValueKind == JsonValueKind.Object) body.Children.Add(ThreadChip(m.Thread));
+        if (m.Thread.ValueKind == JsonValueKind.Object && !IsStarter && !_v.IsThread) body.Children.Add(ThreadChip(m.Thread));
         if (m.Send == SendState.Failed)
         {
             var retry = new HyperlinkButton { Content = U.T("Ponów", 12, U.Bold, Theme.Accent), Padding = U.Th(0) };
@@ -260,16 +262,24 @@ public sealed class MessageView : Grid
         return panel;
     }
 
-    static FrameworkElement ThreadChip(JsonElement t)
+    FrameworkElement ThreadChip(JsonElement t)
     {
         var count = t.Long("count") ?? 0;
-        var chip = U.Box(U.H(8, U.I("", 13, Theme.Accent), U.T(t.Str("name") ?? "Wątek", 12.5, U.Bold, Theme.Accent),
-            U.T($"{count} {Format.Plural(count, "wiadomość", "wiadomości", "wiadomości")}", 12, null, Theme.Mu)), U.W(.06), 10, U.Th(10, 6));
+        var tid = t.Long("id") ?? 0;
+        var known = S.ThreadById(tid);
+        var unread = known?.Unread == true;
+        var last = t.Long("lastAt") is long la && count > 0 ? " · " + Format.When(la) : "";
+        var chip = U.Box(U.H(8, U.I(GT.Thread, 13, Theme.Accent), U.T(known?.Name ?? t.Str("name") ?? "Wątek", 12.5, U.Bold, Theme.Accent),
+            U.T(count > 0 ? $"{count} {Format.Plural(count, "odpowiedź", "odpowiedzi", "odpowiedzi")}{last}" : "Brak odpowiedzi — napisz pierwszą", 12, null, Theme.Mu),
+            unread ? new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = Theme.Red } : null), U.W(.06), 10, U.Th(10, 6));
         chip.BorderBrush = Theme.Accent;
         chip.BorderThickness = U.Th(3, 0, 0, 0);
         chip.HorizontalAlignment = HorizontalAlignment.Left;
         chip.Margin = U.Th(0, 4, 0, 0);
-        chip.Tip("Wątki otworzysz w kolejnej wersji bety — na razie na stronie");
+        chip.Tip("Otwórz wątek");
+        chip.PointerEntered += (_, _) => chip.Background = U.W(.1);
+        chip.PointerExited += (_, _) => chip.Background = U.W(.06);
+        if (tid > 0) chip.Tapped += (_, e) => { e.Handled = true; _v.Sh.OpenThread(tid); };
         return chip;
     }
 
@@ -384,7 +394,8 @@ public sealed class MessageView : Grid
             pick.Click += (_, _) => EmojiPicker.Show(pick, _v, emo => _v.React(m, emo));
             p.Add(pick);
         }
-        p.Add(U.IconButton("", "Odpowiedz", () => _v.Reply(m), 15, 32));
+        p.Add(U.IconButton("\uE97A", "Odpowiedz", () => _v.Reply(m), 15, 32));
+        if (_v.CanStartThread(m)) p.Add(U.IconButton(GT.Thread, m.Thread.ValueKind == JsonValueKind.Object ? "Otwórz wątek" : "Utwórz wątek", () => OpenOrStartThread(m), 15, 32));
         if (m.AuthorId == S.Me.Id) p.Add(U.IconButton("", "Edytuj", () => _v.Edit(m), 15, 32));
         var more = U.IconButton("", "Więcej", () => { }, 15, 32);
         more.Flyout = Menu();
@@ -409,7 +420,8 @@ public sealed class MessageView : Grid
             foreach (var e in new[] { "👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👀" }) sub.Items.Add(M.Item(e, "", () => _v.React(m, e)));
             f.Items.Add(sub);
         }
-        if (m.AuthorId == S.Me.Id) f.Items.Add(M.Item("Edytuj", "", () => _v.Edit(m)));
+        if (_v.CanStartThread(m)) f.Items.Add(M.Item(m.Thread.ValueKind == JsonValueKind.Object ? "Otwórz wątek" : "Utwórz wątek", GT.Thread, () => OpenOrStartThread(m)));
+        if (m.AuthorId == S.Me.Id) f.Items.Add(M.Item("Edytuj", "\uE70F", () => _v.Edit(m)));
         if (_v.CanPin) f.Items.Add(M.Item(m.PinnedAt is null ? "Przypnij" : "Odepnij", "", () => _v.TogglePin(m)));
         f.Items.Add(M.Item("Kopiuj tekst", "", () => Sidebar.Copy(m.Content)));
         f.Items.Add(M.Item("Wspomnij autora", "", () => _v.InsertMention(m.AuthorId)));
@@ -419,6 +431,12 @@ public sealed class MessageView : Grid
             f.Items.Add(M.Item("Usuń wiadomość", "", () => _v.Delete(m), danger: true));
         }
         return f;
+    }
+
+    void OpenOrStartThread(Message m)
+    {
+        if (m.Thread.Long("id") is long tid) _v.Sh.OpenThread(tid);
+        else _v.StartThread(m);
     }
 
     /// <summary>Krótkie podświetlenie po skoku do wiadomości.</summary>

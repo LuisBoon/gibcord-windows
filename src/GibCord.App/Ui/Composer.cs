@@ -90,12 +90,13 @@ public sealed partial class Composer : StackPanel
         else if (!can) why = "Nie masz uprawnień do pisania na tym kanale.";
         else if (ch is { Readonly: true } && !S.Can(_v.Cid, Perm.ManageMessages)) why = "Ten kanał jest tylko do czytania.";
         else if (_v.DmObj is { IsGroup: false } d && S.DmOther(d) is { } o && S.Blocked.Contains(o.Id)) why = $"Blokujesz {o.Name}. Odblokuj tę osobę na stronie, żeby pisać.";
+        else if (_v.Thread is { Locked: true } && !S.Can(_v.Cid, Perm.ManageMessages)) why = "Ten wątek jest zamknięty. Piszą w nim tylko moderatorzy.";
         _blocked.Child = U.H(10, U.I("", 15, Theme.Mu), U.T(why ?? "", 13.5, null, Theme.Mu, wrap: true));
         _blocked.Visibility = why is null ? Visibility.Collapsed : Visibility.Visible;
         ((FrameworkElement)Children[0]).Visibility = why is null ? Visibility.Visible : Visibility.Collapsed;
         _hint.Visibility = why is null ? Visibility.Visible : Visibility.Collapsed;
         _attach.Visibility = CanAttach ? Visibility.Visible : Visibility.Collapsed;
-        _box.PlaceholderText = ch is not null ? $"Napisz na #{ch.Name}" : _v.DmObj is { } dm ? $"Napisz do {(dm.IsGroup ? S.DmTitle(dm) : "@" + S.DmOther(dm)?.Name)}" : "Napisz wiadomość";
+        _box.PlaceholderText = _v.IsThread ? "Napisz w wątku" : ch is not null ? $"Napisz na #{ch.Name}" : _v.DmObj is { } dm ? $"Napisz do {(dm.IsGroup ? S.DmTitle(dm) : "@" + S.DmOther(dm)?.Name)}" : "Napisz wiadomość";
         _hint.Text = ch is { Slowmode: > 0 } && !S.Can(_v.Cid, Perm.ManageMessages) ? $"Tryb powolny: jedna wiadomość co {ch.Slowmode} s" : "";
     }
 
@@ -129,7 +130,7 @@ public sealed partial class Composer : StackPanel
 
     void OnText()
     {
-        if (_box.Text.Length > 0 && _editing is null) _v.Sh.C.Typing(_v.Cid);
+        if (_box.Text.Length > 0 && _editing is null) _v.Sh.C.Typing(_v.Key);
         UpdateSuggest();
     }
 
@@ -304,8 +305,8 @@ public sealed partial class Composer : StackPanel
         _mentions.Clear();
         CancelBar();
         ClearFiles();
-        _v.Sh.C.StoppedTyping(_v.Cid);
-        var error = await _v.Sh.C.Send(_v.Cid, text, reply, atts);
+        _v.Sh.C.StoppedTyping(_v.Key);
+        var error = await _v.Sh.C.Send(_v.Key, text, reply, atts);
         if (error is not null) _v.Sh.Info(error, true);
     }
 

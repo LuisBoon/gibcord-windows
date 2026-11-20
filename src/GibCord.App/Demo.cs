@@ -24,6 +24,10 @@ public static class Demo
         c.Store.SetWindow(Ogolne, Messages(now), hasOlder: false);
         c.Store.SetWindow(DmOla, DmMessages(now), hasOlder: false);
         c.Store.Mentions[Memy] = 3;
+        // wątek „Sobotni turniej” pod zrzutem z bazy (widok --view thread)
+        c.Store.MergeThread(new ThreadInfo { Id = 1, ChannelId = Ogolne, ServerId = Eg, MessageId = 1010, Name = "Sobotni turniej", CreatorId = BonkusId, Count = 4,
+            LastAt = now - 2 * 60000, LastMessageId = 4004, LastAuthors = [OlaId, KubaId, BonkusId], Following = true, LastRead = 4002 });
+        c.Store.SetWindow(-1, ThreadMessages(now), hasOlder: false);
         c.Store.Typing(Ogolne, KubaId);
         return c;
     }
@@ -35,6 +39,7 @@ public static class Demo
             case "friends": sh.Go(0, 0); break;
             case "dm": sh.Go(0, DmOla); break;
             case "voice": sh.C.DemoSpeaker = OlaId; sh.JoinVoiceChannel(Eg, Pogaduchy); break;
+            case "thread": sh.Go(Eg, Ogolne); sh.OpenThread(1); break;
             default: sh.Go(Eg, Ogolne); break;
         }
     }
@@ -113,11 +118,23 @@ public static class Demo
         };
         list[8].Attachments = [new Attachment { Id = 1, Url = "https://gibcord.luisboon.pl/icon-512.png", Name = "baza.png", Mime = "image/png", Width = 512, Height = 512, Size = 120000 }];
         list[8].Reactions = [new Reaction { Emoji = "🔥", UserIds = [MeId, OlaId, KubaId, MajaId] }, new Reaction { Emoji = "😂", UserIds = [KubaId, BartekId] }];
-        list[8].Thread = J(new { id = 1, name = "Sobotni turniej", count = 12 });
+        list[8].Thread = J(new { id = 1, name = "Sobotni turniej", count = 4, lastAt = now - 2 * 60000 });
         list[7].ReplyTo = new ReplyRef { Id = 1008, AuthorId = KubaId, Content = "ktoś wbija dziś wieczorem na granie?" };
         list[1].Mentions = [MajaId];
         list[9].Mentions = [OlaId, KubaId];
         return list;
+    }
+
+    static List<Message> ThreadMessages(long now)
+    {
+        Message T(long id, long author, string content, long at) { var m = Msg(id, Ogolne, author, content, at); m.ThreadId = 1; return m; }
+        return
+        [
+            T(4001, BonkusId, "robimy w sobotę turniej na tej mapie? 🏆", now - 4 * 60000),
+            T(4002, OlaId, "ja się piszę! drużyny po 2?", now - 3 * 60000),
+            T(4003, KubaId, "biorę <@2> do drużyny 😎", now - 2 * 60000 - 30000),
+            T(4004, OlaId, "deal. start 18:00?", now - 2 * 60000),
+        ];
     }
 
     static List<Message> DmMessages(long now) =>

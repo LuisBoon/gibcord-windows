@@ -256,11 +256,38 @@ public sealed class Message
     [JsonIgnore] public SendState Send { get; set; }
 
     [JsonIgnore] public bool IsSystem => Type != "default";
+    /// <summary>Gdzie leży na liście: kanał / rozmowa albo wątek (klucz ujemny).</summary>
+    [JsonIgnore] public long Key => ThreadId is long t ? -t : ChannelId;
     [JsonIgnore] public long? RefIdLong => RefId.ValueKind == JsonValueKind.Number && RefId.TryGetInt64(out var l) ? l : RefId.ValueKind == JsonValueKind.String && long.TryParse(RefId.GetString(), out var p) ? p : null;
     [JsonIgnore] public bool HasCard => Card.ValueKind == JsonValueKind.Object && Card.Str("title") is { Length: > 0 };
 }
 
 public enum SendState { Sent, Pending, Failed }
+
+/// <summary>Wątek: boczna rozmowa przy jednej wiadomości kanału (serwer 5.10). Wiadomości leżą na kanale-rodzicu z threadId.</summary>
+public sealed class ThreadInfo
+{
+    public long Id { get; set; }
+    public long ChannelId { get; set; }
+    public long ServerId { get; set; }
+    public long MessageId { get; set; }
+    public string Name { get; set; } = "Wątek";
+    public long CreatorId { get; set; }
+    public bool Locked { get; set; }
+    public long CreatedAt { get; set; }
+    public long LastAt { get; set; }
+    public int Count { get; set; }
+    public long? LastMessageId { get; set; }
+    public List<long> LastAuthors { get; set; } = [];
+    public bool Archived { get; set; }
+    // tylko dla mnie (threadView); w thread_update ich nie ma — wtedy zostają stare
+    public bool? Following { get; set; }
+    public long? LastRead { get; set; }
+
+    /// <summary>Klucz okna wiadomości wątku w <see cref="Store.Windows"/> (ujemny, żeby nie zderzył się z id kanału).</summary>
+    [JsonIgnore] public long Key => -Id;
+    [JsonIgnore] public bool Unread => Following == true && (LastMessageId ?? 0) > (LastRead ?? 0);
+}
 
 public sealed class VoiceMember
 {

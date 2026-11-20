@@ -41,6 +41,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     /// <summary>Kanał otwarty w oknie (0 = żaden, np. Znajomi).</summary>
     public long ActiveChannelId { get; private set; }
+    /// <summary>Wątek otwarty z boku (0 = żaden).</summary>
+    public long ActiveThreadId { get; private set; }
     /// <summary>Okno jest na wierzchu i aktywne — wiadomości na otwartym kanale są od razu przeczytane.</summary>
     public bool WindowActive { get; private set; } = true;
 
@@ -171,6 +173,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
                 Store.Load(st);
                 _fresh.Clear();
                 if (ActiveChannelId != 0) _ = OpenChannel(ActiveChannelId);
+                if (ActiveThreadId != 0) _ = LoadThread(ActiveThreadId);
             });
             _cache?.SaveState(raw);
             if (_gw is not null) await _gw.Send(new { t = "visibility", visible = _visible });
@@ -192,8 +195,9 @@ public sealed partial class GibCordClient : IAsyncDisposable
                 var m = ev.Data.Prop("message").To<Message>();
                 if (m is null) break;
                 if (m.ChannelId == ActiveChannelId && WindowActive && m.AuthorId != Store.Me.Id && m.ThreadId is null) ScheduleRead(m.ChannelId);
-                if (Store.ShouldNotify(m, ActiveChannelId, WindowActive)) Notify?.Invoke(m);
-                SaveSoon(m.ChannelId);
+                if (m.ThreadId is long mt && mt == ActiveThreadId && WindowActive && m.AuthorId != Store.Me.Id) ScheduleRead(m.Key);
+                if (Store.ShouldNotify(m, ActiveChannelId, WindowActive, ActiveThreadId)) Notify?.Invoke(m);
+                SaveSoon(m.Key);
                 break;
             }
             case "message_update":
@@ -209,7 +213,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     void SaveSoon(long cid)
     {
-        if (_cache is not null && Store.Windows.TryGetValue(cid, out var w) && w.AtTail) _cache.SaveMessages(cid, w.Items);
+        if (cid > 0 && _cache is not null && Store.Windows.TryGetValue(cid, out var w) && w.AtTail) _cache.SaveMessages(cid, w.Items);
     }
 
     // ───────────────────────── kanały i wiadomości ─────────────────────────
@@ -252,7 +256,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
         {
             var first = w.Items.FirstOrDefault(x => x.Send == SendState.Sent && x.Id > 0);
             if (first is null) return 0;
-            var msgs = await Api.GetMessages(cid, before: first.Id, limit: 50);
+            var (ch, th) = Where(cid);
+            var msgs = await Api.GetMessages(ch, before: first.Id, limit: 50, thread: th);
             _ui(() => Store.PrependOlder(cid, msgs, msgs.Count >= 50));
             return msgs.Count;
         }
@@ -266,8 +271,9 @@ public sealed partial class GibCordClient : IAsyncDisposable
         if (Store.Window(cid).Items.Any(x => x.Id == messageId)) return true;
         try
         {
-            var msgs = await Api.GetMessages(cid, around: messageId, limit: 50);
-            var last = Store.LastIdOf(cid);
+            var (ch, th) = Where(cid);
+            var msgs = await Api.GetMessages(ch, around: messageId, limit: 50, thread: th);
+            var last = cid < 0 ? Store.ThreadById(-cid)?.LastMessageId ?? 0 : Store.LastIdOf(cid);
             _ui(() => Store.SetWindow(cid, msgs, hasOlder: true, atTail: msgs.Count > 0 && msgs[^1].Id >= last));
             return msgs.Any(x => x.Id == messageId);
         }
@@ -279,7 +285,79 @@ public sealed partial class GibCordClient : IAsyncDisposable
     {
         _fresh.Remove(cid);
         Store.Window(cid).AtTail = false;
-        await OpenChannel(cid);
+        if (cid < 0) await LoadThread(-cid); else await OpenChannel(cid);
+    }
+
+    /// <summary>Klucz listy → (kanał, wątek). Wątki mają klucz ujemny (−id wątku).</summary>
+    (long Channel, long? Thread) Where(long key) => key < 0 ? (Store.ThreadById(-key)?.ChannelId ?? 0, -key) : (key, null);
+
+    // ───────────────────────── wątki ─────────────────────────
+
+    /// <summary>Otwiera wątek z boku: dane wątku + pierwsza wiadomość, potem najnowsze odpowiedzi.</summary>
+    public async Task<(ThreadInfo? Thread, Message? Starter, string? Error)> OpenThread(long tid)
+    {
+        ActiveThreadId = tid;
+        if (Offline)
+        {
+            var ot = Store.ThreadById(tid);
+            return (ot, ot is null ? null : Store.Window(ot.ChannelId).Items.Find(x => x.Id == ot.MessageId), null);
+        }
+        try
+        {
+            var (t, starter) = await Api.GetThread(tid);
+            ThreadInfo? merged = null;
+            _ui(() => merged = Store.MergeThread(t));
+            await LoadThread(tid);
+            return (merged ?? t, starter, null);
+        }
+        catch (ApiException ex) when (ex.IsAuth) { _ui(() => EndSession("Sesja wygasła — zaloguj się ponownie.")); return (null, null, ex.Message); }
+        catch (Exception ex) { return (null, null, Friendly(ex)); }
+    }
+
+    async Task LoadThread(long tid)
+    {
+        var t = Store.ThreadById(tid);
+        if (t is null) return;
+        try
+        {
+            var msgs = await Api.GetMessages(t.ChannelId, limit: 50, thread: tid);
+            _ui(() => { Store.SetWindow(-tid, msgs, hasOlder: msgs.Count >= 50); _fresh.Add(-tid); });
+            if (WindowActive) ScheduleRead(-tid, 0);
+        }
+        catch (Exception ex) { _ui(() => Error?.Invoke(Friendly(ex))); }
+    }
+
+    public void CloseThread() { if (ActiveThreadId != 0 && !Offline) Store.Windows.Remove(-ActiveThreadId); ActiveThreadId = 0; }
+
+    public async Task<(ThreadInfo? Thread, string? Error)> CreateThread(long messageId, string? name)
+    {
+        try { var t = await Api.CreateThread(messageId, name); ThreadInfo? m = null; _ui(() => m = Store.MergeThread(t)); return (m ?? t, null); }
+        catch (Exception ex) { return (null, Friendly(ex)); }
+    }
+
+    public async Task<string?> FollowThread(long tid, bool on)
+    {
+        try { var t = await Api.FollowThread(tid, on); _ui(() => Store.MergeThread(t)); return null; }
+        catch (Exception ex) { return Friendly(ex); }
+    }
+
+    public async Task<string?> PatchThread(long tid, object changes)
+    {
+        try { var t = await Api.PatchThread(tid, changes); _ui(() => Store.MergeThread(t)); return null; }
+        catch (Exception ex) { return Friendly(ex); }
+    }
+
+    public async Task<(List<ThreadInfo> Threads, int Archived, string? Error)> ListThreads(long cid, bool archived = false)
+    {
+        if (Offline) return (Store.Threads.Values.Where(t => t.ChannelId == cid).ToList(), 0, null);
+        try
+        {
+            var (list, n) = await Api.GetThreads(cid, archived);
+            var merged = new List<ThreadInfo>();
+            _ui(() => { foreach (var t in list) merged.Add(Store.MergeThread(t)); });
+            return (merged.Count == list.Count ? merged : list, n, null);
+        }
+        catch (Exception ex) { return ([], 0, Friendly(ex)); }
     }
 
     public void SetWindowActive(bool active)
@@ -299,6 +377,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     void ScheduleRead(long cid, int delayMs = 400)
     {
+        if (cid < 0) { ScheduleThreadRead(-cid); return; }
         if (Offline || (!Store.IsUnread(cid) && Store.MentionsIn(cid) == 0)) return;
         if (_readTimers.TryGetValue(cid, out var old)) old.Cancel();
         var cts = new CancellationTokenSource();
@@ -321,16 +400,29 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     public void MarkRead(long cid) => ScheduleRead(cid, 0);
 
+    /// <summary>Wątek: „przeczytane” zapisuje się tylko obserwującym (jak na stronie).</summary>
+    void ScheduleThreadRead(long tid)
+    {
+        var t = Store.ThreadById(tid);
+        if (Offline || t is null || t.Following != true) return;
+        var last = Store.Windows.GetValueOrDefault(-tid)?.Items.LastOrDefault(x => x.Send == SendState.Sent)?.Id ?? t.LastMessageId ?? 0;
+        if (last <= (t.LastRead ?? 0)) return;
+        Store.MarkThreadReadLocal(tid, last);
+        _ = Task.Run(async () => { try { await Api.MarkThreadRead(tid, last); } catch { } });
+    }
+
     /// <summary>Wysyła wiadomość. Na liście pojawia się od razu; nonce chroni przed podwójnym wysłaniem.</summary>
-    public async Task<string?> Send(long cid, string content, ReplyRef? replyTo = null, IReadOnlyList<Attachment>? attachments = null)
+    /// <summary><paramref name="cid"/> = klucz listy: kanał / rozmowa, albo −id wątku.</summary>
+    public async Task<string?> Send(long cid, string content, ReplyRef? replyTo = null, IReadOnlyList<Attachment>? attachments = null, Sticker? sticker = null)
     {
         content = content.Trim();
-        if (content.Length == 0 && attachments is not { Count: > 0 }) return null;
+        if (content.Length == 0 && attachments is not { Count: > 0 } && sticker is null) return null;
         var nonce = Guid.NewGuid().ToString("N");
+        var (ch, th) = Where(cid);
         var local = new Message
         {
-            Id = -Environment.TickCount64, ChannelId = cid, AuthorId = Store.Me.Id, Content = content, CreatedAt = Format.NowMs(),
-            Nonce = nonce, ReplyTo = replyTo, Attachments = attachments?.ToList() ?? [],
+            Id = -Environment.TickCount64, ChannelId = ch, ThreadId = th, AuthorId = Store.Me.Id, Content = content, CreatedAt = Format.NowMs(),
+            Nonce = nonce, ReplyTo = replyTo, Attachments = attachments?.ToList() ?? [], Sticker = sticker,
         };
         Store.AddPending(local);
         return await Deliver(local);
@@ -342,20 +434,24 @@ public sealed partial class GibCordClient : IAsyncDisposable
         {
             await Task.Delay(300);
             var copy = Json.Deserialize<Message>(Json.Serialize(local))!;
-            copy.Id = Store.LastIdOf(local.ChannelId) + 1;
-            _ui(() => { Store.Upsert(copy, live: false); Store.MarkReadLocal(copy.ChannelId, copy.Id); });
+            copy.Id = Math.Max(Store.LastIdOf(local.ChannelId), Store.Window(local.Key).Items.Where(x => x.Send == SendState.Sent).Select(x => x.Id).DefaultIfEmpty().Max()) + 1;
+            _ui(() => { Store.Upsert(copy, live: false); if (copy.ThreadId is null) Store.MarkReadLocal(copy.ChannelId, copy.Id); });
             return null;
         }
         try
         {
-            var m = await Api.SendMessage(local.ChannelId, local.Content, local.ReplyTo?.Id, local.Attachments.Select(a => a.Id).ToList(), local.Nonce);
-            _ui(() => { Store.Upsert(m, live: false); Store.MarkReadLocal(m.ChannelId, m.Id); });
-            SaveSoon(local.ChannelId);
+            var m = await Api.SendMessage(local.ChannelId, local.Content, local.ReplyTo?.Id, local.Attachments.Select(a => a.Id).ToList(), local.Nonce, local.ThreadId, local.Sticker?.Id);
+            _ui(() =>
+            {
+                Store.Upsert(m, live: false);
+                if (m.ThreadId is long mt) Store.MarkThreadReadLocal(mt, m.Id); else Store.MarkReadLocal(m.ChannelId, m.Id);
+            });
+            SaveSoon(local.Key);
             return null;
         }
         catch (Exception ex)
         {
-            _ui(() => Store.FailPending(local.ChannelId, local.Nonce!));
+            _ui(() => Store.FailPending(local.Key, local.Nonce!));
             return Friendly(ex);
         }
     }
@@ -375,8 +471,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     public async Task<string?> Delete(Message m)
     {
-        if (m.Send != SendState.Sent) { Store.RemoveLocal(m.ChannelId, m.Id); return null; }
-        try { await Api.DeleteMessage(m.Id); _ui(() => Store.RemoveLocal(m.ChannelId, m.Id)); return null; }
+        if (m.Send != SendState.Sent) { Store.RemoveLocal(m.Key, m.Id); return null; }
+        try { await Api.DeleteMessage(m.Id); _ui(() => Store.RemoveLocal(m.Key, m.Id)); return null; }
         catch (Exception ex) { return Friendly(ex); }
     }
 
@@ -391,13 +487,14 @@ public sealed partial class GibCordClient : IAsyncDisposable
         catch (Exception ex) { return Friendly(ex); }
     }
 
-    /// <summary>„pisze…” — najwyżej co 3 s na kanał.</summary>
+    /// <summary>„pisze…” — najwyżej co 3 s na kanał (albo wątek: klucz ujemny).</summary>
     public void Typing(long cid)
     {
         var now = Environment.TickCount64;
         if (now - _typingSent.GetValueOrDefault(cid) < 3000) return;
         _typingSent[cid] = now;
-        _ = _gw?.Send(new { t = "typing", channelId = cid });
+        var (ch, th) = Where(cid);
+        _ = _gw?.Send(th is long t ? new { t = "typing", channelId = ch, threadId = (long?)t } : new { t = "typing", channelId = ch, threadId = (long?)null });
     }
 
     public void StoppedTyping(long cid) => _typingSent.Remove(cid);
