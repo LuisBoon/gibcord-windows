@@ -581,7 +581,40 @@ public sealed class SettingsPage : Grid
         foreach (var (k, w) in Shortcuts) keys.Add(Shortcut(k, w));
         keys.Add(Toggle("Skróty Ctrl+Shift+M i Ctrl+Shift+D w całym systemie w trakcie rozmowy", p.GlobalShortcuts, v => { p.GlobalShortcuts = v; p.Save(); _sh.W.Keys?.Sync(); }));
         _body.Add(Card(keys));
+        _body.Add(Card(Label("Pomoc i diagnostyka"),
+            U.T("Coś nie działa (np. głos)? Skopiuj dane diagnostyczne i wklej je osobie, która pomaga. Nie zawierają haseł ani treści wiadomości.", 12.5, null, Theme.Mu, wrap: true),
+            U.H(8,
+                U.Ghost("Kopiuj dane diagnostyczne", () => { Sidebar.Copy(Diagnostics()); _sh.Info("Skopiowano — wklej to (Ctrl+V) w wiadomości."); }, 34),
+                U.Ghost("Otwórz folder z dziennikiem", () => _ = Launcher.LaunchFolderPathAsync(App.DataDir), 34))));
         _body.Add(Card(Label("Strona"), U.Ghost("Otwórz GibCorda w przeglądarce", () => _ = Launcher.LaunchUriAsync(Api.BaseUri), 34).With(b => b.HorizontalAlignment = HorizontalAlignment.Left)));
+    }
+
+    /// <summary>Wersja, system, urządzenia dźwięku, stan rozmowy i końcówka dziennika — bez tokenów i treści wiadomości.</summary>
+    string Diagnostics()
+    {
+        var c = _sh.C;
+        var v = c.Voice;
+        var o = v.Options;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"GibCord {Updater.Version} · Windows {Environment.OSVersion.Version} · {(Environment.Is64BitProcess ? "x64" : "x86")} · .NET {Environment.Version}");
+        sb.AppendLine($"Serwer: {Api.BaseUri.Host} · połączenie: {c.Status} · ping: {(c.Rtt is { } r ? Math.Round(r.TotalMilliseconds) + " ms" : "—")}");
+        sb.AppendLine($"Motyw: {App.Prefs.Theme} · skala: {XamlRoot?.RasterizationScale:0.##}");
+        try
+        {
+            sb.AppendLine("Mikrofony: " + string.Join(" | ", AudioDevices.Inputs().Select(d => d.Name)));
+            sb.AppendLine("Głośniki: " + string.Join(" | ", AudioDevices.Outputs().Select(d => d.Name)));
+        }
+        catch (Exception ex) { sb.AppendLine("Urządzenia: błąd " + ex.Message); }
+        sb.AppendLine($"Wybrane: mikrofon „{(o.InputDevice == "" ? "domyślny" : o.InputDevice)}”, głośniki „{(o.OutputDevice == "" ? "domyślne" : o.OutputDevice)}”");
+        sb.AppendLine($"Tryb: {o.Mode} · czułość auto: {o.AutoSens} · szumy: {o.NoiseSuppression} · echo: {o.EchoCancellation} · wzmocnienie: {o.AutoGain}");
+        sb.AppendLine($"Rozmowa: kanał {c.VoiceChannelId} · silnik: {v.State} · jakość: {v.Quality} · wyciszony: {o.Muted} · bez dźwięku: {o.Deafened}");
+        sb.AppendLine($"Dźwięk: {(_sh.W.Voice?.AudioError ?? "bez błędów")}");
+        sb.AppendLine("— dziennik (ostatnie 80 linii) —");
+        sb.AppendLine(App.LogTail(80));
+        // na wszelki wypadek: tokeny (JWT, ?token=…) i adresy e-mail nie wychodzą z komputera
+        var text = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), @"eyJ[\w-]+\.[\w-]+\.[\w-]+", "[token]");
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"((?:access_)?token=)[^&\s""]+", "$1[ukryty]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return System.Text.RegularExpressions.Regex.Replace(text, @"[\w.+-]+@[\w-]+\.[\w.-]+", "[e-mail]");
     }
 
     /// <summary>Wszystkie skróty — w ustawieniach i w ściądze pod Ctrl+/.</summary>

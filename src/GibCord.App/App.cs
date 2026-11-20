@@ -49,9 +49,33 @@ public sealed class App : Application, IXamlMetadataProvider
         catch (Exception ex) { Log("Błąd w OnLaunched: " + ex); throw; }
     }
 
+    static readonly object _logLock = new();
+    public static string LogPath => Path.Combine(DataDir, "dziennik.txt");
+
+    /// <summary>Dziennik w %LocalAppData%: najwyżej ~2 MB, potem poprzedni trafia do dziennik-stary.txt.</summary>
     public static void Log(string line)
     {
-        try { Directory.CreateDirectory(DataDir); File.AppendAllText(Path.Combine(DataDir, "dziennik.txt"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {line}{Environment.NewLine}"); } catch { }
+        lock (_logLock)
+        {
+            try
+            {
+                Directory.CreateDirectory(DataDir);
+                var p = LogPath;
+                if (File.Exists(p) && new FileInfo(p).Length > 2_000_000) File.Move(p, Path.Combine(DataDir, "dziennik-stary.txt"), true);
+                File.AppendAllText(p, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {line}{Environment.NewLine}");
+            }
+            catch { }
+        }
+    }
+
+    /// <summary>Ostatnie linie dziennika (do „Kopiuj dane diagnostyczne”).</summary>
+    public static string LogTail(int lines)
+    {
+        lock (_logLock)
+        {
+            try { return File.Exists(LogPath) ? string.Join(Environment.NewLine, File.ReadLines(LogPath).TakeLast(lines)) : "(pusty)"; }
+            catch (Exception ex) { return "(nie da się odczytać: " + ex.Message + ")"; }
+        }
     }
 }
 
