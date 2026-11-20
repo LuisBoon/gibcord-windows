@@ -286,10 +286,11 @@ public sealed class MainWindow : Window
     {
         try
         {
-            await Task.Delay(Options.View == "switcher" || Options.View == "profile" ? 3500 : 2500);
+            await Task.Delay(Options.View is "switcher" or "profile" or "emoji" ? 3500 : 2500);
             if (Options.View == "switcher") _shell?.OpenSwitcher();
             if (Options.View == "profile") _shell?.ShowProfileDemo();
-            if (Options.View is "switcher" or "profile") await Task.Delay(1200);
+            if (Options.View == "emoji") _shell?.ShowPickerDemo();
+            if (Options.View is "switcher" or "profile" or "emoji") await Task.Delay(1200);
             var rtb = new RenderTargetBitmap();
             await rtb.RenderAsync(_root);
             var pixels = await rtb.GetPixelsAsync();

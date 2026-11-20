@@ -48,7 +48,8 @@ public static class Picker
 {
     public enum Tab { Emoji, Gif, Sticker }
 
-    public static void Show(FrameworkElement anchor, ChatView v, Tab tab, Action<string> pickEmoji, Action<GifItem>? pickGif, Action<Sticker>? pickSticker, bool emojiOnly = false)
+    public static void Show(FrameworkElement anchor, ChatView v, Tab tab, Action<string> pickEmoji, Action<GifItem>? pickGif, Action<Sticker>? pickSticker, bool emojiOnly = false,
+        Action<FrameworkElement>? demoHost = null)
     {
         var sh = v.Sh;
         var s = v.S;
@@ -324,6 +325,7 @@ public static class Picker
         };
         if (cur == Tab.Gif && pickGif is null) cur = Tab.Emoji;
         Draw();
+        if (demoHost is not null) { demoHost(new Border { Child = root, Background = U.B("#FA2a2147"), CornerRadius = new CornerRadius(12), Padding = U.Th(10) }); return; }
         fly.Content = root;
         fly.Opened += (_, _) => search.Focus(FocusState.Programmatic);
         fly.ShowAt(anchor);

@@ -475,6 +475,13 @@ public sealed class Shell : Grid
 
     public void ShowProfile(long uid, FrameworkElement anchor) => ProfileCard.Show(this, uid, anchor);
 
+    /// <summary>Zrzut w CI: okienko emoji na środku.</summary>
+    public void ShowPickerDemo()
+    {
+        if (_chat is null) return;
+        Picker.Show(_chat, _chat, Picker.Tab.Emoji, _ => { }, _ => { }, _ => { }, demoHost: el => ShowOverlay(el));
+    }
+
     /// <summary>Zrzut w CI: karta profilu na środku (dymki nie trafiają na zrzut okna).</summary>
     public void ShowProfileDemo()
     {
