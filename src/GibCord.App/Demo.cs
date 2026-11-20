@@ -94,8 +94,8 @@ public static class Demo
         return new StateResponse
         {
             Me = me, Users = users, Servers = [eg, gc, sz, mc],
-            Dms = [new Dm { Id = DmOla, UserIds = [MeId, OlaId], LastMessageId = 3005 }, new Dm { Id = 201, UserIds = [MeId, KubaId], LastMessageId = 3100 }, new Dm { Id = 202, Type = "group", Name = "Sobota 🎮", UserIds = [MeId, OlaId, KubaId, BonkusId], LastMessageId = 2500 }],
-            Reads = new() { [Ogolne] = 1007, [Memy] = 1990, [Granie] = 500, [Nauka] = 400, [300] = 9, [301] = 5, [302] = 40, [DmOla] = 3005, [201] = 3000, [202] = 2500 },
+            Dms = [new Dm { Id = DmOla, UserIds = [MeId, OlaId], LastMessageId = 3007 }, new Dm { Id = 201, UserIds = [MeId, KubaId], LastMessageId = 3100 }, new Dm { Id = 202, Type = "group", Name = "Sobota 🎮", UserIds = [MeId, OlaId, KubaId, BonkusId], LastMessageId = 2500 }],
+            Reads = new() { [Ogolne] = 1007, [Memy] = 1990, [Granie] = 500, [Nauka] = 400, [300] = 9, [301] = 5, [302] = 40, [DmOla] = 3007, [201] = 3000, [202] = 2500 },
             Voice = new()
             {
                 [Pogaduchy] = [new VoiceMember { UserId = MeId }, new VoiceMember { UserId = OlaId }, new VoiceMember { UserId = KubaId, Muted = true }],
@@ -151,5 +151,7 @@ public static class Demo
         Msg(3003, DmOla, OlaId, "to jest szybsze niż discord serio", now - 38 * 60000),
         Msg(3004, DmOla, OlaId, "i ładniejsze", now - 38 * 60000 + 5000),
         Msg(3005, DmOla, MeId, "dzięki ❤️ jutro dorzucę głos", now - 20 * 60000),
+        Msg(3006, DmOla, OlaId, "", now - 3 * 60000).With(m => m.Game = J(new { kind = "ttt", players = new[] { OlaId, MeId }, board = "X.O.X....", turn = MeId })),
+        Msg(3007, DmOla, MeId, "", now - 60000).With(m => m.Game = J(new { kind = "dice", count = 2, sides = 6, rolls = new[] { 4, 6 }, total = 10 })),
     ];
 }
