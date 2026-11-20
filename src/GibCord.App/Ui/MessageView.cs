@@ -152,7 +152,8 @@ public sealed partial class MessageView : Grid
 
     FrameworkElement Normal(Message m, Row row)
     {
-        var grid = new Grid { Padding = U.Th(16, row.Grouped ? 1 : 8, 16, 2) }.Cols("56", "*");
+        var compact = App.Prefs.CompactMessages;
+        var grid = new Grid { Padding = U.Th(16, row.Grouped ? (compact ? 0 : 1) : (compact ? 3 : 8), 16, compact ? 0 : 2) }.Cols(compact ? "48" : "56", "*");
         var mentioned = m.AuthorId != S.Me.Id && S.MentionsMe(m);
         if (mentioned) Background = Theme.MentionedRow;
         var body = new StackPanel { Spacing = 3 };
@@ -168,25 +169,28 @@ public sealed partial class MessageView : Grid
             grid.Add(line.At(0, 0, colSpan: 2));
             r = 1;
         }
-        if (row.Grouped)
+        if (row.Grouped || compact)
         {
             var t = U.T(Format.Time(m.CreatedAt), 10.5, null, Theme.Mu2);
-            t.HorizontalAlignment = HorizontalAlignment.Center;
+            t.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Center;
             t.VerticalAlignment = VerticalAlignment.Top;
-            t.Margin = U.Th(0, 4, 0, 0);
-            t.Opacity = 0;
-            grid.PointerEntered += (_, _) => t.Opacity = 1;
-            grid.PointerExited += (_, _) => t.Opacity = 0;
+            t.Margin = U.Th(0, compact ? 3 : 4, 0, 0);
+            t.Opacity = compact ? 1 : 0;
+            t.Tip(Format.Full(m.CreatedAt));
+            if (!compact) { grid.PointerEntered += (_, _) => t.Opacity = 1; grid.PointerExited += (_, _) => t.Opacity = 0; }
             grid.Add(t.At(r, 0));
         }
-        else
+        if (!row.Grouped)
         {
-            var av = new Avatar(40).Set(S, Api, m.AuthorId, Srv);
-            av.VerticalAlignment = VerticalAlignment.Top;
-            av.Margin = U.Th(0, 2, 0, 0);
-            av.Tapped += (_, e) => { e.Handled = true; _v.Sh.ShowProfile(m.AuthorId, av); };
-            av.RightTapped += (_, e) => { e.Handled = true; UserMenu.Build(_v.Sh, m.AuthorId, Srv, _v, av).ShowAt(av, e.GetPosition(av)); };
-            grid.Add(av.At(r, 0));
+            if (!compact)
+            {
+                var av = new Avatar(40).Set(S, Api, m.AuthorId, Srv);
+                av.VerticalAlignment = VerticalAlignment.Top;
+                av.Margin = U.Th(0, 2, 0, 0);
+                av.Tapped += (_, e) => { e.Handled = true; _v.Sh.ShowProfile(m.AuthorId, av); };
+                av.RightTapped += (_, e) => { e.Handled = true; UserMenu.Build(_v.Sh, m.AuthorId, Srv, _v, av).ShowAt(av, e.GetPosition(av)); };
+                grid.Add(av.At(r, 0));
+            }
             var name = U.T(S.NameOf(m.AuthorId, Srv), 14.5, U.Bold, U.B(S.NameColor(m.AuthorId, Srv)));
             name.Tapped += (_, e) => { e.Handled = true; _v.Sh.ShowProfile(m.AuthorId, name); };
             name.RightTapped += (_, e) => { e.Handled = true; UserMenu.Build(_v.Sh, m.AuthorId, Srv, _v, name).ShowAt(name, e.GetPosition(name)); };
@@ -196,9 +200,12 @@ public sealed partial class MessageView : Grid
                 head.Add(U.T(ri.Icon!, 13).With(t => t.Tip(ri.Name)));
             if (S.U(m.AuthorId) is { BirthdayToday: true }) head.Add(U.T("🎂", 12).With(t => t.Tip("Dziś ma urodziny!")));
             if (m.PinnedAt is not null) head.Add(U.I("\uE718", 11, Theme.Mu2).With(i => i.Tip("Przypięta")));
-            var time = U.T(Format.When(m.CreatedAt), 11, null, Theme.Mu2);
-            time.Tip(Format.Full(m.CreatedAt));
-            head.Add(time);
+            if (!compact)
+            {
+                var time = U.T(Format.When(m.CreatedAt), 11, null, Theme.Mu2);
+                time.Tip(Format.Full(m.CreatedAt));
+                head.Add(time);
+            }
             body.Children.Add(head);
         }
 

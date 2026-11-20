@@ -550,7 +550,9 @@ public sealed class SettingsPage : Grid
         foreach (var label in new[] { "Mały", "Zwykły", "Duży", "Bardzo duży" }) fontSize.Items.Add(label);
         fontSize.SelectedIndex = Math.Max(0, Array.IndexOf(sizes, p.MessageFontSize));
         fontSize.SelectionChanged += (_, _) => { p.MessageFontSize = sizes[Math.Max(0, fontSize.SelectedIndex)]; p.Save(); _sh.CurrentChat?.Rerender(); };
-        _body.Add(Card(Label("Wygląd wiadomości"), fontSize, U.T("Zmiana działa od razu w otwartej rozmowie.", 11.5, null, Theme.Mu2)));
+        _body.Add(Card(Label("Wygląd wiadomości"), fontSize,
+            Toggle("Tryb zwarty (bez awatarów, godzina przy każdej wiadomości)", p.CompactMessages, v => { p.CompactMessages = v; p.Save(); _sh.CurrentChat?.Rerender(); }),
+            U.T("Zmiana działa od razu w otwartej rozmowie.", 11.5, null, Theme.Mu2)));
         _body.Add(Card(Label("Okno"),
             Toggle("Zamykanie do zasobnika (obok zegara)", p.CloseToTray, v => { p.CloseToTray = v; p.Save(); }),
             Toggle("Uruchamiaj razem z Windowsem", AutoStart.Enabled, AutoStart.Set),

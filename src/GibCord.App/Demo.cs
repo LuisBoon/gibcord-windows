@@ -48,6 +48,7 @@ public static class Demo
             case "thread": sh.Go(Eg, Ogolne); sh.OpenThread(1); break;
             case "search": sh.Go(Eg, Ogolne); sh.OpenSearch("sobot"); break;
             case "settings": sh.Go(Eg, Ogolne); sh.ShowSettings("profile"); break;
+            case "compact": App.Prefs.CompactMessages = true; sh.Go(Eg, Ogolne); break;
             case "inbox":
                 sh.Go(Eg, Ogolne);
                 foreach (var m in sh.C.Store.Window(Ogolne).Items.Where(x => x.Mentions.Count > 0).Take(3)) Inbox.AddMention(m, sh.C.Store);
