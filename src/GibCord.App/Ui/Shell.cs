@@ -806,6 +806,30 @@ public sealed class Shell : Grid
     public void ShowProfile(long uid, FrameworkElement anchor) => ProfileCard.Show(this, uid, anchor);
 
     /// <summary>Zrzut w CI: okienko emoji na środku.</summary>
+    /// <summary>Tryb pokazowy: edytor obrazka na przykładowym „zrzucie ekranu” z czatu.</summary>
+    public void DemoImageEditor()
+    {
+        using var bmp = new System.Drawing.Bitmap(1280, 720);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using var bg = new System.Drawing.Drawing2D.LinearGradientBrush(new System.Drawing.Rectangle(0, 0, 1280, 720), System.Drawing.Color.FromArgb(29, 107, 116), System.Drawing.Color.FromArgb(107, 45, 124), 35f);
+            g.FillRectangle(bg, 0, 0, 1280, 720);
+            using var panel = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(70, 0, 0, 0));
+            g.FillRectangle(panel, 80, 80, 1120, 560);
+            using var white = new System.Drawing.SolidBrush(System.Drawing.Color.White);
+            using var f1 = new System.Drawing.Font("Segoe UI", 34, System.Drawing.FontStyle.Bold);
+            using var f2 = new System.Drawing.Font("Segoe UI", 26);
+            g.DrawString("Ustawienia konta", f1, white, 130, 120);
+            g.DrawString("Nick: kubus_2009", f2, white, 130, 230);
+            g.DrawString("E-mail: kuba.nowak@example.pl", f2, white, 130, 300);
+            g.DrawString("Telefon: 600 123 456", f2, white, 130, 370);
+        }
+        using var ms = new MemoryStream();
+        bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+        _ = ImageEditor.Open(this, ms.ToArray(), "zrzut-ekranu.png");
+    }
+
     public void ShowPickerDemo()
     {
         if (_chat is null) return;

@@ -466,7 +466,7 @@ public sealed class MainWindow : Window
     {
         try
         {
-            await Task.Delay(Options.View is "switcher" or "profile" or "emoji" or "overlay" or "adminmail" ? 3500 : 2500);
+            await Task.Delay(Options.View is "switcher" or "profile" or "emoji" or "overlay" or "adminmail" or "imgedit" ? 3500 : 2500);
             if (Options.View == "switcher") _shell?.OpenSwitcher();
             if (Options.View == "profile") _shell?.ShowProfileDemo();
             if (Options.View == "emoji") _shell?.ShowPickerDemo();
@@ -479,7 +479,10 @@ public sealed class MainWindow : Window
             }
             if (Options.View is "switcher" or "profile" or "emoji" or "overlay") await Task.Delay(1200);
             var rtb = new RenderTargetBitmap();
-            await rtb.RenderAsync(_root);
+            // okienko (ContentDialog) leży w warstwie wyskakujących — zrzut z niej, gdy jest otwarte
+            UIElement target = _root;
+            if (Options.View == "imgedit" && Microsoft.UI.Xaml.Media.VisualTreeHelper.GetOpenPopupsForXamlRoot(_root.XamlRoot).FirstOrDefault(p => p.Child is ContentDialog) is { Child: { } dc }) target = dc;
+            await rtb.RenderAsync(target);
             var pixels = await rtb.GetPixelsAsync();
             using var stream = new InMemoryRandomAccessStream();
             var enc = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);

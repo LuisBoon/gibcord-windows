@@ -48,6 +48,9 @@ public sealed partial class Composer : StackPanel
     {
         public string Name = "";
         public Attachment? Att;
+        /// <summary>Obrazek do edycji przed wysłaniem (PNG/JPEG/BMP do 30 MB).</summary>
+        public byte[]? Data;
+        public string? Mime;
         public string? Error;
         public Task? Upload;
     }
@@ -621,11 +624,22 @@ public sealed partial class Composer : StackPanel
     {
         var max = _v.Sh.C.Info?.Limits.AttachmentsPerMessage ?? 10;
         if (_pending.Count >= max) { _v.Sh.Info($"Najwyżej {max} plików w jednej wiadomości.", true); data.Dispose(); return; }
-        var p = new Pending { Name = name };
+        var p = new Pending { Name = name, Mime = mime };
         _pending.Add(p);
         DrawFiles();
+        var editable = ImageEditor.CanEdit(name, mime) && size <= 30 * 1024 * 1024;
         p.Upload = Task.Run(async () =>
         {
+            if (editable)
+            {
+                // kopia w pamięci — do miniaturki i edytora
+                var mem = new MemoryStream();
+                await data.CopyToAsync(mem);
+                data.Dispose();
+                var bytes = mem.ToArray();
+                data = new MemoryStream(bytes);
+                _v.Sh.W.UiRun(() => { p.Data = bytes; DrawFiles(); });
+            }
             var (att, err) = await _v.Sh.C.Upload(data, name, mime, size);
             data.Dispose();
             _v.Sh.W.UiRun(() => { p.Att = att; p.Error = err; DrawFiles(); if (err is not null) _v.Sh.Info($"{name}: {err}", true); });
@@ -640,10 +654,45 @@ public sealed partial class Composer : StackPanel
         {
             var state = p.Error is not null ? U.I("", 14, Theme.Red) : p.Att is null ? new ProgressRing { IsActive = true, Width = 14, Height = 14 } : (FrameworkElement)U.I("", 14, Theme.Green);
             var x = U.IconButton("", "Usuń z wiadomości", () => { _pending.Remove(p); DrawFiles(); }, 10, 22);
-            var card = U.Box(U.H(8, state, U.T(p.Name, 12.5, U.Semi).With(t => t.MaxWidth = 180), x), U.W(.08), 10, U.Th(10, 4, 4, 4));
+            FrameworkElement? thumb = null, edit = null;
+            if (p.Data is { } img)
+            {
+                var bi = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage { DecodePixelHeight = 56 };
+                _ = LoadThumb(bi, img);
+                thumb = new Border { Width = 28, Height = 28, CornerRadius = new CornerRadius(6), Child = new Image { Source = bi, Stretch = Microsoft.UI.Xaml.Media.Stretch.UniformToFill } };
+                edit = U.IconButton("\uE70F", "Edytuj obrazek (przytnij, zamaż, rysuj)", () => EditPending(p), 12, 24);
+            }
+            var card = U.Box(U.H(8, thumb ?? state, U.T(p.Name, 12.5, U.Semi).With(t => t.MaxWidth = 180), thumb is null ? null : state, edit, x), U.W(.08), 10, U.Th(thumb is null ? 10 : 4, 4, 4, 4));
             _files.Children.Add(card);
         }
         _files.Visibility = _pending.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    static async Task LoadThumb(Microsoft.UI.Xaml.Media.Imaging.BitmapImage bi, byte[] data)
+    {
+        try
+        {
+            using var ras = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+            using (var w = ras.AsStreamForWrite()) { await w.WriteAsync(data); await w.FlushAsync(); }
+            ras.Seek(0);
+            await bi.SetSourceAsync(ras);
+        }
+        catch { }
+    }
+
+    /// <summary>Edycja obrazka przed wysłaniem — wynik idzie jako nowy plik (stary, już przesłany, serwer sprzątnie).</summary>
+    async void EditPending(Pending p)
+    {
+        if (p.Data is not { } data) return;
+        var r = await ImageEditor.Open(_v.Sh, data, p.Name);
+        if (r is not { } got) return;
+        var i = _pending.IndexOf(p);
+        if (i < 0) return;
+        _pending.RemoveAt(i);
+        var name = System.IO.Path.GetFileNameWithoutExtension(p.Name) + (got.Mime == "image/jpeg" ? ".jpg" : ".png");
+        AddStream(new MemoryStream(got.Data), name, got.Mime, got.Data.Length);
+        // nowa karta trafia na koniec listy — wraca na stare miejsce
+        if (_pending.Count > 0 && i < _pending.Count - 1) { var n = _pending[^1]; _pending.RemoveAt(_pending.Count - 1); _pending.Insert(i, n); DrawFiles(); }
     }
 
     void ClearFiles()

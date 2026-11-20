@@ -71,6 +71,19 @@ public static class Demo
                 sh.Go(0, DmOla);
                 sh.StartCall(DmOla);
                 break;
+            case "imgedit": sh.Go(Eg, Ogolne); sh.DemoImageEditor(); break;
+            case "later":
+            {
+                sh.C.DemoScheduled = true;
+                var now = Format.NowMs();
+                var tomorrow8 = new DateTimeOffset(DateTime.Today.AddDays(1).AddHours(8)).ToUnixTimeMilliseconds();
+                sh.C.Store.LoadScheduled([
+                    new ScheduledMessage { Id = 1, ChannelId = Ogolne, Content = "Wszystkiego najlepszego, Ola! 🎂🎉", SendAt = tomorrow8, CreatedAt = now },
+                    new ScheduledMessage { Id = 2, ChannelId = Ogolne, Content = "Przypominam: o 20:00 turniej, nie spóźniać się", SendAt = tomorrow8 + 12 * 3600_000, CreatedAt = now },
+                ]);
+                sh.Go(Eg, Ogolne);
+                break;
+            }
             default: sh.Go(Eg, Ogolne); break;
         }
     }

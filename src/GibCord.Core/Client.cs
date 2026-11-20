@@ -208,7 +208,9 @@ public sealed partial class GibCordClient : IAsyncDisposable
     // ───────────────────────── zaplanowane wiadomości i notatki o osobach ─────────────────────────
 
     /// <summary>Serwer wysyła wiadomości o czasie (nowy serwer C#).</summary>
-    public bool CanSchedule => Info?.Has("scheduled") == true && !Offline;
+    public bool CanSchedule => DemoScheduled || (Info?.Has("scheduled") == true && !Offline);
+    /// <summary>Tryb pokazowy: pokaż „Wyślij później” bez serwera.</summary>
+    public bool DemoScheduled { get; set; }
     /// <summary>Notatki są na serwerze (wszystkie urządzenia); inaczej tylko na tym komputerze.</summary>
     public bool NotesSynced => Info?.Has("notes") == true;
 
