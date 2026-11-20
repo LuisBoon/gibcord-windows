@@ -231,12 +231,8 @@ public sealed class GibCordApi : IDisposable
     // ── serwery, zaproszenia, powiadomienia ──
     public async Task<string> CreateInvite(long serverId, CancellationToken ct = default) =>
         (await Send(HttpMethod.Post, $"servers/{serverId}/invites", ct: ct).ConfigureAwait(false)).Str("code") ?? "";
-    public async Task<(long Id, string Name, int Members)> GetInvite(string code, CancellationToken ct = default)
-    {
-        var e = await Send(HttpMethod.Get, "invites/" + Uri.EscapeDataString(code), ct: ct).ConfigureAwait(false);
-        var sv = e.Prop("server");
-        return (sv.Long("id") ?? 0, sv.Str("name") ?? "", (int)(sv.Long("memberCount") ?? 0));
-    }
+    public async Task<InviteInfo> GetInvite(string code, CancellationToken ct = default) =>
+        (await Send(HttpMethod.Get, "invites/" + Uri.EscapeDataString(code), ct: ct).ConfigureAwait(false)).Prop("server").To<InviteInfo>() ?? throw new ApiException(404, "Zaproszenie nie działa");
     public Task<Server> JoinInvite(string code, CancellationToken ct = default) => Send<Server>(HttpMethod.Post, $"invites/{Uri.EscapeDataString(code)}/join", ct: ct);
     public Task<Server> CreateServer(string name, CancellationToken ct = default) => Send<Server>(HttpMethod.Post, "servers", new { name }, ct);
     public Task LeaveServer(long serverId, CancellationToken ct = default) => Send(HttpMethod.Post, $"servers/{serverId}/leave", ct: ct);

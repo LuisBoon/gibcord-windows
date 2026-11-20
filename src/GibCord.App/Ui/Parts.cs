@@ -173,7 +173,12 @@ public static class RichText
             case LinkSpan l:
             {
                 var h = new Hyperlink { Foreground = LinkBrush, UnderlineStyle = UnderlineStyle.None };
-                if (Uri.TryCreate(l.Url, UriKind.Absolute, out var u)) h.NavigateUri = u;
+                if (Uri.TryCreate(l.Url, UriKind.Absolute, out var u))
+                {
+                    // linki do GibCorda (kanał, wątek, rozmowa, zaproszenie) otwieramy w aplikacji
+                    if (Links.IsOwn(u) && App.Window?.CurrentShell is { } sh) h.Click += (_, _) => Links.Open(sh, u);
+                    else h.NavigateUri = u;
+                }
                 h.Inlines.Add(Styled(new Run { Text = l.Url }, l.Style));
                 ToolTipService.SetToolTip(h, l.Url);
                 return h;

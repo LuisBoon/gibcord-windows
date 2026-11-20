@@ -163,6 +163,7 @@ public sealed partial class MessageView : Grid
         if (m.Game.ValueKind == JsonValueKind.Object && m.Type == "default") body.Children.Add(Fun.GameView(_v, m));
         foreach (var a in m.Attachments) body.Children.Add(AttachmentView(a));
         foreach (var yt in Markup.YouTubeIds(m.Content)) body.Children.Add(YouTube(yt));
+        foreach (var code in Links.InviteCodes(m.Content)) body.Children.Add(Links.InviteCard(_v.Sh, code));
         if (m.Reactions.Count > 0) body.Children.Add(Reactions(m));
         if (m.Thread.ValueKind == JsonValueKind.Object && !IsStarter && !_v.IsThread) body.Children.Add(ThreadChip(m.Thread));
         if (m.Send == SendState.Failed)

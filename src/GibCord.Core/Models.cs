@@ -206,6 +206,19 @@ public sealed class Sound
     public double Volume { get; set; } = 1;
 }
 
+/// <summary>Serwer z zaproszenia (GET /api/invites/:code) — do karty „Dołącz”.</summary>
+public sealed class InviteInfo
+{
+    public long Id { get; set; }
+    public string Name { get; set; } = "";
+    public string? Icon { get; set; }
+    public string? Banner { get; set; }
+    public string? Description { get; set; }
+    public long CreatedAt { get; set; }
+    public int MemberCount { get; set; }
+    public int OnlineCount { get; set; }
+}
+
 /// <summary>Wynik wyszukiwania wiadomości (GET /api/search).</summary>
 public sealed class SearchResult
 {
