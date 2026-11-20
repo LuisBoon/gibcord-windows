@@ -74,6 +74,7 @@ public sealed partial class WatchPanel : Grid, IDisposable
         _timer.Interval = TimeSpan.FromMilliseconds(500);
         _timer.Tick += (_, _) => Tick();
         _timer.Start();
+        DrawControls(W);
         _ = Init();
     }
 
@@ -173,7 +174,7 @@ public sealed partial class WatchPanel : Grid, IDisposable
         {
             var pos = w.Now(Format.NowMs());
             _seek.Maximum = Math.Max(1, _duration);
-            _seek.Value = Math.Min(_seek.Maximum, pos);
+            _seek.Value = _duration > 0 ? Math.Min(_seek.Maximum, pos) : 0; // długość jeszcze nieznana — pasek pusty
             _time.Text = _duration > 0 ? $"{Fmt(pos)} / {Fmt(_duration)}" : Fmt(pos);
         }
         // co ~2 s sprawdzamy, czy nie odjechaliśmy od reszty
