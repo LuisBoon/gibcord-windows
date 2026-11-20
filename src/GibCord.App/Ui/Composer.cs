@@ -39,6 +39,7 @@ public sealed partial class Composer : StackPanel
     Message? _editing;
     List<(string Label, string Insert)> _sugg = [];
     int _suggIdx;
+    bool _emojiMode; // podpowiedzi „:serce” zamiast „@osoba”
     int _atStart = -1;
 
     sealed class Pending
@@ -209,9 +210,40 @@ public sealed partial class Composer : StackPanel
     [GeneratedRegex(@"(?:^|\s)@([\p{L}\p{N}_.]{0,32})$")]
     private static partial Regex AtRe();
 
+    [GeneratedRegex(@"(?:^|\s):([\p{L}\p{N}_]{2,32})$")]
+    private static partial Regex ColonRe();
+
+    /// <summary>„:ser” → ❤️ serce, emoji serwerów (najpierw z tego serwera), ostatnio używane wyżej.</summary>
+    bool EmojiSuggest(string upto)
+    {
+        var m = ColonRe().Match(upto);
+        if (!m.Success) return false;
+        var q = Fold(m.Groups[1].Value);
+        var list = new List<(string Label, string Insert)>();
+        foreach (var srv in S.Servers.Where(x => x.Emojis.Count > 0).OrderByDescending(x => x.Id == _v.Srv?.Id))
+            foreach (var e in srv.Emojis.Where(e => Fold(e.Name).StartsWith(q) || (q.Length >= 3 && Fold(e.Name).Contains(q))))
+            {
+                if (list.Count >= 4) break;
+                list.Add(($":{e.Name}:  ·  {srv.Name}", $"<{(e.Animated ? "a" : "")}:{e.Name}:{e.Id}>"));
+            }
+        var recent = App.Prefs.RecentEmoji;
+        foreach (var (e, keys) in EmojiData.All
+            .Where(x => Fold(x.Keys).Split(' ').Any(w => w.StartsWith(q)))
+            .OrderBy(x => recent.IndexOf(x.E) is var i && i >= 0 ? i : 999)
+            .Take(8 - list.Count))
+            list.Add((keys, e));
+        if (list.Count == 0) return false;
+        _emojiMode = true;
+        _sugg = list;
+        _atStart = upto.Length - m.Groups[1].Value.Length - 1;
+        return true;
+    }
+
     void UpdateSuggest()
     {
         var upto = _box.Text[..Math.Min(_box.SelectionStart, _box.Text.Length)];
+        if (EmojiSuggest(upto)) { ShowSuggest(); return; }
+        _emojiMode = false;
         var m = AtRe().Match(upto);
         if (!m.Success) { HideSuggest(); return; }
         var q = Fold(m.Groups[1].Value);
@@ -236,6 +268,11 @@ public sealed partial class Composer : StackPanel
         if (_v.Srv is not null && S.Can(_v.Cid, Perm.MentionEveryone) && ("wszyscy".StartsWith(q) || "everyone".StartsWith(q)))
             _sugg.Add(("@wszyscy — powiadamia wszystkich na kanale", "@everyone|0"));
         if (_sugg.Count == 0) { HideSuggest(); return; }
+        ShowSuggest();
+    }
+
+    void ShowSuggest()
+    {
         _suggIdx = Math.Min(_suggIdx, _sugg.Count - 1);
         DrawSuggest();
         if (!_suggest.IsOpen)
@@ -256,7 +293,11 @@ public sealed partial class Composer : StackPanel
             var (label, ins) = _sugg[i];
             var key = ins[(ins.LastIndexOf('|') + 1)..];
             UIElement icon;
-            if (key.StartsWith('r')) icon = new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 14, Height = 14, Margin = U.Th(5, 0), Fill = U.B(S.RoleById(long.Parse(key[1..]))?.Color ?? "#8b8599") };
+            if (_emojiMode)
+                icon = Markup.ParseInline(ins).FirstOrDefault() is EmojiSpan es && S.EmojiById(es.Id) is { } ce
+                    ? new Image { Source = Images.Get(_v.Sh.C.Api.Abs(ce.Url), 48), Width = 22, Height = 22 }
+                    : U.T(ins, 18).With(t => { t.Width = 24; t.TextAlignment = TextAlignment.Center; });
+            else if (key.StartsWith('r')) icon = new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 14, Height = 14, Margin = U.Th(5, 0), Fill = U.B(S.RoleById(long.Parse(key[1..]))?.Color ?? "#8b8599") };
             else { var uid = long.Parse(key); icon = uid == 0 ? U.I("\uE716", 16) : new Avatar(24).Set(S, _v.Sh.C.Api, uid, _v.Srv); }
             var row = U.Row(U.H(10, icon, U.T(label, 13.5, U.Semi)), () => Accept(idx), i == _suggIdx, 8, U.Th(8, 0), U.Th(0, 1));
             row.Height = 34;
@@ -270,6 +311,15 @@ public sealed partial class Composer : StackPanel
     {
         if (i < 0 || i >= _sugg.Count || _atStart < 0) return;
         var ins = _sugg[i].Insert;
+        if (_emojiMode)
+        {
+            App.Prefs.UseEmoji(ins);
+            var endE = Math.Min(_box.SelectionStart, _box.Text.Length);
+            _box.Text = _box.Text[.._atStart] + ins + _box.Text[endE..];
+            _box.SelectionStart = _atStart + ins.Length;
+            HideSuggest();
+            return;
+        }
         var bar = ins.LastIndexOf('|');
         var name = ins[..bar];
         var key = ins[(bar + 1)..];
@@ -281,7 +331,7 @@ public sealed partial class Composer : StackPanel
         HideSuggest();
     }
 
-    void HideSuggest() { _suggest.IsOpen = false; _atStart = -1; _suggIdx = 0; }
+    void HideSuggest() { _suggest.IsOpen = false; _atStart = -1; _suggIdx = 0; _emojiMode = false; }
 
     static string Fold(string s)
     {

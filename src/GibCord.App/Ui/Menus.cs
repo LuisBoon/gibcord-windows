@@ -29,6 +29,9 @@ static class M
         return i;
     }
 
+    public static bool DialogOpen(XamlRoot? root) =>
+        root is not null && Microsoft.UI.Xaml.Media.VisualTreeHelper.GetOpenPopupsForXamlRoot(root).Any(p => p.Child is ContentDialog);
+
     /// <summary>Czeka, aż zamknie się inne okienko (dwa ContentDialogi naraz = wyjątek).</summary>
     public static async Task WaitNoDialog(XamlRoot? root)
     {

@@ -576,23 +576,35 @@ public sealed class SettingsPage : Grid
                 var err = await Updater.Check(v => _sh.ShowUpdate(v));
                 _sh.Info(err ?? "Szukam nowej wersji… jeśli jest, pojawi się pasek u góry.", err is not null);
             }, 34).With(b => b.HorizontalAlignment = HorizontalAlignment.Left)));
-        _body.Add(Card(Label("Skróty klawiszowe"),
-            Shortcut("Ctrl+K", "Szybkie przejście do kanału, osoby albo serwera"),
-            Shortcut("Ctrl+F", "Szukaj wiadomości"),
-            Shortcut("Ctrl+I", "Skrzynka: wzmianki, zapisane, przypomnienia"),
-            Shortcut("Alt+↑ / Alt+↓", "Poprzedni / następny kanał"),
-            Shortcut("Alt+Shift+↑ / ↓", "Poprzedni / następny nieprzeczytany kanał"),
-            Shortcut("Alt+← / Alt+→", "Wstecz / dalej"),
-            Shortcut("↑ w pustym polu", "Edytuj ostatnią wiadomość"),
-            Shortcut("Ctrl+Shift+O", "Nakładka w grze"),
-            Shortcut("Ctrl+Shift+M", "Wycisz / włącz mikrofon (w rozmowie, działa też w grze)"),
-            Shortcut("Ctrl+Shift+D", "Wyłącz / włącz dźwięk (w rozmowie, działa też w grze)"),
-            Toggle("Skróty Ctrl+Shift+M i Ctrl+Shift+D w całym systemie w trakcie rozmowy", p.GlobalShortcuts, v => { p.GlobalShortcuts = v; p.Save(); _sh.W.Keys?.Sync(); }),
-            Shortcut("Esc", "Zamknij okienko, wątek, odpowiedź")));
+        var keys = new StackPanel { Spacing = 8 };
+        keys.Add(Label("Skróty klawiszowe"));
+        foreach (var (k, w) in Shortcuts) keys.Add(Shortcut(k, w));
+        keys.Add(Toggle("Skróty Ctrl+Shift+M i Ctrl+Shift+D w całym systemie w trakcie rozmowy", p.GlobalShortcuts, v => { p.GlobalShortcuts = v; p.Save(); _sh.W.Keys?.Sync(); }));
+        _body.Add(Card(keys));
         _body.Add(Card(Label("Strona"), U.Ghost("Otwórz GibCorda w przeglądarce", () => _ = Launcher.LaunchUriAsync(Api.BaseUri), 34).With(b => b.HorizontalAlignment = HorizontalAlignment.Left)));
     }
 
-    static FrameworkElement Shortcut(string keys, string what) => new Grid().Cols("170", "*").Add(
+    /// <summary>Wszystkie skróty — w ustawieniach i w ściądze pod Ctrl+/.</summary>
+    public static readonly (string Keys, string What)[] Shortcuts =
+    [
+        ("Ctrl+K", "Szybkie przejście do kanału, osoby albo serwera"),
+        ("Ctrl+F", "Szukaj wiadomości"),
+        ("Ctrl+I", "Skrzynka: wzmianki, zapisane, przypomnienia"),
+        ("Ctrl+/", "Ta ściąga ze skrótami"),
+        ("Alt+↑ / Alt+↓", "Poprzedni / następny kanał"),
+        ("Alt+Shift+↑ / ↓", "Poprzedni / następny nieprzeczytany kanał"),
+        ("Alt+← / Alt+→", "Wstecz / dalej"),
+        ("↑ w pustym polu", "Edytuj ostatnią wiadomość"),
+        (":serce", "Podpowiedzi emoji w polu pisania (Tab albo Enter wstawia)"),
+        ("@imię", "Oznacz osobę albo rolę"),
+        ("Shift+Enter", "Nowa linia w wiadomości"),
+        ("Ctrl+Shift+O", "Nakładka w grze"),
+        ("Ctrl+Shift+M", "Wycisz / włącz mikrofon (w rozmowie, działa też w grze)"),
+        ("Ctrl+Shift+D", "Wyłącz / włącz dźwięk (w rozmowie, działa też w grze)"),
+        ("Esc", "Zamknij okienko, wątek, odpowiedź"),
+    ];
+
+    public static FrameworkElement Shortcut(string keys, string what) => new Grid().Cols("170", "*").Add(
         U.Box(U.T(keys, 12, U.Bold).With(t => t.FontFamily = Theme.Mono), U.W(.08), 6, U.Th(8, 3)).With(b => b.HorizontalAlignment = HorizontalAlignment.Left).At(0, 0),
         U.T(what, 13, null, Theme.Mu, wrap: true).At(0, 1));
 }

@@ -93,6 +93,8 @@ public sealed class Shell : Grid
         Accel(VirtualKey.K, VirtualKeyModifiers.Control, OpenSwitcher);
         Accel(VirtualKey.F, VirtualKeyModifiers.Control, () => OpenSearch());
         Accel(VirtualKey.I, VirtualKeyModifiers.Control, () => OpenInbox());
+        Accel((VirtualKey)191, VirtualKeyModifiers.Control, () => _ = ShowShortcuts()); // Ctrl+/
+        Accel(VirtualKey.Divide, VirtualKeyModifiers.Control, () => _ = ShowShortcuts());
         KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape && FocusMode) { e.Handled = true; ToggleFocus(); Dirty(voice: true); } };
         Accel(VirtualKey.Left, VirtualKeyModifiers.Menu, Back);
         Accel(VirtualKey.Right, VirtualKeyModifiers.Menu, Forward);
@@ -555,6 +557,19 @@ public sealed class Shell : Grid
         var i = ids.IndexOf(ChannelId);
         var j = Math.Clamp(i < 0 ? 0 : i + dir, 0, ids.Count - 1);
         if (ids[j] != ChannelId) Go(ServerId, ids[j]);
+    }
+
+    async Task ShowShortcuts()
+    {
+        if (M.DialogOpen(XamlRoot)) return;
+        var list = new StackPanel { Spacing = 8 };
+        foreach (var (k, w) in SettingsPage.Shortcuts) list.Add(SettingsPage.Shortcut(k, w));
+        var d = new ContentDialog
+        {
+            Title = "Skróty klawiszowe", Content = new ScrollViewer { Content = list, MaxHeight = 460 }.With(s => s.Width = 480), CloseButtonText = "Zamknij",
+            XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
+        };
+        await d.ShowAsync();
     }
 
     /// <summary>Alt+Shift+↑/↓: poprzedni / następny nieprzeczytany kanał (wszystkie serwery po kolei, potem rozmowy prywatne).</summary>
