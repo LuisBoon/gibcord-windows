@@ -512,6 +512,9 @@ public sealed class StateResponse
     public List<long> Blocked { get; set; } = [];
     public Announcement? Announcement { get; set; }
     public Dictionary<long, WatchState?> Watch { get; set; } = [];
+    /// <summary>API v2: numer ostatniego zdarzenia zawartego w stanie (zdarzenia z s ≤ Seq są już w nim).</summary>
+    public long? Seq { get; set; }
+    public string? Session { get; set; }
 }
 
 public sealed class Limits

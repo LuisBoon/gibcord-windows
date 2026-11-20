@@ -13,11 +13,17 @@ public readonly record struct GatewayEvent(string Type, JsonElement Data);
 /// <summary>
 /// Połączenie na żywo (API.md, sekcja 7). Łączy się z tokenem w nagłówku, sam wraca po zerwaniu
 /// (1 → 30 s), mierzy ping. Zdarzenia przychodzą na wątku w tle — odbiorca sam przenosi je na swój wątek.
+/// API v2 (serwer C#): zawsze prosi o ?v=2. Serwer v2 numeruje zdarzenia („s”); po zerwaniu łączymy się z
+/// resume=SESJA.NUMER i dostajemy tylko przegapione (hello.resumed = true) — bez pobierania całego stanu.
+/// Stary serwer ignoruje ?v=2 i działa jak dotąd (hello bez „v”).
 /// </summary>
 public sealed class Gateway : IAsyncDisposable
 {
-    readonly Uri _wsUri;
+    readonly Uri _wsBase;
+    readonly bool _desktop;
     readonly string _token;
+    string? _v2Session;
+    long _v2Seq;
     readonly SemaphoreSlim _sendLock = new(1, 1);
     CancellationTokenSource? _cts;
     ClientWebSocket? _ws;
@@ -29,14 +35,17 @@ public sealed class Gateway : IAsyncDisposable
     public event Action<GatewayStatus, TimeSpan?>? StatusChanged;
 
     public GatewayStatus Status { get; private set; } = GatewayStatus.Offline;
+    /// <summary>Ostatnie hello było z serwera v2 (zdarzenia z numerami).</summary>
+    public bool V2 { get; private set; }
+    /// <summary>Numer ostatniego odebranego zdarzenia (v2).</summary>
+    public long Seq => Interlocked.Read(ref _v2Seq);
     public TimeSpan? Rtt { get; private set; }
     public int CloseCode { get; private set; }
 
     public Gateway(Uri baseUri, string token, bool desktop = true)
     {
-        var b = new UriBuilder(new Uri(baseUri, "ws")) { Scheme = baseUri.Scheme == "https" ? "wss" : "ws" };
-        if (desktop) b.Query = "client=desktop";
-        _wsUri = b.Uri;
+        _wsBase = new UriBuilder(new Uri(baseUri, "ws")) { Scheme = baseUri.Scheme == "https" ? "wss" : "ws" }.Uri;
+        _desktop = desktop;
         _token = token;
     }
 
@@ -68,7 +77,7 @@ public sealed class Gateway : IAsyncDisposable
             {
                 using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 connectCts.CancelAfter(TimeSpan.FromSeconds(15));
-                await ws.ConnectAsync(_wsUri, connectCts.Token).ConfigureAwait(false);
+                await ws.ConnectAsync(ConnectUri(), connectCts.Token).ConfigureAwait(false);
                 _ws = ws;
                 attempt = 0;
                 Interlocked.Exchange(ref _lastRx, Environment.TickCount64);
@@ -105,6 +114,13 @@ public sealed class Gateway : IAsyncDisposable
         SetStatus(GatewayStatus.Offline);
     }
 
+    Uri ConnectUri()
+    {
+        var q = (_desktop ? "client=desktop&" : "") + "v=2";
+        if (_v2Session is { } s) q += "&resume=" + Uri.EscapeDataString(s + "." + Interlocked.Read(ref _v2Seq));
+        return new UriBuilder(_wsBase) { Query = q }.Uri;
+    }
+
     async Task Receive(ClientWebSocket ws, CancellationToken ct)
     {
         var buf = ArrayPool<byte>.Shared.Rent(64 * 1024);
@@ -128,6 +144,18 @@ public sealed class Gateway : IAsyncDisposable
                 catch (JsonException) { continue; }
                 var t = root.Str("t");
                 if (t is null) continue;
+                // v2: zdarzenie z numerem — dubel (np. przy wznowieniu) pomijamy
+                if (root.Long("s") is long sn) { if (sn <= Interlocked.Read(ref _v2Seq)) continue; Interlocked.Exchange(ref _v2Seq, sn); }
+                if (t == "hello")
+                {
+                    if (root.Long("v") == 2 && root.Str("session") is { } sess)
+                    {
+                        V2 = true;
+                        _v2Session = sess;
+                        if (root.Bool("resumed") != true) Interlocked.Exchange(ref _v2Seq, root.Long("seq") ?? 0); // nowy początek — stan i tak przyjdzie z /api/v2/state
+                    }
+                    else { V2 = false; _v2Session = null; Interlocked.Exchange(ref _v2Seq, 0); }
+                }
                 if (t == "pong")
                 {
                     var sent = Interlocked.Exchange(ref _pingSentAt, 0);

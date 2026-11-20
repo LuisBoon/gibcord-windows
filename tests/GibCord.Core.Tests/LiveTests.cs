@@ -68,6 +68,35 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
         await c.DisposeAsync();
     }
 
+    /// <summary>API v2 (serwer C#): po zerwaniu połączenia aplikacja wznawia je numerem ostatniego zdarzenia —
+    /// wiadomość z przerwy dochodzi raz, a cały stan nie jest pobierany od nowa.</summary>
+    [LiveFact]
+    public async Task WznowieniePoZerwaniuBezPobieraniaStanu()
+    {
+        var (a, b) = (p.A, p.B);
+        await p.Until(() => a.Status == GatewayStatus.Connected, "połączenie A");
+        if (Environment.GetEnvironmentVariable("GC_TEST_V2") == "1") Assert.True(a.GatewayV2, "serwer powinien mówić API v2");
+        if (!a.GatewayV2) return; // stary serwer bez API v2
+        var chan = a.Store.Servers.SelectMany(s => s.Channels).First(c => c.Name == "pogaduchy");
+        await a.OpenChannel(chan.Id);
+        await p.Until(() => a.Store.Window(chan.Id).Items.Count > 0 && !a.Store.Window(chan.Id).FromCache, "wiadomości kanału");
+        await Task.Delay(300);
+        int loads; long seq0;
+        lock (p.Lock) { loads = a.StateLoads; seq0 = a.GatewaySeq; }
+        a.KickGateway();
+        var text = $"w przerwie {Guid.NewGuid():N}";
+        Assert.Null(await b.Send(chan.Id, text));
+        await p.Until(() => a.Store.Window(chan.Id).Items.Any(m => m.Content == text), "wiadomość z przerwy u A", 15000);
+        await p.Until(() => a.Status == GatewayStatus.Connected, "powrót połączenia A");
+        await Task.Delay(500);
+        lock (p.Lock)
+        {
+            Assert.Equal(loads, a.StateLoads);
+            Assert.True(a.GatewaySeq > seq0);
+            Assert.Single(a.Store.Window(chan.Id).Items, m => m.Content == text);
+        }
+    }
+
     [LiveFact]
     public async Task RozmowaNaKanaleIWDm()
     {

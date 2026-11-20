@@ -47,7 +47,9 @@ public sealed class GibCordApi : IDisposable
 
     async Task<JsonElement> SendRaw(HttpMethod method, string path, HttpContent? content, CancellationToken ct, TimeSpan? timeout = null)
     {
-        using var req = new HttpRequestMessage(method, "api/v1/" + path.TrimStart('/')) { Content = content };
+        // „v2:ścieżka” → /api/v2/… (serwer C#: m.in. stan z numerem zdarzeń); reszta przez /api/v1
+        var url = path.StartsWith("v2:", StringComparison.Ordinal) ? "api/v2/" + path[3..].TrimStart('/') : "api/v1/" + path.TrimStart('/');
+        using var req = new HttpRequestMessage(method, url) { Content = content };
         if (Token is not null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeout ?? TimeSpan.FromSeconds(30));
@@ -62,7 +64,10 @@ public sealed class GibCordApi : IDisposable
         }
         if (!res.IsSuccessStatusCode)
         {
-            var msg = body.Str("error") ?? res.StatusCode switch
+            // v2: {"error":{"code","message","status",…}}; v1: {"error":"…", "code":…}
+            var isV2 = body.ValueKind == JsonValueKind.Object && body.TryGetProperty("error", out var ee) && ee.ValueKind == JsonValueKind.Object;
+            var err = isV2 ? body.GetProperty("error") : body;
+            var msg = (isV2 ? err.Str("message") : body.Str("error")) ?? res.StatusCode switch
             {
                 HttpStatusCode.TooManyRequests => "Za dużo prób — poczekaj chwilę",
                 HttpStatusCode.Unauthorized => "Sesja wygasła — zaloguj się ponownie",
@@ -71,8 +76,8 @@ public sealed class GibCordApi : IDisposable
                 >= HttpStatusCode.InternalServerError => "Serwer GibCorda chwilowo nie odpowiada",
                 _ => $"Błąd {(int)res.StatusCode}",
             };
-            int? retry = body.Long("retryAfter") is long r ? (int)r : null;
-            throw new ApiException((int)res.StatusCode, msg, body.Str("code"), body.Long("until"), retry);
+            int? retry = err.Long("retryAfter") is long r ? (int)r : null;
+            throw new ApiException((int)res.StatusCode, msg, err.Str("code"), err.Long("until"), retry);
         }
         return body;
     }
@@ -111,9 +116,10 @@ public sealed class GibCordApi : IDisposable
     /// <summary>Przesiadka ze starej aplikacji: jednorazowy kod → sesja (bez wpisywania hasła).</summary>
     public Task<LoginResult> RedeemHandoff(string code, CancellationToken ct = default) =>
         Send<LoginResult>(HttpMethod.Post, "auth/handoff/redeem", new { code }, ct);
-    public async Task<(StateResponse State, string Raw)> GetStateRaw(CancellationToken ct = default)
+    /// <summary>Stan. <paramref name="v2"/>: /api/v2/state — z numerem ostatniego zdarzenia (Seq) i sesją bramki.</summary>
+    public async Task<(StateResponse State, string Raw)> GetStateRaw(CancellationToken ct = default, bool v2 = false)
     {
-        var e = await Send(HttpMethod.Get, "state", ct: ct).ConfigureAwait(false);
+        var e = await Send(HttpMethod.Get, v2 ? "v2:state" : "state", ct: ct).ConfigureAwait(false);
         return (e.To<StateResponse>() ?? throw new ApiException(500, "Pusty stan"), e.GetRawText());
     }
     public async Task<StateResponse> GetState(CancellationToken ct = default) => (await GetStateRaw(ct).ConfigureAwait(false)).State;

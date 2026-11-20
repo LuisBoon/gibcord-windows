@@ -203,6 +203,14 @@ public sealed partial class GibCordClient : IAsyncDisposable
         SessionEnded?.Invoke(why);
     }
 
+    /// <summary>Ile razy pobrano cały stan (diagnostyka; przy API v2 wznowienie po zerwaniu go nie pobiera).</summary>
+    public int StateLoads { get; private set; }
+    /// <summary>Połączenie z serwerem API v2 (zdarzenia z numerami, wznawianie).</summary>
+    public bool GatewayV2 => _gw?.V2 == true;
+    public long GatewaySeq => _gw?.Seq ?? 0;
+    /// <summary>Zrywa połączenie WS — wraca samo (v2: ze wznowieniem).</summary>
+    public void KickGateway() => _gw?.Kick();
+
     /// <summary>Świeży stan z serwera (po każdym połączeniu WebSocket — API.md, sekcja 7).</summary>
     public async Task RefreshState()
     {
@@ -214,7 +222,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
         var session = _session;
         try
         {
-            var (st, raw) = await Api.GetStateRaw();
+            var (st, raw) = await Api.GetStateRaw(v2: _gw?.V2 == true); // v2: stan z numerem zdarzeń
             if (session != _session) { _during = null; return; } // wylogowano w trakcie — stan starego konta nie wraca
             _ui(() =>
             {
@@ -223,10 +231,14 @@ public sealed partial class GibCordClient : IAsyncDisposable
                 if (session != _session) return;
                 var keep = during?.Where(e => e.Type == "message_create").Select(e => e.Data.Prop("message").Long("channelId") ?? 0).ToHashSet();
                 Store.Load(st, keep);
+                StateLoads++;
                 // zdarzenia, które przyszły w trakcie pobierania, są świeższe niż zrzut — nakładamy je jeszcze raz
                 if (during is not null)
                     foreach (var ev in during)
+                    {
+                        if (st.Seq is long sq && ev.Data.Long("s") is long es && es <= sq) continue; // v2: już jest w stanie
                         try { Store.Apply(ev); } catch { } // uszkodzone zdarzenie nie może zatrzymać wczytania
+                    }
                 _fresh.Clear();
                 if (ActiveChannelId != 0) _ = OpenChannel(ActiveChannelId);
                 if (ActiveThreadId != 0) _ = LoadThread(ActiveThreadId);
@@ -258,7 +270,13 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     void OnEvent(GatewayEvent ev)
     {
-        if (ev.Type == "hello") { _ = RefreshState(); RejoinVoiceAfterReconnect(); _ = FlushOutbox(); return; }
+        if (ev.Type == "hello")
+        {
+            // v2: wznowione połączenie — przegapione zdarzenia przyjdą zaraz po hello, stan zostaje (bez pobierania całości)
+            if (ev.Data.Long("v") == 2 && ev.Data.Bool("resumed") == true && Store.Loaded) { if (_gw is not null) _ = _gw.Send(new { t = "visibility", visible = _visible }); }
+            else _ = RefreshState();
+            RejoinVoiceAfterReconnect(); _ = FlushOutbox(); return;
+        }
         if (_during is not null && Replayable.Contains(ev.Type) && _during.Count < 2000) _during.Add(ev);
         Store.Apply(ev);
         OnVoiceEvent(ev);
