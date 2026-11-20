@@ -139,7 +139,7 @@ public sealed class Sidebar : Grid
     readonly Border _header = new() { Height = 48, BorderBrush = Theme.Line, BorderThickness = U.Th(0, 0, 0, 1), Padding = U.Th(16, 0) };
     readonly StackPanel _list = new() { Padding = U.Th(0, 6, 0, 10) };
     readonly ScrollViewer _scroll;
-    readonly Grid _me = new() { Height = 56, Padding = U.Th(10, 0, 6, 0), Background = Theme.Rail };
+    readonly Grid _me = new() { Height = Composer.BarHeight, Padding = U.Th(6, 0, 4, 0), Margin = U.Th(8, 4, 8, Composer.BottomGap), Background = Theme.Input, BorderBrush = Theme.InputLine, BorderThickness = U.Th(1), CornerRadius = new CornerRadius(14) };
     readonly Border _voice = new();
     readonly HashSet<long> _collapsed = [];
     readonly List<(long Uid, Avatar Av)> _talk = [];
@@ -371,7 +371,9 @@ public sealed class Sidebar : Grid
         var av = new Avatar(34, withStatus: true, ring: "#2a2140").Set(S, _sh.C.Api, me.Id, null, status: true);
         var status = S.StatusOf(me.Id);
         var sub = !string.IsNullOrEmpty(me.CustomStatus) ? me.CustomStatus! : Format.StatusPl.GetValueOrDefault(me.Status == "invisible" ? "invisible" : status, "Dostępny");
-        var who = U.V(0, U.T(me.Name, 12.5, U.Bold), U.T(sub, 11, null, Theme.Mu));
+        var who = U.V(0, U.T(me.Name, 12.5, U.Bold).With(t => t.TextTrimming = TextTrimming.CharacterEllipsis), U.T(sub, 11, null, Theme.Mu).With(t => t.TextTrimming = TextTrimming.CharacterEllipsis));
+        who.VerticalAlignment = VerticalAlignment.Center;
+        av.VerticalAlignment = VerticalAlignment.Center;
         var left = new Grid().Cols("auto", "*").Add(av.At(0, 0), who.With(w => w.Margin = U.Th(9, 0, 0, 0)).At(0, 1));
         var leftBtn = new Border { Child = left, CornerRadius = new CornerRadius(8), Padding = U.Th(2, 4), Background = Theme.Transparent };
         leftBtn.PointerEntered += (_, _) => leftBtn.Background = Theme.Hover;
@@ -390,7 +392,8 @@ public sealed class Sidebar : Grid
         var (mic, hp) = VoiceUi.MuteButtons(_sh);
         var cog = U.IconButton(G.Settings, "Ustawienia (prawy przycisk: szybkie przełączniki)", () => _sh.ShowSettings(), 15, 30);
         cog.ContextFlyout = SettingsMenu.Build(_sh);
-        _me.Add(leftBtn.At(0, 0, colSpan: 2), U.H(0, mic, hp, cog).At(0, 2));
+        leftBtn.VerticalAlignment = VerticalAlignment.Center;
+        _me.Add(leftBtn.At(0, 0, colSpan: 2), U.H(0, mic, hp, cog).With(h => h.VerticalAlignment = VerticalAlignment.Center).At(0, 2));
     }
 
     static MenuFlyoutItem Item(string text, string glyph, Action a)

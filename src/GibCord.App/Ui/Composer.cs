@@ -18,9 +18,13 @@ public sealed partial class Composer : StackPanel
     readonly ChatView _v;
     readonly TextBox _box;
     readonly Border _frame;
+    /// <summary>Wysokość pola pisania w jednej linii i panelu „ja” w pasku bocznym — obie karty stoją na jednej linii.</summary>
+    public const double BarHeight = 52;
+    /// <summary>Odstęp kart na dole okna od jego dolnej krawędzi.</summary>
+    public const double BottomGap = 12;
     readonly Border _bar = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(12, 12, 0, 0), Background = U.B("#4D0A0618"), Padding = U.Th(14, 6, 8, 6) };
     readonly StackPanel _files = new() { Orientation = Orientation.Horizontal, Spacing = 8, Visibility = Visibility.Collapsed, Padding = U.Th(12, 10, 12, 4) };
-    readonly Border _blocked = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(14), Background = U.W(.05), Padding = U.Th(16, 12), Margin = U.Th(16, 4, 16, 14) };
+    readonly Border _blocked = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(14), Background = U.W(.05), Padding = U.Th(16, 8), Margin = U.Th(16, 4, 16, BottomGap), MinHeight = BarHeight };
     readonly TextBlock _hint = U.T("", 11, null, Theme.Mu2);
     readonly Button _attach;
     readonly Popup _suggest = new() { IsLightDismissEnabled = false };
@@ -34,7 +38,7 @@ public sealed partial class Composer : StackPanel
     Button _later = null!;
     readonly Later.Bar _schedBar;
     VoiceRecorder? _rec;
-    readonly Border _recBar = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(14), Background = U.Alpha("#ff4d6a", .14), BorderBrush = U.Alpha("#ff4d6a", .5), BorderThickness = U.Th(1), Padding = U.Th(14, 8), MinHeight = 50 };
+    readonly Border _recBar = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(14), Background = U.Alpha("#ff4d6a", .14), BorderBrush = U.Alpha("#ff4d6a", .5), BorderThickness = U.Th(1), Padding = U.Th(14, 8), MinHeight = BarHeight };
     readonly TextBlock _recTime = U.T("0:00", 14, U.Bold);
     Microsoft.UI.Dispatching.DispatcherQueueTimer? _recTimer;
     ReplyRef? _reply;
@@ -61,7 +65,7 @@ public sealed partial class Composer : StackPanel
         _box = new TextBox
         {
             AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MaxHeight = 220, MinHeight = 46, FontSize = 14.5, FontFamily = Theme.Font,
-            BorderThickness = U.Th(0), Background = Theme.Transparent, Padding = U.Th(4, 12, 4, 10), VerticalAlignment = VerticalAlignment.Center,
+            BorderThickness = U.Th(0), Background = Theme.Transparent, Padding = U.Th(4, 14, 4, 12), VerticalAlignment = VerticalAlignment.Center,
             IsSpellCheckEnabled = true, Language = "pl-PL",
         };
         // przezroczyste tło także po najechaniu i w trakcie pisania
@@ -90,10 +94,13 @@ public sealed partial class Composer : StackPanel
         _later.Click += (_, _) => OpenLater();
         _schedBar = new Later.Bar(_v);
         var right = U.H(0, _later, _mic, gif, emoji);
+        // Jedna linia: pole 46 px + 2 px u góry i u dołu + ramka = 52 px, ikony (34 px) na środku — tak samo jak panel „ja” w pasku bocznym.
+        // Przy dłuższym tekście pole rośnie, a ikony zostają przy dolnej krawędzi (6 px od niej).
         right.VerticalAlignment = VerticalAlignment.Bottom;
-        var row = new Grid().Cols("auto", "*", "auto").Add(_attach.At(0, 0).With(b => b.VerticalAlignment = VerticalAlignment.Bottom), _box.At(0, 1),
+        right.Margin = U.Th(0, 0, 0, 6);
+        var row = new Grid().Cols("auto", "*", "auto").Add(_attach.At(0, 0).With(b => { b.VerticalAlignment = VerticalAlignment.Bottom; b.Margin = U.Th(0, 0, 0, 6); }), _box.At(0, 1),
             right.At(0, 2));
-        row.Margin = U.Th(6, 0, 6, 4);
+        row.Margin = U.Th(6, 2, 6, 2);
         var inner = U.V(0, _files, row);
         _frame = new Border { Child = inner, CornerRadius = new CornerRadius(14), Background = Theme.Input, BorderBrush = Theme.InputLine, BorderThickness = U.Th(1) };
         _box.GotFocus += (_, _) => _frame.BorderBrush = U.Alpha("#ffb98f", .45);
@@ -105,9 +112,9 @@ public sealed partial class Composer : StackPanel
             new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 12, Height = 12, Fill = Theme.Red2, Margin = U.Th(0, 0, 10, 0) }.At(0, 0),
             U.H(8, U.T("Nagrywanie", 14, U.Semi), _recTime).At(0, 1),
             cancelRec.With(b => b.Margin = U.Th(0, 0, 8, 0)).At(0, 3), sendRec.At(0, 4));
-        var wrap = U.V(0, _schedBar.Root, _bar, _frame, _recBar);
-        wrap.Margin = U.Th(16, 2, 16, 0);
-        this.Add(wrap, _hint.With(h => h.Margin = U.Th(20, 3, 16, 8)), _blocked);
+        var wrap = U.V(0, _hint.With(h => { h.Margin = U.Th(4, 0, 0, 4); h.Visibility = Visibility.Collapsed; }), _schedBar.Root, _bar, _frame, _recBar);
+        wrap.Margin = U.Th(16, 2, 16, BottomGap);
+        this.Add(wrap, _blocked);
         _suggest.Child = new Border { Child = _suggestList, Background = U.B("#F5281f40"), CornerRadius = new CornerRadius(12), BorderBrush = U.W(.14), BorderThickness = U.Th(1), Width = 320 };
         Loaded += (_, _) => { _suggest.XamlRoot = XamlRoot; _v.Sh.S.Changed += OnStoreChanged; RefreshLater(); };
         Unloaded += (_, _) => _v.Sh.S.Changed -= OnStoreChanged;
@@ -147,14 +154,14 @@ public sealed partial class Composer : StackPanel
         else if (ch is { Readonly: true } && !S.Can(_v.Cid, Perm.ManageMessages)) why = "Ten kanał jest tylko do czytania.";
         else if (_v.DmObj is { IsGroup: false } d && S.DmOther(d) is { } o && S.Blocked.Contains(o.Id)) why = $"Blokujesz {o.Name}. Odblokuj tę osobę na stronie, żeby pisać.";
         else if (_v.Thread is { Locked: true } && !S.Can(_v.Cid, Perm.ManageMessages)) why = "Ten wątek jest zamknięty. Piszą w nim tylko moderatorzy.";
-        _blocked.Child = U.H(10, U.I("", 15, Theme.Mu), U.T(why ?? "", 13.5, null, Theme.Mu, wrap: true));
+        _blocked.Child = U.H(10, U.I("", 15, Theme.Mu), U.T(why ?? "", 13.5, null, Theme.Mu, wrap: true)).With(h => h.VerticalAlignment = VerticalAlignment.Center);
         _blocked.Visibility = why is null ? Visibility.Collapsed : Visibility.Visible;
         ((FrameworkElement)Children[0]).Visibility = why is null ? Visibility.Visible : Visibility.Collapsed;
-        _hint.Visibility = why is null ? Visibility.Visible : Visibility.Collapsed;
         _attach.Visibility = CanAttach || !_v.IsThread ? Visibility.Visible : Visibility.Collapsed;
         _mic.Visibility = CanAttach && !_v.Sh.C.Offline ? Visibility.Visible : Visibility.Collapsed;
         _box.PlaceholderText = _v.IsThread ? "Napisz w wątku" : ch is not null ? $"Napisz na #{ch.Name}" : _v.DmObj is { } dm ? $"Napisz do {(dm.IsGroup ? S.DmTitle(dm) : "@" + S.DmOther(dm)?.Name)}" : "Napisz wiadomość";
         _hint.Text = ch is { Slowmode: > 0 } && !S.Can(_v.Cid, Perm.ManageMessages) ? $"Tryb powolny: jedna wiadomość co {ch.Slowmode} s" : "";
+        _hint.Visibility = why is null && _hint.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ───────────────────────── klawisze i tekst ─────────────────────────

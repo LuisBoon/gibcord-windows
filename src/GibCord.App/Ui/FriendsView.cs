@@ -158,7 +158,7 @@ public sealed class FriendsView : Grid
 
     void BuildAdd()
     {
-        var box = new TextBox { PlaceholderText = "Nazwa użytkownika, np. luisboon", Height = 48, FontSize = 15, Padding = U.Th(14, 12), CornerRadius = new CornerRadius(12), FontFamily = Theme.Font };
+        var box = new TextBox { PlaceholderText = "Nazwa użytkownika znajomego", Height = 48, FontSize = 15, Padding = U.Th(14, 12), CornerRadius = new CornerRadius(12), FontFamily = Theme.Font };
         var result = U.T("", 13, U.Semi, Theme.Green, wrap: true);
         async void Send()
         {

@@ -53,7 +53,7 @@ public sealed class LoginPage : Grid
     {
         _ticket = null;
         Header("Witaj w GibCordzie 6.0", Updater.IsPrerelease ? "Nowa aplikacja na Windows (wersja beta). Zaloguj się tym samym kontem co na stronie." : "Nowa aplikacja na Windows. Zaloguj się tym samym kontem co na stronie.");
-        var user = Field("np. luisboon");
+        var user = Field("Twoja nazwa użytkownika");
         var pass = new PasswordBox { PlaceholderText = "Hasło", Height = 42, FontSize = 14, CornerRadius = new CornerRadius(10), Padding = U.Th(12, 10) };
         Button? go = null;
         void Submit() { if (go is not null) _ = DoLogin(user.Text, pass.Password, go); }

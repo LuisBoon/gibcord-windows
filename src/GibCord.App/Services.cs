@@ -268,7 +268,8 @@ public static class Updater
     {
         try
         {
-            _mgr = new UpdateManager(new GithubSource(Repo, null, true));
+            // Wersja zwykła (6.0.0, 6.0.1…) dostaje tylko zwykłe wydania; beta — także kolejne bety (i zwykłe, gdy są nowsze).
+            _mgr = new UpdateManager(new GithubSource(Repo, null, prerelease: IsPrerelease));
             if (!_mgr.IsInstalled) return;
             while (true)
             {
