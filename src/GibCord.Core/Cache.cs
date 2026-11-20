@@ -109,6 +109,8 @@ public sealed class Prefs
     public bool CompactMessages { get; set; }
     /// <summary>Kiedy wyczyścić opis statusu (0 = nie czyścić).</summary>
     public long StatusClearAt { get; set; }
+    /// <summary>Czyje są szkice i ostatnie kanały (po zmianie konta czyścimy je).</summary>
+    public long LastUserId { get; set; }
     public bool MembersPanel { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)
@@ -134,15 +136,60 @@ public sealed class Prefs
     }
 
     static string? _path;
+    static readonly object _saveLock = new();
     public static Prefs Load(string dir)
     {
         _path = Path.Combine(dir, "ustawienia.json");
-        try { return File.Exists(_path) ? JsonSerializer.Deserialize<Prefs>(File.ReadAllText(_path), Json.Options) ?? new() : new(); }
-        catch { return new(); }
+        return SafeFile.Read<Prefs>(_path) ?? new();
     }
     public void Save()
     {
         if (_path is null) return;
-        try { File.WriteAllText(_path, JsonSerializer.Serialize(this, Json.Options)); } catch { }
+        string json;
+        lock (_saveLock) json = JsonSerializer.Serialize(this, Json.Options);
+        SafeFile.Write(_path, json);
+    }
+}
+
+/// <summary>
+/// Zapis bez ryzyka: najpierw plik .tmp, potem podmiana — przerwany zapis (zawieszenie, brak prądu, aktualizacja)
+/// nie zostawia uciętego JSON-a. Uszkodzony plik przy odczycie odkładamy jako .uszkodzony zamiast go nadpisać.
+/// </summary>
+public static class SafeFile
+{
+    static readonly object _lock = new();
+
+    public static void Write(string path, string content)
+    {
+        lock (_lock)
+        {
+            try
+            {
+                var tmp = path + ".tmp";
+                File.WriteAllText(tmp, content);
+                File.Move(tmp, path, true);
+            }
+            catch { }
+        }
+    }
+
+    public static T? Read<T>(string path) where T : class
+    {
+        lock (_lock)
+        {
+            if (!File.Exists(path))
+            {
+                // zapis przerwany między .tmp a podmianą — ratujemy .tmp
+                var tmp = path + ".tmp";
+                if (!File.Exists(tmp)) return null;
+                try { File.Move(tmp, path, true); } catch { return null; }
+            }
+            try { return JsonSerializer.Deserialize<T>(File.ReadAllText(path), Json.Options); }
+            catch
+            {
+                try { File.Copy(path, path + ".uszkodzony", true); } catch { }
+                return null;
+            }
+        }
     }
 }

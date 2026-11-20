@@ -51,7 +51,7 @@ public sealed class GameOverlay : IDisposable
     readonly DispatcherQueueTimer _timer;
     readonly WndProc _proc;
     IntPtr _hwnd;
-    bool _shown, _hidden;
+    bool _shown, _hidden, _hotkey;
     string _last = "";
 
     public GameOverlay(GibCordClient c, DispatcherQueue dq, Func<bool> inGame)
@@ -71,12 +71,34 @@ public sealed class GameOverlay : IDisposable
         var wc = new WNDCLASSEX { cbSize = Marshal.SizeOf<WNDCLASSEX>(), lpfnWndProc = Marshal.GetFunctionPointerForDelegate(_proc), hInstance = GetModuleHandle(null), lpszClassName = "GibCordNakladka" };
         RegisterClassEx(ref wc);
         _hwnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, "GibCordNakladka", "GibCord — nakładka", WS_POPUP, 0, 0, 10, 10, IntPtr.Zero, IntPtr.Zero, wc.hInstance, IntPtr.Zero);
-        if (!RegisterHotKey(_hwnd, HotkeyId, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 'O')) App.Log("Nakładka: skrót Ctrl+Shift+O zajęty przez inny program");
+    }
+
+    /// <summary>Ctrl+Shift+O zajmujemy tylko w trakcie rozmowy — poza nią należy do innych programów (VS Code, przeglądarka).</summary>
+    void SyncHotkey(bool inCall)
+    {
+        if (inCall == _hotkey) return;
+        if (inCall)
+        {
+            EnsureWindow();
+            _hotkey = RegisterHotKey(_hwnd, HotkeyId, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 'O');
+            if (!_hotkey) App.Log("Nakładka: skrót Ctrl+Shift+O zajęty przez inny program");
+            _hotkey = true; // nie próbujemy co 200 ms
+        }
+        else
+        {
+            if (_hwnd != IntPtr.Zero) UnregisterHotKey(_hwnd, HotkeyId);
+            _hotkey = false;
+            _hidden = false;
+        }
     }
 
     IntPtr Proc(IntPtr hwnd, uint msg, IntPtr w, IntPtr l)
     {
-        if (msg == WM_HOTKEY && (int)w == HotkeyId) { _hidden = !_hidden; _last = ""; Tick(); return IntPtr.Zero; }
+        if (msg == WM_HOTKEY && (int)w == HotkeyId)
+        {
+            try { _hidden = !_hidden; _last = ""; Tick(); } catch (Exception ex) { App.Log("Nakładka: " + ex.Message); }
+            return IntPtr.Zero;
+        }
         return DefWindowProc(hwnd, msg, w, l);
     }
 
@@ -85,7 +107,8 @@ public sealed class GameOverlay : IDisposable
         var mode = App.Prefs.OverlayMode;
         var room = _c.VoiceChannelId;
         var want = mode != "off" && room != 0 && !_c.Offline && (mode == "always" || _inGame());
-        if (mode != "off") EnsureWindow();
+        SyncHotkey(mode != "off" && room != 0 && !_c.Offline);
+        if (want) EnsureWindow();
         if (!want || _hidden) { if (_shown) { ShowWindow(_hwnd, SW_HIDE); _shown = false; } return; }
         var s = _c.Store;
         var members = (s.Voice.GetValueOrDefault(room) ?? []).Take(8).Select(m => (m.UserId, Name: s.NameOf(m.UserId, s.ServerOfChannel(room)), Color: Store.ColorOfUser(s.U(m.UserId)),

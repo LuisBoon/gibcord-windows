@@ -124,6 +124,18 @@ public sealed partial class GibCordClient : IAsyncDisposable
         _tokens.Save(null);
         Api.Token = null;
         _cache?.Clear();
+        ResetLocal();
+    }
+
+    /// <summary>Po wylogowaniu: stan, kolejka niewysłanych i otwarte kanały poprzedniego konta znikają.</summary>
+    void ResetLocal()
+    {
+        lock (_outbox) { _outbox.Clear(); _cancelled.Clear(); }
+        var t = _outboxTimer; _outboxTimer = null; t?.Dispose();
+        _fresh.Clear();
+        ActiveChannelId = 0;
+        ActiveThreadId = 0;
+        _ui(Store.Reset);
     }
 
     // ───────────────────────── start i połączenie ─────────────────────────
@@ -135,6 +147,9 @@ public sealed partial class GibCordClient : IAsyncDisposable
         Api.Token = token;
         var session = ++_session;
         if (!Store.Loaded && _cache?.LoadState() is { } cached) _ui(() => Store.Load(cached));
+        // drugi Start (np. podwójne „Już potwierdziłem”) nie może zostawić osieroconego połączenia
+        var old = _gw; _gw = null;
+        if (old is not null) _ = old.DisposeAsync().AsTask();
         _gw = new Gateway(Api.BaseUri, token);
         _gw.Event += ev => _ui(() => { if (session == _session) OnEvent(ev); });
         _gw.StatusChanged += (s, d) => _ui(() => { if (session == _session) OnStatus(s, d); });
@@ -159,8 +174,11 @@ public sealed partial class GibCordClient : IAsyncDisposable
     public async Task Stop()
     {
         _session++;
+        var wasInVoice = VoiceChannelId != 0;
         VoiceChannelId = 0;
         if (_voice is not null) await _voice.DisconnectAsync();
+        // silnik w stanie „Łączenie…” nie zgłasza zmiany — bez tego mikrofon zostałby otwarty
+        if (wasInVoice) _ui(() => VoiceChanged?.Invoke());
         var gw = _gw; _gw = null;
         if (gw is not null) await gw.DisposeAsync();
         Status = GatewayStatus.Offline;
@@ -181,20 +199,30 @@ public sealed partial class GibCordClient : IAsyncDisposable
         Api.Token = null;
         _cache?.Clear();
         _ = Stop();
+        ResetLocal();
         SessionEnded?.Invoke(why);
     }
 
     /// <summary>Świeży stan z serwera (po każdym połączeniu WebSocket — API.md, sekcja 7).</summary>
     public async Task RefreshState()
     {
-        if (_stateInFlight) return;
+        // „hello” w trakcie zapytania (np. z Fallback) — po nim pobieramy jeszcze raz, bo tamten stan może być sprzed połączenia
+        if (_stateInFlight) { _stateAgain = true; return; }
         _stateInFlight = true;
+        _stateAgain = false;
+        _during = [];
         try
         {
             var (st, raw) = await Api.GetStateRaw();
             _ui(() =>
             {
+                var during = _during;
+                _during = null;
                 Store.Load(st);
+                // zdarzenia, które przyszły w trakcie pobierania, są świeższe niż zrzut — nakładamy je jeszcze raz
+                if (during is not null)
+                    foreach (var ev in during)
+                        try { Store.Apply(ev); } catch { } // uszkodzone zdarzenie nie może zatrzymać wczytania
                 _fresh.Clear();
                 if (ActiveChannelId != 0) _ = OpenChannel(ActiveChannelId);
                 if (ActiveThreadId != 0) _ = LoadThread(ActiveThreadId);
@@ -202,14 +230,30 @@ public sealed partial class GibCordClient : IAsyncDisposable
             _cache?.SaveState(raw);
             if (_gw is not null) await _gw.Send(new { t = "visibility", visible = _visible });
         }
-        catch (ApiException ex) when (ex.IsAuth) { _ui(() => EndSession("Sesja wygasła — zaloguj się ponownie.")); }
-        catch (Exception ex) { _ui(() => Error?.Invoke(Friendly(ex))); }
-        finally { _stateInFlight = false; }
+        catch (ApiException ex) when (ex.IsAuth) { _during = null; _ui(() => EndSession("Sesja wygasła — zaloguj się ponownie.")); }
+        catch (Exception ex) { _during = null; _ui(() => Error?.Invoke(Friendly(ex))); }
+        finally
+        {
+            _stateInFlight = false;
+            if (_stateAgain) { _stateAgain = false; _ = RefreshState(); }
+        }
     }
+
+    List<GatewayEvent>? _during;
+    bool _stateAgain;
+
+    /// <summary>Zdarzenia, które można bezpiecznie nałożyć drugi raz na świeży zrzut stanu.</summary>
+    static readonly HashSet<string> Replayable =
+    [
+        "message_create", "message_update", "message_delete", "reaction_update", "read_state", "presence", "user_update",
+        "voice_state", "dm_create", "dm_update", "dm_hidden", "dm_remove", "friend_update", "friend_remove",
+        "member_update", "channel_update", "server_update", "notify_update", "block_update", "thread_update", "watch_state",
+    ];
 
     void OnEvent(GatewayEvent ev)
     {
         if (ev.Type == "hello") { _ = RefreshState(); RejoinVoiceAfterReconnect(); _ = FlushOutbox(); return; }
+        if (_during is not null && Replayable.Contains(ev.Type) && _during.Count < 2000) _during.Add(ev);
         Store.Apply(ev);
         OnVoiceEvent(ev);
         switch (ev.Type)
@@ -353,6 +397,13 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     /// <summary>Klucz listy → (kanał, wątek). Wątki mają klucz ujemny (−id wątku).</summary>
     (long Channel, long? Thread) Where(long key) => key < 0 ? (Store.ThreadById(-key)?.ChannelId ?? 0, -key) : (key, null);
+
+    /// <summary>Wątek nieznany po starcie (np. odpowiedź z dymka, gdy aplikacja była zamknięta) — dociągamy jego dane.</summary>
+    public async Task EnsureThread(long tid)
+    {
+        if (Store.ThreadById(tid) is not null) return;
+        try { var (t, _) = await Api.GetThread(tid); _ui(() => Store.MergeThread(t)); } catch { }
+    }
 
     // ───────────────────────── wątki ─────────────────────────
 

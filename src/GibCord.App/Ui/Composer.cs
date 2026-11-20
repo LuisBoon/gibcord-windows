@@ -301,16 +301,16 @@ public sealed partial class Composer : StackPanel
 
     string Decode(string content)
     {
-        content = Regex.Replace(content, @"<@&(\d+)>", m =>
+        content = Regex.Replace(content, @"<@&([0-9]{1,18})>", m =>
         {
-            var id = long.Parse(m.Groups[1].Value);
+            if (!long.TryParse(m.Groups[1].Value, out var id)) return m.Value;
             var name = "@" + (S.RoleById(id)?.Name ?? "rola");
             _roleMentions[name] = id;
             return name;
         });
-        return Regex.Replace(content, @"<@(\d+)>", m =>
+        return Regex.Replace(content, @"<@([0-9]{1,18})>", m =>
         {
-            var id = long.Parse(m.Groups[1].Value);
+            if (!long.TryParse(m.Groups[1].Value, out var id)) return m.Value;
             var name = "@" + S.NameOf(id, _v.Srv);
             _mentions[name] = id;
             return name;

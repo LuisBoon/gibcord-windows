@@ -286,4 +286,38 @@ public class StoreTests
         s.Apply(Ev("message_delete", new { id = 40, channelId = 10 }));
         Assert.Empty(s.Window(-9).Items);
     }
+
+    [Fact]
+    public void WiadomoscZCzasuPobieraniaZostaje()
+    {
+        var s = Make();
+        s.Window(10); // kanał otwarty, pobieranie w toku
+        s.Apply(Ev("message_create", new { message = Msg(8, 10, 2, "na żywo") }));
+        // odpowiedź z serwera sprzed tej wiadomości
+        s.SetWindow(10, [Msg(4, 10, 2), Msg(5, 10, 2)], hasOlder: false);
+        Assert.Equal([4L, 5, 8], s.Window(10).Items.Select(x => x.Id).ToArray());
+    }
+
+    [Fact]
+    public void TaSamaWzmiankaLiczonaRaz()
+    {
+        var s = Make();
+        var m = Msg(6, 10, 2, "hej <@1>"); m.Mentions = [1];
+        s.Apply(Ev("message_create", new { message = m }));
+        s.Apply(Ev("message_create", new { message = m })); // odtworzone po wczytaniu stanu
+        Assert.Equal(1, s.MentionsIn(10));
+    }
+
+    [Fact]
+    public void ResetCzysciKonto()
+    {
+        var s = Make();
+        s.Window(10);
+        s.Reset();
+        Assert.False(s.Loaded);
+        Assert.Empty(s.Servers);
+        Assert.Empty(s.Dms);
+        Assert.Empty(s.Windows);
+        Assert.Equal(0, s.Me.Id);
+    }
 }

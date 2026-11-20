@@ -185,9 +185,14 @@ public static partial class Tray
     {
         if (msg == WM_APP_TRAY)
         {
-            var ev = (uint)(lParam.ToInt64() & 0xFFFF);
-            if (ev == WM_LBUTTONUP) _w?.BringToFront();
-            else if (ev is WM_RBUTTONUP or WM_CONTEXTMENU) ShowMenu(hwnd);
+            // wyjątek w wywołaniu z natywnej pętli zamknąłby program bez śladu w dzienniku
+            try
+            {
+                var ev = (uint)(lParam.ToInt64() & 0xFFFF);
+                if (ev == WM_LBUTTONUP) _w?.BringToFront();
+                else if (ev is WM_RBUTTONUP or WM_CONTEXTMENU) ShowMenu(hwnd);
+            }
+            catch (Exception ex) { App.Log("Zasobnik: " + ex); }
             return IntPtr.Zero;
         }
         if (msg == _taskbarCreated && _taskbarCreated != 0) Add(); // Eksplorator uruchomił się ponownie

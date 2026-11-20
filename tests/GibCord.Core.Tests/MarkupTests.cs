@@ -145,4 +145,15 @@ public class FormatTests
         Assert.Equal("512 B", Format.Size(512));
         Assert.Equal("2,5 MB", Format.Size(2621440));
     }
+
+    [Fact]
+    public void ZlosliweWejscieNieWywracaParsera()
+    {
+        // cyfry spoza ASCII (arabskie, pełnej szerokości) i znaki zastępcze atomów — zwykły tekst, bez wyjątku
+        var spans = Markup.ParseInline("<@١٢٣> <:x:１２> <@&٤> <@5>\uF000\uF000");
+        Assert.Single(spans.OfType<MentionSpan>());
+        Assert.DoesNotContain(spans, s => s is EmojiSpan or RoleMentionSpan);
+        var blocks = Markup.Parse("**" + new string('*', 4000) + "** <@99999999999999999999>");
+        Assert.NotEmpty(blocks);
+    }
 }

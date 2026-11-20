@@ -22,6 +22,7 @@ public sealed class Camera : IDisposable
     byte[] _buf = [];
 
     public bool Active => _reader is not null;
+    public long StartedAt { get; private set; }
     public Camera(GibCordClient c) { _c = c; }
 
     public async Task<string?> Start()
@@ -44,7 +45,13 @@ public sealed class Camera : IDisposable
             if (_push is null) { Stop(); return "Najpierw wejdź do rozmowy."; }
             _reader = await _mc.CreateFrameReaderAsync(src, MediaEncodingSubtypes.Bgra8);
             _reader.FrameArrived += OnFrame;
-            await _reader.StartAsync();
+            var st = await _reader.StartAsync();
+            if (st != MediaFrameReaderStartStatus.Success)
+            {
+                Stop();
+                return st == MediaFrameReaderStartStatus.ExclusiveControlNotAvailable ? "Kamerę zajmuje inny program — zamknij go i spróbuj jeszcze raz." : "Kamera nie chce się włączyć (" + st + ").";
+            }
+            StartedAt = Environment.TickCount64;
             _c.SetVideo(true);
             return null;
         }
@@ -71,6 +78,24 @@ public sealed class Camera : IDisposable
         }
         catch (Exception ex) { App.Log("Kamera (klatka): " + ex.Message); }
         finally { Interlocked.Exchange(ref _busy, 0); }
+    }
+
+    bool _republishing;
+
+    /// <summary>Po ponownym połączeniu głosu kamera publikuje się od nowa (inni zobaczą obraz bez ponownego klikania).</summary>
+    public async Task Republish()
+    {
+        if (!Active || _republishing) return;
+        _republishing = true;
+        try
+        {
+            var push = await _c.Voice.StartCamera(640, 360);
+            if (push is null) { Stop(); return; }
+            _push = push;
+            StartedAt = Environment.TickCount64;
+        }
+        catch (Exception ex) { App.Log("Kamera po ponownym połączeniu: " + ex.Message); Stop(); }
+        finally { _republishing = false; }
     }
 
     public void Stop()

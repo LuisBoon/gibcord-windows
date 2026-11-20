@@ -32,7 +32,7 @@ public sealed class GibCordApi : IDisposable
             ? new HttpClient(new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All, PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
             : new HttpClient(handler);
         _http.BaseAddress = BaseUri;
-        _http.Timeout = TimeSpan.FromSeconds(30);
+        _http.Timeout = System.Threading.Timeout.InfiniteTimeSpan; // limit czasu na każde zapytanie osobno (pliki do 100 MB potrzebują więcej niż 30 s)
         _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
         _http.DefaultRequestHeaders.Add("X-DC-Client", "app");
     }
@@ -45,10 +45,13 @@ public sealed class GibCordApi : IDisposable
         return Uri.TryCreate(BaseUri, url, out var r) ? r : null;
     }
 
-    async Task<JsonElement> SendRaw(HttpMethod method, string path, HttpContent? content, CancellationToken ct)
+    async Task<JsonElement> SendRaw(HttpMethod method, string path, HttpContent? content, CancellationToken ct, TimeSpan? timeout = null)
     {
         using var req = new HttpRequestMessage(method, "api/v1/" + path.TrimStart('/')) { Content = content };
         if (Token is not null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(timeout ?? TimeSpan.FromSeconds(30));
+        ct = cts.Token;
         using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
         var bytes = await res.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
         JsonElement body = default;
@@ -156,7 +159,8 @@ public sealed class GibCordApi : IDisposable
     {
         var content = new StreamContent(data);
         content.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrEmpty(contentType) ? "application/octet-stream" : contentType);
-        var e = await SendRaw(HttpMethod.Post, "uploads?name=" + Uri.EscapeDataString(name), content, ct).ConfigureAwait(false);
+        // duży plik na wolnym łączu: do 30 minut (anulowanie i tak działa)
+        var e = await SendRaw(HttpMethod.Post, "uploads?name=" + Uri.EscapeDataString(name), content, ct, TimeSpan.FromMinutes(30)).ConfigureAwait(false);
         return e.To<Attachment>()!;
     }
 
@@ -188,7 +192,7 @@ public sealed class GibCordApi : IDisposable
     {
         var content = new StreamContent(data);
         content.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrEmpty(contentType) ? "application/octet-stream" : contentType);
-        return await SendRaw(HttpMethod.Post, path, content, ct).ConfigureAwait(false);
+        return await SendRaw(HttpMethod.Post, path, content, ct, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
     }
     public Task<System.Text.Json.JsonElement> DeleteJson(string path, object? body = null, CancellationToken ct = default) => Send(HttpMethod.Delete, path, body, ct);
     public Task<System.Text.Json.JsonElement> PatchJson(string path, object body, CancellationToken ct = default) => Send(HttpMethod.Patch, path, body, ct);
@@ -207,7 +211,9 @@ public sealed class GibCordApi : IDisposable
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, "api/v1/" + path.TrimStart('/'));
         if (Token is not null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(30));
+        using var res = await _http.SendAsync(req, cts.Token).ConfigureAwait(false);
         if (!res.IsSuccessStatusCode) throw new ApiException((int)res.StatusCode, "Brak podglądu");
         return await res.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
     }

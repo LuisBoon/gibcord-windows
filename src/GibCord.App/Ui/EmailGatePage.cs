@@ -83,6 +83,7 @@ public sealed class EmailGatePage : Grid
         try
         {
             var (me, gate) = await _w.Client.Api.GetMe();
+            if (_done) return; // dwuklik albo zbieg z timerem — drugi raz nie wchodzimy
             if (_email != me.Email && !string.IsNullOrEmpty(me.Email)) { _email = me.Email; Draw(); }
             if (!gate || me.EmailVerified)
             {

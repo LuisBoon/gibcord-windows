@@ -40,18 +40,23 @@ public static class Inbox
     public static IReadOnlyList<InboxItem> Reminders => _d.Reminders;
     public static int Unseen => _d.Mentions.Count(m => !m.Seen);
 
+    /// <summary>Czyja skrzynka jest wczytana (0 = żadna).</summary>
+    public static long For { get; private set; }
+
+    public static void Unload() { For = 0; _path = null; _d = new(); Changed?.Invoke(); }
+
     public static void Load(long userId)
     {
+        For = userId;
         _path = Path.Combine(App.DataDir, $"skrzynka-{userId}.json");
-        try { _d = File.Exists(_path) ? JsonSerializer.Deserialize<InboxData>(File.ReadAllText(_path), Json.Options) ?? new() : new(); }
-        catch { _d = new(); }
+        _d = SafeFile.Read<InboxData>(_path) ?? new();
         Changed?.Invoke();
     }
 
     static void Save()
     {
         if (_path is null) return;
-        try { File.WriteAllText(_path, JsonSerializer.Serialize(_d, Json.Options)); } catch { }
+        SafeFile.Write(_path, JsonSerializer.Serialize(_d, Json.Options));
         Changed?.Invoke();
     }
 

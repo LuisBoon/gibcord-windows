@@ -45,6 +45,9 @@ public sealed class Store
     public Dictionary<long, ThreadInfo> Threads { get; } = [];
     /// <summary>Ile wzmianek z danego wątku siedzi w liczniku kanału-rodzica (gasną po przeczytaniu wątku).</summary>
     readonly Dictionary<long, int> _threadMentions = [];
+    /// <summary>Wiadomości już policzone jako wzmianki — to samo zdarzenie drugi raz (odtworzenie po wczytaniu stanu) nie podbija licznika.</summary>
+    readonly HashSet<long> _counted = [];
+    bool CountMention(long id) { if (_counted.Count > 5000) _counted.Clear(); return _counted.Add(id); }
     /// <summary>Wspólne oglądanie w pokojach (kanał głosowy / rozmowa) → stan.</summary>
     public Dictionary<long, WatchState> Watches { get; } = [];
     readonly Dictionary<long, Dictionary<long, long>> _typing = [];
@@ -82,6 +85,18 @@ public sealed class Store
         foreach (var w in Windows.Values) w.FromCache = true;
         Loaded = true;
         Raise(ChangeKind.All);
+    }
+
+    /// <summary>Wylogowanie: nic z poprzedniego konta nie może zostać (następna osoba na tym komputerze).</summary>
+    public void Reset()
+    {
+        Me = new();
+        Users.Clear(); Servers.Clear(); Dms.Clear(); Reads.Clear(); Voice.Clear(); Friends.Clear(); Blocked.Clear();
+        Mentions.Clear(); Windows.Clear(); Threads.Clear(); Watches.Clear();
+        _threadMentions.Clear(); _typing.Clear(); _chan.Clear(); _counted.Clear();
+        Notify = new();
+        Announcement = null;
+        Loaded = false;
     }
 
     void Reindex()
@@ -312,8 +327,12 @@ public sealed class Store
     {
         var w = Window(cid);
         var pending = w.Items.Where(x => x.Send != SendState.Sent).ToList();
+        // wiadomości, które przyszły na żywo w trakcie pobierania (nowsze niż najnowsza w odpowiedzi) — zostają
+        var newest = msgs.Count > 0 ? msgs.Max(x => x.Id) : 0;
+        var live = atTail ? w.Items.Where(x => x.Send == SendState.Sent && x.Id > newest && x.Key == cid).ToList() : [];
         w.Items.Clear();
         w.Items.AddRange(msgs.Where(x => x.Key == cid).OrderBy(x => x.Id));
+        w.Items.AddRange(live.OrderBy(x => x.Id));
         if (atTail) foreach (var p in pending) if (!w.Items.Any(x => x.Nonce is not null && x.Nonce == p.Nonce)) w.Items.Add(p);
         w.HasOlder = hasOlder;
         w.AtTail = atTail;
@@ -490,7 +509,7 @@ public sealed class Store
                     StopTyping(m.Key, m.AuthorId);
                     Upsert(m);
                     if (m.AuthorId == Me.Id) MarkThreadReadLocal(mt, m.Id);
-                    else if (MentionsMe(m) && !Blocked.Contains(m.AuthorId))
+                    else if (MentionsMe(m) && !Blocked.Contains(m.AuthorId) && CountMention(m.Id))
                     {
                         Mentions[m.ChannelId] = MentionsIn(m.ChannelId) + 1;
                         _threadMentions[mt] = _threadMentions.GetValueOrDefault(mt) + 1;
@@ -503,7 +522,7 @@ public sealed class Store
                 if (m.AuthorId == Me.Id) MarkReadLocal(m.ChannelId, m.Id);
                 else
                 {
-                    if (MentionsMe(m) && !Blocked.Contains(m.AuthorId)) Mentions[m.ChannelId] = MentionsIn(m.ChannelId) + 1;
+                    if (MentionsMe(m) && !Blocked.Contains(m.AuthorId) && CountMention(m.Id)) Mentions[m.ChannelId] = MentionsIn(m.ChannelId) + 1;
                     Raise(ChangeKind.Reads, m.ChannelId, m.ChannelId);
                 }
                 break;

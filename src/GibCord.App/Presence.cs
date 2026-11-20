@@ -19,13 +19,24 @@ public sealed class Presence
     GlobalSystemMediaTransportControlsSessionManager? _smtc;
     readonly CancellationTokenSource _cts = new();
 
+    // serwer zapomina grę i muzykę po rozłączeniu (i po każdym wdrożeniu) — po ponownym połączeniu wysyłamy je jeszcze raz
+    volatile bool _resendGame, _resendMusic;
+    GatewayStatus _last;
+
     public Presence(GibCordClient c)
     {
         _c = c;
+        _c.StatusChanged += OnStatus;
         _ = Loop(_cts.Token);
     }
 
-    public void Stop() => _cts.Cancel();
+    void OnStatus(GatewayStatus st, TimeSpan? _)
+    {
+        if (st == GatewayStatus.Connected && _last != GatewayStatus.Connected) { _resendGame = true; _resendMusic = true; }
+        _last = st;
+    }
+
+    public void Stop() { _c.StatusChanged -= OnStatus; _cts.Cancel(); }
 
     /// <summary>Czy właśnie wykryliśmy grę (nakładka w trybie „tylko w grze”).</summary>
     public bool InGame => _game is not null;
@@ -61,7 +72,13 @@ public sealed class Presence
         IEnumerable<string> Titles(string exe) => byExe.TryGetValue(exe, out var l) ? l.Select(p => { try { return p.MainWindowTitle; } catch { return ""; } }) : [];
         var pick = GibCordClient.PickGame(_games, running, Titles, _game);
         foreach (var p in procs) p.Dispose();
-        if (pick?.Name == _game?.Name) return;
+        var resend = _resendGame;
+        _resendGame = false;
+        if (pick?.Name == _game?.Name)
+        {
+            if (resend && pick is not null) _c.SendGame(pick, _gameSince);
+            return;
+        }
         _game = pick;
         _gameSince = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         _c.SendGame(pick, _gameSince);
@@ -86,7 +103,9 @@ public sealed class Presence
             }
         }
         var key = now is null ? null : $"{now.Title}|{now.Artists}|{(now.StartedAt ?? 0) / 10000}";
-        if (key == _musicKey) return;
+        var resend = _resendMusic;
+        _resendMusic = false;
+        if (key == _musicKey && !(resend && now is not null)) return;
         _musicKey = key;
         _c.SendMusic(now);
     }

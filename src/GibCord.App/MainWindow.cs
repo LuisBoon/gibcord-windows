@@ -109,8 +109,19 @@ public sealed class MainWindow : Window
         Client.EmailGateRequired += ShowEmailGate;
         Client.Mentioned += m => Inbox.AddMention(m, Client.Store);
         // skrzynka jest osobna dla każdego konta — wczytujemy ją, gdy znamy „ja”
-        long inboxFor = 0;
-        Client.Store.Changed += c => { if (c.Kind is ChangeKind.All && Client.Store.Me.Id != inboxFor) { inboxFor = Client.Store.Me.Id; Inbox.Load(inboxFor); } };
+        Client.Store.Changed += c =>
+        {
+            var me = Client.Store.Me.Id;
+            if (c.Kind is not ChangeKind.All || me == 0 || me == Inbox.For) return;
+            // inne konto niż poprzednio na tym komputerze → szkice i ostatnie kanały poprzedniej osoby znikają
+            if (App.Prefs.LastUserId != me)
+            {
+                if (App.Prefs.LastUserId != 0) { App.Prefs.Drafts.Clear(); App.Prefs.LastChannel.Clear(); App.Prefs.LastDm = 0; App.Prefs.StatusClearAt = 0; }
+                App.Prefs.LastUserId = me;
+                App.Prefs.Save();
+            }
+            Inbox.Load(me);
+        };
         // przypomnienia „przypomnij mi o tej wiadomości”
         var remindTimer = Dq.CreateTimer();
         remindTimer.Interval = TimeSpan.FromSeconds(20);
@@ -161,6 +172,7 @@ public sealed class MainWindow : Window
 
         Toasts.Reply = (key, text) => Dq.TryEnqueue(async () =>
         {
+            if (key < 0) await Client.EnsureThread(-key);
             var err = await Client.Send(key, text);
             if (err is not null) Toasts.Show("Nie wysłano odpowiedzi", err, key, "err" + key);
             else Client.MarkRead(key);
@@ -201,6 +213,7 @@ public sealed class MainWindow : Window
 
     public void ShowLogin(string? message)
     {
+        Inbox.Unload(); // przypomnienia poprzedniego konta nie mogą wyskoczyć po wylogowaniu
         _shell?.Detach();
         _shell = null;
         _host.Children.Clear();
@@ -309,6 +322,7 @@ public sealed class MainWindow : Window
                 n.Arguments.TryGetValue("a", out var act);
                 if (act == "reply" && n.UserInput.TryGetValue("odp", out var text) && !string.IsNullOrWhiteSpace(text)) AfterLoad(async () =>
                 {
+                    if (cid < 0) await Client.EnsureThread(-cid);
                     var err = await Client.Send(cid, text);
                     if (err is not null) Toasts.Show("Nie wysłano odpowiedzi", err, cid, "err" + cid); else Client.MarkRead(cid);
                 });

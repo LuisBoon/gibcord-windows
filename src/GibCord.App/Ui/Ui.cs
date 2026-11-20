@@ -281,6 +281,9 @@ public static class Images
         if (_cache.TryGetValue(key, out var b)) return b;
         b = new BitmapImage { UriSource = uri };
         if (decodeWidth > 0) b.DecodePixelWidth = decodeWidth;
+        // nieudane pobranie (np. autostart przed Wi-Fi) nie może zostać w pamięci do końca sesji
+        var img = b;
+        b.ImageFailed += (_, _) => { if (_cache.TryGetValue(key, out var x) && ReferenceEquals(x, img)) { _cache.Remove(key); _order.Remove(key); } };
         _cache[key] = b;
         _order.AddLast(key);
         if (_order.Count > 600) { _cache.Remove(_order.First!.Value); _order.RemoveFirst(); }

@@ -38,7 +38,7 @@ public static partial class Markup
     [GeneratedRegex(@"```(?:[a-z0-9+#-]*\n)?([\s\S]*?)```", RegexOptions.IgnoreCase)]
     private static partial Regex CodeBlockRe();
 
-    [GeneratedRegex(@"(?<code>`[^`\n]+`)|(?<user><@(?<uid>\d{1,18})>)|(?<emoji><(?<an>a?):(?<en>[a-z0-9_]{2,32}):(?<eid>\d{1,18})>)|(?<role><@&(?<rid>\d{1,18})>)|(?<every>(?<=^|\s)@(?:everyone|wszyscy)\b)|(?<url>\bhttps?://[^\s<>]+[^\s<>.,:;""')\]!?])")]
+    [GeneratedRegex(@"(?<code>`[^`\n]+`)|(?<user><@(?<uid>[0-9]{1,18})>)|(?<emoji><(?<an>a?):(?<en>[a-z0-9_]{2,32}):(?<eid>[0-9]{1,18})>)|(?<role><@&(?<rid>[0-9]{1,18})>)|(?<every>(?<=^|\s)@(?:everyone|wszyscy)\b)|(?<url>\bhttps?://[^\s<>]+[^\s<>.,:;""')\]!?])")]
     private static partial Regex AtomRe();
 
     [GeneratedRegex(@"\*\*([^*\n]+)\*\*")] private static partial Regex BoldRe();
@@ -81,6 +81,7 @@ public static partial class Markup
 
     public static List<Span> ParseInline(string line)
     {
+        line = OurCharsRe().Replace(line, ""); // znaki zastępcze z wejścia nie mogą udawać wzmianek
         var atoms = new List<Match>();
         var marked = AtomRe().Replace(line, m => { atoms.Add(m); return ((char)(AtomBase + atoms.Count - 1)).ToString(); });
         marked = BoldRe().Replace(marked, $"{BOn}$1{BOff}");
@@ -124,9 +125,10 @@ public static partial class Markup
     static Span Atom(Match m, TextStyle st)
     {
         if (m.Groups["code"].Success) return new CodeSpan(m.Value[1..^1], st);
-        if (m.Groups["user"].Success) return new MentionSpan(long.Parse(m.Groups["uid"].Value, CultureInfo.InvariantCulture), st);
-        if (m.Groups["emoji"].Success) return new EmojiSpan(long.Parse(m.Groups["eid"].Value, CultureInfo.InvariantCulture), m.Groups["en"].Value, m.Groups["an"].Value == "a", st);
-        if (m.Groups["role"].Success) return new RoleMentionSpan(long.Parse(m.Groups["rid"].Value, CultureInfo.InvariantCulture), st);
+        static long Id(Group g) => long.TryParse(g.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var v) ? v : -1;
+        if (m.Groups["user"].Success) return Id(m.Groups["uid"]) is var u and >= 0 ? new MentionSpan(u, st) : new TextSpan(m.Value, st);
+        if (m.Groups["emoji"].Success) return Id(m.Groups["eid"]) is var e and >= 0 ? new EmojiSpan(e, m.Groups["en"].Value, m.Groups["an"].Value == "a", st) : new TextSpan(m.Value, st);
+        if (m.Groups["role"].Success) return Id(m.Groups["rid"]) is var r and >= 0 ? new RoleMentionSpan(r, st) : new TextSpan(m.Value, st);
         if (m.Groups["every"].Success) return new EveryoneSpan(st);
         return new LinkSpan(m.Value, st);
     }
@@ -165,7 +167,7 @@ public static partial class Markup
     public static bool IsBigEmoji(string? content)
     {
         if (string.IsNullOrWhiteSpace(content)) return false;
-        var t = Regex.Replace(content, @"<a?:[a-z0-9_]{2,32}:\d+>", "⭐");
+        var t = Regex.Replace(content, @"<a?:[a-z0-9_]{2,32}:[0-9]+>", "⭐");
         if (t.Length > 48) return false;
         var any = false;
         foreach (var r in t.EnumerateRunes())

@@ -63,6 +63,9 @@ public sealed class AudioIo : IDisposable
 
     public AudioIo(VoiceEngine v) { _v = v; }
 
+    /// <summary>Urządzenie przestało działać (wyjęte słuchawki, zmiana profilu Bluetooth) — VoiceHost uruchamia dźwięk ponownie.</summary>
+    public event Action? Lost;
+
     public void Start(string inputId, string outputId, bool output = true)
     {
         Stop();
@@ -90,7 +93,13 @@ public sealed class AudioIo : IDisposable
             _rs.SetRates(_inRate, VoiceEngine.Rate);
         }
         cap.DataAvailable += (_, e) => OnMic(e.Buffer, e.BytesRecorded, fmt);
-        cap.RecordingStopped += (_, e) => { if (e.Exception is not null) { Error = "Mikrofon przestał działać: " + e.Exception.Message; App.Log(Error); } };
+        cap.RecordingStopped += (_, e) =>
+        {
+            if (e.Exception is null) return;
+            Error = "Mikrofon przestał działać: " + e.Exception.Message;
+            App.Log(Error);
+            if (ReferenceEquals(_cap, cap)) { _cap = null; try { cap.Dispose(); } catch { } Lost?.Invoke(); }
+        };
         cap.StartRecording();
         _cap = cap;
     }
@@ -150,7 +159,13 @@ public sealed class AudioIo : IDisposable
         var dev = AudioDevices.Get(outputId, DataFlow.Render) ?? throw new InvalidOperationException("brak głośników");
         var o = new WasapiOut(dev, AudioClientShareMode.Shared, true, 40);
         o.Init(new EngineOutput(_v));
-        o.PlaybackStopped += (_, e) => { if (e.Exception is not null) { Error = "Głośniki przestały działać: " + e.Exception.Message; App.Log(Error); } };
+        o.PlaybackStopped += (_, e) =>
+        {
+            if (e.Exception is null) return;
+            Error = "Głośniki przestały działać: " + e.Exception.Message;
+            App.Log(Error);
+            if (ReferenceEquals(_out, o)) { _out = null; try { o.Dispose(); } catch { } Lost?.Invoke(); }
+        };
         o.Play();
         _out = o;
     }
@@ -310,6 +325,19 @@ public sealed class VoiceHost
 
     readonly ScreenShare? _screen;
     readonly Camera? _cam;
+    readonly DispatcherQueueTimer _restart;
+    DeviceWatch? _devWatch;
+    MMDeviceEnumerator? _devEnum;
+
+    /// <summary>Zmiana domyślnego mikrofonu / głośników w Windows (np. podłączone słuchawki).</summary>
+    sealed class DeviceWatch(Action changed) : NAudio.CoreAudioApi.Interfaces.IMMNotificationClient
+    {
+        public void OnDeviceStateChanged(string deviceId, DeviceState newState) { }
+        public void OnDeviceAdded(string pwstrDeviceId) { }
+        public void OnDeviceRemoved(string deviceId) { }
+        public void OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId) { if (role == Role.Communications || role == Role.Multimedia) changed(); }
+        public void OnPropertyValueChanged(string pwstrDeviceId, PropertyKey key) { }
+    }
 
     public VoiceHost(GibCordClient c, DispatcherQueue dq, ScreenShare? screen = null, Camera? cam = null)
     {
@@ -317,6 +345,23 @@ public sealed class VoiceHost
         _screen = screen;
         _cam = cam;
         _io = new AudioIo(c.Voice);
+        // urządzenie zniknęło albo zmieniło się domyślne → po chwili włączamy dźwięk od nowa (inaczej cisza do końca rozmowy)
+        _restart = dq.CreateTimer();
+        _restart.Interval = TimeSpan.FromMilliseconds(1500);
+        _restart.IsRepeating = false;
+        _restart.Tick += (_, _) => { if (_c.VoiceChannelId != 0) { var o = _c.Voice.Options; _devIn = o.InputDevice; _devOut = o.OutputDevice; _io.Start(o.InputDevice, o.OutputDevice); } };
+        _io.Lost += () => dq.TryEnqueue(() => { _restart.Stop(); _restart.Start(); });
+        try
+        {
+            _devWatch = new DeviceWatch(() => dq.TryEnqueue(() =>
+            {
+                var o = _c.Voice.Options;
+                if (_c.VoiceChannelId != 0 && (o.InputDevice == "" || o.OutputDevice == "")) { _restart.Stop(); _restart.Start(); }
+            }));
+            _devEnum = new MMDeviceEnumerator();
+            _devEnum.RegisterEndpointNotificationCallback(_devWatch);
+        }
+        catch (Exception ex) { App.Log("Obserwowanie urządzeń dźwięku: " + ex.Message); }
         _ptt = dq.CreateTimer();
         _ptt.Interval = TimeSpan.FromMilliseconds(15);
         _ptt.Tick += (_, _) =>
@@ -365,6 +410,8 @@ public sealed class VoiceHost
         // rozmowa sama zakończyła transmisję (zmiana kanału, błąd, odebrane uprawnienie) — zgaś też przechwytywanie (żółta ramka)
         else if (_screen?.Active == true && !_c.Voice.ScreenSharing && Environment.TickCount64 - _screen.StartedAt > 5000) _screen.Stop(silent: true);
         if (!inCall && _cam?.Active == true) _cam.Stop();
+        // głos się zerwał i połączył ponownie — kamera nie jest już publikowana: publikujemy ją od nowa
+        else if (_cam?.Active == true && !_c.Voice.CameraOn && _c.Voice.State == VoiceState.Connected && Environment.TickCount64 - _cam.StartedAt > 5000) _ = _cam.Republish();
         if (_c.VoiceChannelId != _room)
         {
             if (_room == 0 && _c.VoiceChannelId != 0) Tones.Play("join");

@@ -266,7 +266,7 @@ public sealed partial class GibCordClient
     }
 
     /// <summary>Ponowne łączenie z głosem: świeży token przez REST, a gdy serwer nas już nie widzi — ponowne wejście.</summary>
-    async Task RetryMedia(long channelId, int delayMs)
+    async Task RetryMedia(long channelId, int delayMs, int netTries = 0)
     {
         await Task.Delay(delayMs);
         if (VoiceChannelId != channelId || Voice.State != VoiceState.Idle) return;
@@ -275,7 +275,18 @@ public sealed partial class GibCordClient
             if (await Api.VoiceToken(channelId) is { } m && VoiceChannelId == channelId) { await ConnectMedia(m with { ChannelId = channelId }); return; }
         }
         catch (ApiException) { }
-        catch { return; }
+        catch
+        {
+            // chwilowy brak internetu: próbujemy dalej (rosnące odstępy, łącznie ok. 1,5 minuty), potem uczciwie wychodzimy
+            if (netTries < 10) { _ = RetryMedia(channelId, Math.Min(2000 * (netTries + 1), 15000), netTries + 1); return; }
+            _ui(() =>
+            {
+                if (VoiceChannelId != channelId) return;
+                VoiceInfo?.Invoke("Brak połączenia z internetem — rozłączono z rozmową.", true);
+                _ = LeaveVoice();
+            });
+            return;
+        }
         var o = Voice.Options;
         if (VoiceChannelId == channelId && _gw is not null) await _gw.Send(new { t = "voice_join", channelId, muted = o.Muted || o.Deafened, deafened = o.Deafened });
     }
