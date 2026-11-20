@@ -31,6 +31,9 @@ public sealed class Shell : Grid
     readonly DispatcherQueueTimer _refresh;
     ChatView? _chat;
     ChatView? _thread;
+    SearchPanel? _search;
+    Task _openTask = Task.CompletedTask;
+    bool _jumping;
     readonly Border _threadHost = new() { Width = 440, Background = Theme.Members, BorderBrush = Theme.Line, BorderThickness = U.Th(1, 0, 0, 0), Visibility = Visibility.Collapsed };
     FriendsView? _friends;
     VoiceView? _voice;
@@ -55,7 +58,7 @@ public sealed class Shell : Grid
         _connBar = new Border { Background = Theme.Yellow, Padding = U.Th(12, 4), Child = _connText, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Top };
         _updateBar = new Border { Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Top };
         var center = new Grid().Rows("auto", "auto", "*").Add(_connBar.At(0), _updateBar.At(1), _main.At(2));
-        _threadHost.KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape && !e.Handled) { e.Handled = true; CloseThread(); } };
+        _threadHost.KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape && !e.Handled) { e.Handled = true; CloseSidePanel(); } };
         // panel wątku: szeroki w dużym oknie, węższy w małym (kanał obok ma zostać czytelny)
         SizeChanged += (_, e) => _threadHost.Width = Math.Clamp(e.NewSize.Width - 68 - 240 - 440, 320, 480);
         this.Add(_rail.At(0, 0), _side.At(0, 1), center.At(0, 2), _threadHost.At(0, 3), _members.At(0, 4));
@@ -84,6 +87,7 @@ public sealed class Shell : Grid
         _talk.Start();
 
         Accel(VirtualKey.K, VirtualKeyModifiers.Control, OpenSwitcher);
+        Accel(VirtualKey.F, VirtualKeyModifiers.Control, () => OpenSearch());
         Accel(VirtualKey.Left, VirtualKeyModifiers.Menu, Back);
         Accel(VirtualKey.Right, VirtualKeyModifiers.Menu, Forward);
         Accel(VirtualKey.Up, VirtualKeyModifiers.Menu, () => Step(-1));
@@ -264,6 +268,7 @@ public sealed class Shell : Grid
 
         var same = serverId == ServerId && channelId == ChannelId;
         if (!same && _thread is not null && _thread.Cid != channelId) CloseThread(refresh: false);
+        if (!same && _search is not null && serverId != ServerId && !_jumping) CloseSearch(refresh: false);
         ServerId = serverId;
         ChannelId = channelId;
         if (record && !same)
@@ -304,7 +309,7 @@ public sealed class Shell : Grid
         {
             _chat = new ChatView(this, ChannelId);
             _main.Children.Add(_chat);
-            _ = C.OpenChannel(ChannelId);
+            _openTask = C.OpenChannel(ChannelId);
             Toasts.ClearFor(ChannelId);
         }
         else if (ServerId == 0)
@@ -332,7 +337,52 @@ public sealed class Shell : Grid
 
     // ───────────────────────── wątki (panel z boku) ─────────────────────────
 
-    public bool ThreadOpen => _thread is not null;
+    public bool ThreadOpen => _thread is not null || _search is not null;
+
+    // ── wyszukiwarka (ten sam panel z prawej co wątek) ──
+
+    public void OpenSearch(string? text = null)
+    {
+        if (!S.Loaded) return;
+        if (_search is not null) { _search.Focus(text); return; }
+        CloseThread(refresh: false);
+        _search = new SearchPanel(this, text);
+        _threadHost.Child = _search;
+        _threadHost.Visibility = Visibility.Visible;
+        _members.Refresh();
+        _chat?.RefreshHeader();
+    }
+
+    void CloseSearch(bool refresh)
+    {
+        if (_search is null) return;
+        _search = null;
+        _threadHost.Child = null;
+        _threadHost.Visibility = Visibility.Collapsed;
+        if (refresh) { _members.Refresh(); _chat?.RefreshHeader(); _chat?.FocusComposer(); }
+    }
+
+    public void CloseSidePanel() { CloseSearch(refresh: true); CloseThread(); }
+    public bool SearchOpen => _search is not null;
+
+    /// <summary>Skok do wiadomości z wyniku wyszukiwania (albo linku): kanał / rozmowa, a dla wiadomości w wątku — panel wątku.</summary>
+    public async void JumpToMessage(long cid, long mid, long? threadId = null)
+    {
+        if (threadId is long tid) { OpenThread(tid, mid); return; }
+        if (ChannelId != cid)
+        {
+            _jumping = true;
+            try
+            {
+                if (S.ServerOfChannel(cid) is { } srv) Go(srv.Id, cid);
+                else if (S.DmById(cid) is not null) Go(0, cid);
+                else { Info("Nie masz już dostępu do tej rozmowy.", true); return; }
+            }
+            finally { _jumping = false; }
+            try { await _openTask; } catch { }
+        }
+        if (_chat is not null && _chat.Cid == cid) await _chat.JumpTo(mid);
+    }
     public long OpenThreadId => _thread?.Tid ?? 0;
 
     /// <summary>Otwiera wątek w panelu obok kanału (przechodzi na kanał-rodzica, jeśli trzeba). Opcjonalnie skacze do wiadomości.</summary>
@@ -348,6 +398,7 @@ public sealed class Shell : Grid
         if (ChannelId != t.ChannelId) Go(srv.Id, t.ChannelId);
         if (_thread?.Tid == tid) { if (jumpTo > 0) await _thread.JumpTo(jumpTo); _thread.FocusComposer(); return; }
         CloseThread(refresh: false);
+        CloseSearch(refresh: false);
         var view = new ChatView(this, t.ChannelId, tid);
         _thread = view;
         _threadHost.Child = view;
@@ -367,6 +418,7 @@ public sealed class Shell : Grid
     void CloseThread(bool refresh)
     {
         if (_thread is null) return;
+        _search = null;
         _thread.Dispose();
         _thread = null;
         _threadHost.Child = null;

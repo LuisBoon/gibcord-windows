@@ -144,6 +144,9 @@ public sealed class GibCordApi : IDisposable
         return e.To<Attachment>()!;
     }
 
+    // ── wyszukiwarka ──
+    public Task<SearchResult> Search(SearchQuery q, CancellationToken ct = default) => Send<SearchResult>(HttpMethod.Get, "search?" + q.ToQueryString(), ct: ct);
+
     // ── GIF-y ──
     public Task<GifPage> GifsTrending(string? pos = null, int limit = 24, CancellationToken ct = default) =>
         Send<GifPage>(HttpMethod.Get, $"gifs/trending?limit={limit}" + (pos is null ? "" : "&pos=" + Uri.EscapeDataString(pos)), ct: ct);

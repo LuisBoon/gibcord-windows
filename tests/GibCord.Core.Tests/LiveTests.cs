@@ -116,6 +116,71 @@ public sealed class LiveTests(LivePair p) : IClassFixture<LivePair>
     }
 
     [LiveFact]
+    public async Task WatkiIWyszukiwarka()
+    {
+        var (a, b) = (p.A, p.B);
+        var chan = a.Store.Servers.SelectMany(s => s.Channels).First(c => c.Name == "pogaduchy");
+        await a.OpenChannel(chan.Id);
+        await b.OpenChannel(chan.Id);
+        var tag = "watek" + Guid.NewGuid().ToString("N")[..8];
+        Assert.Null(await a.Send(chan.Id, "zaczynam " + tag));
+        await p.Until(() => a.Store.Window(chan.Id).Items.Any(m => m.Content == "zaczynam " + tag && m.Id > 0), "wiadomość startowa");
+        var starter = a.Store.Window(chan.Id).Items.Last(m => m.Content == "zaczynam " + tag);
+
+        // nowy wątek: znaczek pod wiadomością u obu osób
+        var (t, err) = await a.CreateThread(starter.Id, "Plan " + tag);
+        Assert.Null(err);
+        Assert.NotNull(t);
+        await p.Until(() => b.Store.ThreadById(t!.Id) is { } bt && bt.Name == "Plan " + tag, "wątek u B");
+        await p.Until(() => b.Store.Window(chan.Id).Items.Any(m => m.Id == starter.Id && m.Thread.Str("name") == "Plan " + tag), "znaczek wątku u B");
+        lock (p.Lock) Assert.True(a.Store.ThreadById(t!.Id)!.Following); // zakładający obserwuje
+
+        // obie osoby w wątku; wiadomości trafiają tylko do wątku
+        var (ta, st, e1) = await a.OpenThread(t!.Id);
+        Assert.Null(e1);
+        Assert.Equal(starter.Id, st!.Id);
+        var (_, _, e2) = await b.OpenThread(t.Id);
+        Assert.Null(e2);
+        var text = $"w wątku {tag} <@{b.Store.Me.Id}>";
+        Assert.Null(await a.Send(-t.Id, text));
+        await p.Until(() => b.Store.Window(-t.Id).Items.Any(m => m.Content == text), "odpowiedź w wątku u B");
+        lock (p.Lock)
+        {
+            Assert.Single(a.Store.Window(-t.Id).Items, m => m.Content == text);
+            Assert.DoesNotContain(a.Store.Window(chan.Id).Items, m => m.Content == text);
+            Assert.DoesNotContain(b.Store.Window(chan.Id).Items, m => m.Content == text);
+        }
+        await p.Until(() => b.Store.ThreadById(t.Id)?.Following == true, "wzmianka = obserwowanie u B");
+        await p.Until(() => a.Store.ThreadById(t.Id)?.Count >= 1, "licznik odpowiedzi");
+        // „pisze…” w wątku
+        a.Typing(-t.Id);
+        await p.Until(() => b.Store.TypingIn(-t.Id).Contains(a.Store.Me.Id), "„pisze…” w wątku u B");
+        // lista wątków kanału
+        var (list, _, e3) = await b.ListThreads(chan.Id);
+        Assert.Null(e3);
+        Assert.Contains(list, x => x.Id == t.Id);
+
+        // wyszukiwarka: tekst z wątku, z filtrem autora (od:@tester), na kanale
+        var q = a.ParseSearch($"{tag} od:@tester") with { ChannelId = chan.Id };
+        Assert.NotNull(q.AuthorId);
+        var (r, e4) = await b.Search(q);
+        Assert.Null(e4);
+        Assert.True(r!.Total >= 2);
+        Assert.Contains(r.Messages, m => m.ThreadId == t.Id && m.Content == text);
+        var (r2, _) = await b.Search(new SearchQuery(tag, Has: "pinned", ServerId: chan.ServerId));
+        Assert.Equal(0, r2!.Total);
+
+        // przestaję obserwować, zmiana nazwy, usunięcie wątku
+        Assert.Null(await b.FollowThread(t.Id, false));
+        await p.Until(() => b.Store.ThreadById(t.Id)?.Following == false, "nie obserwuje");
+        Assert.Null(await a.PatchThread(t.Id, new { name = "Nowa " + tag }));
+        await p.Until(() => b.Store.ThreadById(t.Id)?.Name == "Nowa " + tag, "nowa nazwa u B");
+        await a.Api.DeleteThread(t.Id);
+        await p.Until(() => b.Store.ThreadById(t.Id) is null && b.Store.Window(chan.Id).Items.First(m => m.Id == starter.Id).Thread.ValueKind != System.Text.Json.JsonValueKind.Object, "usunięcie wątku u B");
+        a.CloseThread(); b.CloseThread();
+    }
+
+    [LiveFact]
     public async Task PisanieZalacznikIStarszeWiadomosci()
     {
         var (a, b) = (p.A, p.B);

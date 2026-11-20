@@ -507,6 +507,54 @@ public sealed partial class GibCordClient : IAsyncDisposable
         catch (Exception ex) { return (null, Friendly(ex)); }
     }
 
+    // ───────────────────────── wyszukiwarka ─────────────────────────
+
+    /// <summary>Szuka wiadomości. Osoby z wyników trafiają do stanu (żeby były nazwy i awatary).</summary>
+    public async Task<(SearchResult? Result, string? Error)> Search(SearchQuery q, CancellationToken ct = default)
+    {
+        if (Offline) return (new SearchResult(), null);
+        try
+        {
+            var r = await Api.Search(q, ct);
+            _ui(() => { foreach (var (id, u) in r.Users) if (!Store.Users.ContainsKey(id)) Store.Users[id] = u; });
+            return (r, null);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { return (null, null); }
+        catch (Exception ex) { return (null, Friendly(ex)); }
+    }
+
+    /// <summary>„od:@ola ma:zdjęcie tekst” → zapytanie (jak parseQuery na stronie).</summary>
+    public SearchQuery ParseSearch(string text)
+    {
+        long? author = null; string? has = null;
+        var words = new List<string>();
+        foreach (var w in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var lw = w.ToLowerInvariant();
+            if ((lw.StartsWith("od:") || lw.StartsWith("from:")) && w.Length > lw.IndexOf(':') + 1)
+            {
+                var name = Fold(w[(w.IndexOf(':') + 1)..].TrimStart('@'));
+                var u = Store.Users.Values.FirstOrDefault(x => Fold(x.Username) == name || Fold(x.Name) == name);
+                if (u is not null) { author = u.Id; continue; }
+            }
+            else if (lw.StartsWith("ma:") || lw.StartsWith("has:"))
+            {
+                var v = Fold(w[(w.IndexOf(':') + 1)..]);
+                has = v.Contains("zdj") || v.Contains("obraz") || v.Contains("image") || v.Contains("foto") ? "image"
+                    : v.Contains("plik") || v.Contains("file") ? "file" : v.Contains("link") ? "link" : v.Contains("przyp") || v.Contains("pin") ? "pinned" : null;
+                continue;
+            }
+            words.Add(w);
+        }
+        return new SearchQuery(string.Join(' ', words), author, has);
+    }
+
+    public static string Fold(string s)
+    {
+        var n = s.ToLowerInvariant().Replace('ł', 'l').Normalize(System.Text.NormalizationForm.FormD);
+        return new string(n.Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray());
+    }
+
     // ───────────────────────── znajomi, rozmowy, status ─────────────────────────
 
     public async Task<(long DmId, string? Error)> OpenDm(long userId)

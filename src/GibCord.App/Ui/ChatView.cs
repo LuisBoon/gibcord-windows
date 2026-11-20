@@ -166,10 +166,12 @@ public sealed partial class ChatView : Grid, IDisposable
             }
         }
         var threads = Ch is { Type: "text" } tc && tc.Kind != "ideas" ? ThreadsButton() : null;
+        var search = U.IconButton("\uE721", "Szukaj wiadomości (Ctrl+F)", () => Sh.OpenSearch(), 16, 32, Sh.SearchOpen ? Theme.Fg : null);
         var icons = U.H(2,
             DmObj is not null ? U.IconButton(G.Phone, Sh.C.VoiceChannelId == Cid ? "Jesteś w tej rozmowie" : "Zadzwoń", () => Sh.StartCall(Cid), 16, 32, Sh.C.VoiceChannelId == Cid ? Theme.Green : null) : null,
             threads,
-            U.IconButton("", "Przypięte wiadomości", ShowPins, 16, 32),
+            U.IconButton("\uE718", "Przypięte wiadomości", ShowPins, 16, 32),
+            search,
             U.IconButton("", Sh.MembersVisible ? "Schowaj listę osób" : "Pokaż listę osób", Sh.ToggleMembers, 16, 32, Sh.MembersVisible ? Theme.Fg : Theme.Mu));
         g.Add(icons.At(0, 3));
         _header.Child = g;

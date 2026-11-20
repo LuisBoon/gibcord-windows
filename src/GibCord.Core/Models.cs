@@ -199,6 +199,41 @@ public sealed class Sound
     public double Volume { get; set; } = 1;
 }
 
+/// <summary>Wynik wyszukiwania wiadomości (GET /api/search).</summary>
+public sealed class SearchResult
+{
+    public int Total { get; set; }
+    public List<Message> Messages { get; set; } = [];
+    public Dictionary<long, SearchChannel> Channels { get; set; } = [];
+    public Dictionary<long, User> Users { get; set; } = [];
+}
+
+public sealed class SearchChannel
+{
+    public long Id { get; set; }
+    public string Name { get; set; } = "";
+    public long? ServerId { get; set; }
+    public string? Type { get; set; }
+}
+
+/// <summary>Zapytanie: tekst + filtry (od:@ktoś, ma:zdjęcie) + zakres (kanał / serwer / rozmowy prywatne / wszędzie).</summary>
+public sealed record SearchQuery(string Text, long? AuthorId = null, string? Has = null, long? ChannelId = null, long? ServerId = null, bool Dms = false, int Offset = 0)
+{
+    public string ToQueryString()
+    {
+        var q = new List<string> { "limit=25", "offset=" + Offset };
+        if (!string.IsNullOrWhiteSpace(Text)) q.Add("q=" + Uri.EscapeDataString(Text.Trim()));
+        if (AuthorId is long a) q.Add("authorId=" + a);
+        if (!string.IsNullOrEmpty(Has)) q.Add("has=" + Has);
+        if (ChannelId is long c) q.Add("channelId=" + c);
+        else if (ServerId is long s) q.Add("serverId=" + s);
+        else if (Dms) q.Add("scope=dms");
+        return string.Join("&", q);
+    }
+
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Text) && AuthorId is null && Has is null;
+}
+
 /// <summary>GIF z wyszukiwarki (GIPHY przez serwer) albo z ulubionych.</summary>
 public sealed class GifItem
 {

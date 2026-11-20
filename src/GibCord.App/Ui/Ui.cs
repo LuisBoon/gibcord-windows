@@ -226,6 +226,13 @@ public static class U
         VerticalScrollMode = ScrollMode.Enabled, HorizontalScrollMode = ScrollMode.Disabled,
     };
 
+    /// <summary>Poziome przewijanie (rząd przycisków, który może nie zmieścić się w wąskim panelu).</summary>
+    public static ScrollViewer Scroll2(UIElement content) => new()
+    {
+        Content = content, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollMode = ScrollMode.Disabled,
+    };
+
     public static void Tip(this FrameworkElement e, string text) => ToolTipService.SetToolTip(e, text);
 
     public static void Hand(this UIElement e) => e.With(_ => { });
