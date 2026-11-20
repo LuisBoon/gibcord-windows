@@ -418,6 +418,12 @@ public sealed class MainWindow : Window
             {
                 // aplikacja była zamknięta: odpowiedź z dymka / „Przeczytane” wykonujemy po starcie, bez pokazywania okna
                 n.Arguments.TryGetValue("a", out var act);
+                // powiadomienie z konta, które było w tle — najpierw przełącz konto
+                if (n.Arguments.TryGetValue("acc", out var accs) && long.TryParse(accs, out var acc) && acc != 0)
+                {
+                    AfterLoad(async () => { if (Client.Store.Me.Id != acc) await SwitchAccount(acc); OpenFromNotification(cid); });
+                    return;
+                }
                 if (act == "reply" && n.UserInput.TryGetValue("odp", out var text) && !string.IsNullOrWhiteSpace(text)) AfterLoad(async () =>
                 {
                     if (cid < 0) await Client.EnsureThread(-cid);
