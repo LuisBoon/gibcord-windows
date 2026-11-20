@@ -509,7 +509,8 @@ public sealed partial class MessageView : Grid
         var p = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 };
         if (_v.CanReact)
         {
-            foreach (var q in Quick)
+            // ostatnio używane emoji (bez emoji serwerów — te działają tylko na swoim serwerze), uzupełnione stałymi
+            foreach (var q in App.Prefs.RecentEmoji.Where(e => !e.StartsWith('<')).Concat(Quick).Distinct().Take(3))
             {
                 var b = U.IconButton("", "Reakcja " + q, () => _v.React(m, q), 14, 32);
                 b.Content = U.T(q, 15);
