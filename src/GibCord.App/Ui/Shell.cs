@@ -37,6 +37,7 @@ public sealed class Shell : Grid
     bool _jumping;
     readonly Border _threadHost = new() { Width = 440, Background = Theme.Members, BorderBrush = Theme.Line, BorderThickness = U.Th(1, 0, 0, 0), Visibility = Visibility.Collapsed };
     FriendsView? _friends;
+    IdeasView? _ideas;
     VoiceView? _voice;
     readonly DispatcherQueueTimer _talk;
     long _ringCid;
@@ -345,9 +346,17 @@ public sealed class Shell : Grid
         _chat = null;
         _voice?.Dispose();
         _voice = null;
+        _ideas?.Dispose();
+        _ideas = null;
         _friends = null;
         _main.Children.Clear();
-        if (ChannelId != 0 && S.ChannelById(ChannelId) is { IsVoice: true })
+        if (ChannelId != 0 && S.ChannelById(ChannelId) is { Kind: "ideas" })
+        {
+            C.CloseChannel();
+            _ideas = new IdeasView(this, ChannelId);
+            _main.Children.Add(_ideas);
+        }
+        else if (ChannelId != 0 && S.ChannelById(ChannelId) is { IsVoice: true })
         {
             C.CloseChannel();
             _voice = new VoiceView(this, ChannelId);

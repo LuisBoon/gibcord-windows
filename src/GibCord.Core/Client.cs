@@ -50,6 +50,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
     public event Action<Message>? Notify;
     public event Action<User>? FriendRequest;
     public event Action<string>? SessionEnded;
+    /// <summary>Zmiana na tablicy pomysłów (id kanału).</summary>
+    public event Action<long>? IdeaEvent;
     /// <summary>Urodziny znajomego (albo moje — id = ja).</summary>
     public event Action<long>? Birthday;
     /// <summary>Nowe zgłoszenie na serwerze, który moderuję (albo zatrzymana wiadomość automoderacji).</summary>
@@ -223,6 +225,9 @@ public sealed partial class GibCordClient : IAsyncDisposable
                 break;
             case "friend_update":
                 if (ev.Data.Prop("friend").Str("status") == "incoming" && ev.Data.Prop("user").To<User>() is { } u) FriendRequest?.Invoke(u);
+                break;
+            case "idea":
+                if (ev.Data.Long("channelId") is long ic) IdeaEvent?.Invoke(ic);
                 break;
             case "birthday":
                 if (ev.Data.Long("userId") is long bu) Birthday?.Invoke(bu);
