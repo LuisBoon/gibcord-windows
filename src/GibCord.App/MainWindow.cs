@@ -133,6 +133,7 @@ public sealed class MainWindow : Window
         Client.Store.Changed += c => { if (c.Kind is ChangeKind.All or ChangeKind.Reads or ChangeKind.Dms or ChangeKind.MessageAdded or ChangeKind.Notify or ChangeKind.Servers) UpdateUnread(); };
 
         Toasts.Init(OpenFromNotification);
+        DeepLink.Register();
         Tray.Init(this);
         HandleLaunchActivation(AppInstance.GetCurrent().GetActivatedEventArgs());
         AppInstance.GetCurrent().Activated += (_, e) => Dq.TryEnqueue(() => { BringToFront(); HandleLaunchActivation(e); });
@@ -238,9 +239,22 @@ public sealed class MainWindow : Window
         {
             if (a.Kind == ExtendedActivationKind.AppNotification && a.Data is AppNotificationActivatedEventArgs n && n.Arguments.TryGetValue("c", out var c) && long.TryParse(c, out var cid))
                 OpenFromNotification(cid);
+            else if (a.Kind == ExtendedActivationKind.Launch && a.Data is Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs la && DeepLink.Find(la.Arguments) is { } path)
+                OpenPath(path);
+            else if (a.Kind == ExtendedActivationKind.Protocol && a.Data is Windows.ApplicationModel.Activation.IProtocolActivatedEventArgs pa && DeepLink.Parse(pa.Uri.AbsoluteUri) is { } path2)
+                OpenPath(path2);
         }
         catch { }
     }
+
+    /// <summary>Ścieżka z linku gibcord:// (np. /kanal/1/2, /i/KOD) — otwierana jak link do GibCorda w czacie.</summary>
+    void OpenPath(string path) => Dq.TryEnqueue(async () =>
+    {
+        BringToFront();
+        for (var i = 0; i < 50 && (_shell is null || !Client.Store.Loaded); i++) await Task.Delay(200); // po starcie poczekaj na stan
+        if (_shell is null || path == "/") return;
+        Ui.Links.Open(_shell, new Uri(Client.Api.BaseUri, path.TrimStart('/')));
+    });
 
     void UpdateUnread()
     {
