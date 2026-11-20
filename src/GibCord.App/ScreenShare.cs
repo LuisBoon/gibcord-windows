@@ -63,6 +63,7 @@ public sealed class ScreenShare : IDisposable
     public event Action? Stopped;
 
     ScreenAudio? _audio;
+    long _lastPreview;
     int _tw, _th;
     string _quality = "1080p";
     byte[] _scaled = [];
@@ -167,6 +168,7 @@ public sealed class ScreenShare : IDisposable
                 return;
             }
             using var sb = await SoftwareBitmap.CreateCopyFromSurfaceAsync(frame.Surface, BitmapAlphaMode.Premultiplied);
+            if (now - _lastPreview > 10_000) { _lastPreview = now; _ = SendPreview(SoftwareBitmap.Copy(sb)); }
             var w = sb.PixelWidth & ~1; var h = sb.PixelHeight & ~1;
             var full = sb.PixelWidth * sb.PixelHeight * 4;
             if (_buf.Length != full) _buf = new byte[full];
@@ -190,6 +192,30 @@ public sealed class ScreenShare : IDisposable
         }
         catch (Exception ex) { App.Log("Transmisja (klatka): " + ex.Message); }
         finally { Interlocked.Exchange(ref _busy, 0); }
+    }
+
+    /// <summary>Mały kadr (480 px, JPEG) dla podglądu u innych — co 10 s.</summary>
+    async Task SendPreview(SoftwareBitmap sb)
+    {
+        try
+        {
+            using (sb)
+            {
+                using var ms = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+                var enc = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, ms);
+                enc.SetSoftwareBitmap(SoftwareBitmap.Convert(sb, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore));
+                var k = Math.Min(1.0, 480.0 / Math.Max(1, sb.PixelWidth));
+                enc.BitmapTransform.ScaledWidth = (uint)Math.Max(2, sb.PixelWidth * k);
+                enc.BitmapTransform.ScaledHeight = (uint)Math.Max(2, sb.PixelHeight * k);
+                enc.BitmapTransform.InterpolationMode = BitmapInterpolationMode.Fant;
+                await enc.FlushAsync();
+                var bytes = new byte[ms.Size];
+                ms.Seek(0);
+                await ms.ReadAsync(bytes.AsBuffer(), (uint)bytes.Length, Windows.Storage.Streams.InputStreamOptions.None);
+                if (bytes.Length > 100) await _c.Api.PostImage("voice/preview", new MemoryStream(bytes), "image/jpeg");
+            }
+        }
+        catch (Exception ex) { App.Log("Podgląd transmisji: " + ex.Message); }
     }
 
     public void Stop(bool silent = false)

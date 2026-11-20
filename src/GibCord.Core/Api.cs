@@ -202,6 +202,16 @@ public sealed class GibCordApi : IDisposable
     public Task DeleteEvent(long id, CancellationToken ct = default) => Send(HttpMethod.Delete, $"events/{id}", ct: ct);
     public Task<ServerEvent> Rsvp(long id, bool on, CancellationToken ct = default) => Send<ServerEvent>(on ? HttpMethod.Put : HttpMethod.Delete, $"events/{id}/rsvp", ct: ct);
 
+    /// <summary>Surowe bajty z API (np. podgląd transmisji — wymaga tokenu, więc nie przez zwykły adres obrazka).</summary>
+    public async Task<byte[]> GetBytes(string path, CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, "api/v1/" + path.TrimStart('/'));
+        if (Token is not null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+        if (!res.IsSuccessStatusCode) throw new ApiException((int)res.StatusCode, "Brak podglądu");
+        return await res.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+    }
+
     // ── wyszukiwarka ──
     public Task<SearchResult> Search(SearchQuery q, CancellationToken ct = default) => Send<SearchResult>(HttpMethod.Get, "search?" + q.ToQueryString(), ct: ct);
 

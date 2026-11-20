@@ -146,6 +146,11 @@ public sealed partial class GibCordClient
         if (!Offline) _ = _gw?.Send(frame);
     }
 
+    // ── podglądy transmisji ──
+
+    /// <summary>Kiedy przyszedł ostatni podgląd transmisji danej osoby (stream_preview).</summary>
+    public Dictionary<long, long> StreamPreviews { get; } = [];
+
     // ── soundboard ──
 
     /// <summary>Dźwięk z soundboardu w moim pokoju (do odtworzenia przez aplikację). Url względny (/sounds/… albo /uploads/…).</summary>
@@ -203,6 +208,9 @@ public sealed partial class GibCordClient
                 VoiceChanged?.Invoke();
                 return;
             }
+            case "stream_preview":
+                if (d.Long("userId") is long pu && d.Long("at") is long pat) { StreamPreviews[pu] = pat; VoiceChanged?.Invoke(); }
+                return;
             case "watch_react":
                 if (d.Long("channelId") is long rc2 && d.Long("userId") is long ru && d.Str("emoji") is { } emo) WatchReacted?.Invoke(rc2, ru, emo);
                 return;

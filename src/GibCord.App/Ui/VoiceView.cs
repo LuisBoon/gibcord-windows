@@ -277,6 +277,13 @@ sealed class VoiceTile : Grid
         var label = new Border { Background = U.B("#99120c22"), CornerRadius = new CornerRadius(8), Padding = U.Th(8, 3), Margin = U.Th(8), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Child = U.H(6, name, icons) };
         var center = new Grid().Add(avBox);
         this.Add(_frame, center, new Border { CornerRadius = new CornerRadius(12), Margin = U.Th(2), Child = Video }, label);
+        if (vm.Streaming && !me && !sh.C.Voice.IsWatching(vm.UserId) && sh.C.StreamPreviews.ContainsKey(vm.UserId))
+        {
+            // podgląd transmisji (kadr co ~10 s) zamiast awatara, dopóki ktoś nie kliknie „Oglądaj”
+            var pv = new Image { Stretch = Stretch.UniformToFill, Opacity = .85 };
+            this.Children.Insert(2, new Border { CornerRadius = new CornerRadius(12), Margin = U.Th(2), Child = pv });
+            _ = LoadPreview(sh, vm.UserId, pv);
+        }
         if (vm.Streaming)
         {
             var live = U.Box(U.T("NA ŻYWO", 9.5, U.Bold, U.B("#ffffff")), Theme.Red2, 5, U.Th(6, 2));
@@ -300,6 +307,19 @@ sealed class VoiceTile : Grid
     public bool Talking
     {
         set { Av.Talking = value; _frame.BorderBrush = value ? Theme.Green : U.W(.08); }
+    }
+
+    static async Task LoadPreview(Shell sh, long uid, Image img)
+    {
+        try
+        {
+            var bytes = await sh.C.Api.GetBytes($"voice/{sh.C.VoiceChannelId}/preview/{uid}");
+            var bmp = new BitmapImage();
+            using var ms = new MemoryStream(bytes);
+            await bmp.SetSourceAsync(ms.AsRandomAccessStream());
+            img.Source = bmp;
+        }
+        catch { }
     }
 }
 
