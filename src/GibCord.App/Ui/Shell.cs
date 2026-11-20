@@ -612,10 +612,10 @@ public sealed class Shell : Grid
 
     ServerSettingsPage? _srvSettings;
 
-    public void ShowServerSettings(long serverId, string section = "overview")
+    public void ShowServerSettings(long serverId, string section = "overview", long? selectRole = null)
     {
         CloseServerSettings();
-        _srvSettings = new ServerSettingsPage(this, serverId, section);
+        _srvSettings = new ServerSettingsPage(this, serverId, section, selectRole);
         _srvSettings.At(0, 0, colSpan: 5);
         Children.Add(_srvSettings);
         _srvSettings.Loaded += (_, _) => _srvSettings?.Focus(FocusState.Programmatic);

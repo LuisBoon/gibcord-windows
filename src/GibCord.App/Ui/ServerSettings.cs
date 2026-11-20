@@ -26,11 +26,12 @@ public sealed partial class ServerSettingsPage : Grid
     GibCordApi Api => _sh.C.Api;
     Server? Srv => S.ServerById(_sid);
 
-    public ServerSettingsPage(Shell sh, long serverId, string section)
+    public ServerSettingsPage(Shell sh, long serverId, string section, long? selectRole = null)
     {
         _sh = sh;
         _sid = serverId;
         _section = section;
+        _role = selectRole;
         Background = U.B("#F5181230");
         this.Cols("250", "*", "auto");
         _sv = U.Scroll(_body);
