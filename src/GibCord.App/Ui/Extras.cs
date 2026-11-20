@@ -187,8 +187,8 @@ public static class ProfileCard
         since.Children.Add(U.V(2, U.T("NA GIBCORDZIE OD", 10.5, U.Bold, Theme.Mu2), U.T(Format.Local(u.CreatedAt).ToString("d MMM yyyy", Format.Pl), 13)));
         if (s.MemberOf(srv, uid) is { JoinedAt: > 0 } mem) since.Children.Add(U.V(2, U.T("NA SERWERZE OD", 10.5, U.Bold, Theme.Mu2), U.T(Format.Local(mem.JoinedAt).ToString("d MMM yyyy", Format.Pl), 13)));
         if (s.Friends.GetValueOrDefault(uid) is { Status: "friends", Since: > 0 } fr) since.Children.Add(U.V(2, U.T("ZNAJOMI OD", 10.5, U.Bold, Theme.Mu2), U.T(Format.Local(fr.Since).ToString("d MMM yyyy", Format.Pl), 13)));
-        if (srv is { Levels: true } && s.MemberOf(srv, uid) is { Level: > 0 } lm) since.Children.Add(U.V(2, U.T("POZIOM", 10.5, U.Bold, Theme.Mu2), U.T("⭐ " + lm.Level, 13, U.Bold, Theme.Yellow)));
         body.Add(U.Box(since, U.B("#4D0A0618"), 12, U.Th(12, 10)));
+        if (srv is { Levels: true } && s.MemberOf(srv, uid) is not null && !sh.C.Offline) body.Add(U.Box(Levels.Progress(sh, srv, uid), U.B("#4D0A0618"), 12, U.Th(12, 10)));
         if (u.Badges.Count > 0)
         {
             var badges = new WrapPanel { Spacing = 6 };

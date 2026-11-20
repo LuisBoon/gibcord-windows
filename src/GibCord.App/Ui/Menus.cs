@@ -61,6 +61,7 @@ static class ServerMenu
             }));
         f.Items.Add(M.Item("Oznacz wszystko jako przeczytane", "\uE8FB", () => { foreach (var c in srv.Channels.Where(c => !c.IsVoice && s.IsUnread(c.Id))) sh.C.MarkRead(c.Id); }));
         f.Items.Add(M.Item("Wydarzenia", "\uE787", () => Events.Show(sh, srv.Id)));
+        if (srv.Levels) f.Items.Add(M.Item("Ranking poziomów", "\uE734", () => Levels.Show(sh, srv)));
         f.Items.Add(NotifyMenu.Sub(sh, "server", srv.Id, s.Notify.Servers.GetValueOrDefault(srv.Id)));
         f.Items.Add(M.Item("Mój profil na tym serwerze", "\uE77B", () => ServerProfile.Show(sh, srv)));
         if (srv.Roles.Any(r => r.SelfAssignable)) f.Items.Add(M.Item("Wybierz role", "\uE8EC", () => ServerProfile.PickRoles(sh, srv)));
