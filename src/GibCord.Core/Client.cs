@@ -28,6 +28,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
     readonly HashSet<long> _loadingOlder = [];
     readonly Dictionary<long, long> _typingSent = [];
     readonly Dictionary<long, CancellationTokenSource> _readTimers = [];
+    /// <summary>Wiadomości, które nie poszły przez brak internetu — wyślą się same po powrocie połączenia (ten sam nonce = bez duplikatów).</summary>
+    readonly List<Message> _outbox = [];
     Gateway? _gw;
     bool _stateInFlight;
     bool _visible = true;
@@ -203,7 +205,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     void OnEvent(GatewayEvent ev)
     {
-        if (ev.Type == "hello") { _ = RefreshState(); RejoinVoiceAfterReconnect(); return; }
+        if (ev.Type == "hello") { _ = RefreshState(); RejoinVoiceAfterReconnect(); _ = FlushOutbox(); return; }
         Store.Apply(ev);
         OnVoiceEvent(ev);
         switch (ev.Type)
@@ -502,12 +504,35 @@ public sealed partial class GibCordClient : IAsyncDisposable
                 if (m.ThreadId is long mt) Store.MarkThreadReadLocal(mt, m.Id); else Store.MarkReadLocal(m.ChannelId, m.Id);
             });
             SaveSoon(local.Key);
+            bool more;
+            lock (_outbox) more = _outbox.Count > 0;
+            if (more) _ = FlushOutbox(); // internet wrócił — wyślij też te, które czekały
+            return null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && Status != GatewayStatus.Connected))
+        {
+            // brak sieci: zostaje szara z „czeka na internet” i pójdzie sama po powrocie połączenia
+            lock (_outbox) if (!_outbox.Contains(local)) _outbox.Add(local);
+            _ui(() => Store.FailPending(local.Key, local.Nonce!, queued: true));
             return null;
         }
         catch (Exception ex)
         {
             _ui(() => Store.FailPending(local.Key, local.Nonce!));
             return Friendly(ex);
+        }
+    }
+
+    /// <summary>Po powrocie połączenia: kolejka wiadomości wysyłana po kolei.</summary>
+    async Task FlushOutbox()
+    {
+        List<Message> items;
+        lock (_outbox) { items = [.. _outbox]; _outbox.Clear(); }
+        foreach (var m in items)
+        {
+            m.Send = SendState.Pending;
+            _ui(() => Store.Upsert(m, live: false));
+            await Deliver(m);
         }
     }
 
@@ -526,7 +551,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     public async Task<string?> Delete(Message m)
     {
-        if (m.Send != SendState.Sent) { Store.RemoveLocal(m.Key, m.Id); return null; }
+        if (m.Send != SendState.Sent) { lock (_outbox) _outbox.Remove(m); Store.RemoveLocal(m.Key, m.Id); return null; }
         try { await Api.DeleteMessage(m.Id); _ui(() => Store.RemoveLocal(m.Key, m.Id)); return null; }
         catch (Exception ex) { return Friendly(ex); }
     }

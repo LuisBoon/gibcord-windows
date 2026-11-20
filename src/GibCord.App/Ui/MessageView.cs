@@ -48,7 +48,7 @@ public sealed partial class MessageView : Grid
         if (row.NewMarker) stack.Children.Add(NewSeparator());
         stack.Children.Add(m.Type == "automod" && m.Automod.ValueKind == System.Text.Json.JsonValueKind.Object ? AutomodCard(m) : m.IsSystem ? SystemLine(m) : S.Blocked.Contains(m.AuthorId) && !_v.Revealed.Contains(m.Id) ? BlockedLine(m, row) : Normal(m, row));
         _body.Children.Add(stack);
-        Opacity = m.Send == SendState.Pending ? .55 : 1;
+        Opacity = m.Send is SendState.Pending or SendState.Queued ? .55 : 1;
     }
 
     // ── separatory ──
@@ -218,6 +218,12 @@ public sealed partial class MessageView : Grid
         foreach (var code in Links.InviteCodes(m.Content)) body.Children.Add(Links.InviteCard(_v.Sh, code));
         if (m.Reactions.Count > 0) body.Children.Add(Reactions(m));
         if (m.Thread.ValueKind == JsonValueKind.Object && !IsStarter && !_v.IsThread) body.Children.Add(ThreadChip(m.Thread));
+        if (m.Send == SendState.Queued)
+        {
+            var cancel = new HyperlinkButton { Content = U.T("Anuluj", 12, U.Bold, Theme.Mu), Padding = U.Th(0) };
+            cancel.Click += (_, _) => _v.Delete(m, ask: false);
+            body.Children.Add(U.H(8, U.I("\uE895", 12, Theme.Yellow), U.T("Czeka na internet — wyśle się sama", 12, U.Semi, Theme.Yellow), cancel));
+        }
         if (m.Send == SendState.Failed)
         {
             var retry = new HyperlinkButton { Content = U.T("Ponów", 12, U.Bold, Theme.Accent), Padding = U.Th(0) };

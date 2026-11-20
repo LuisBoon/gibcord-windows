@@ -350,11 +350,11 @@ public sealed class Store
         Raise(ChangeKind.MessageAdded, m.Id, m.Key, m);
     }
 
-    public void FailPending(long cid, string nonce)
+    public void FailPending(long cid, string nonce, bool queued = false)
     {
         var m = Window(cid).Items.Find(x => x.Nonce == nonce && x.Send != SendState.Sent);
         if (m is null) return;
-        m.Send = SendState.Failed;
+        m.Send = queued ? SendState.Queued : SendState.Failed;
         Raise(ChangeKind.MessageUpdated, m.Id, cid, m);
     }
 

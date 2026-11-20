@@ -432,7 +432,7 @@ public sealed class Message
     [JsonIgnore] public bool HasCard => Card.ValueKind == JsonValueKind.Object && Card.Str("title") is { Length: > 0 };
 }
 
-public enum SendState { Sent, Pending, Failed }
+public enum SendState { Sent, Pending, Failed, Queued }
 
 /// <summary>Wątek: boczna rozmowa przy jednej wiadomości kanału (serwer 5.10). Wiadomości leżą na kanale-rodzicu z threadId.</summary>
 public sealed class ThreadInfo
