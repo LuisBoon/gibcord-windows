@@ -72,6 +72,7 @@ public static class Demo
                 sh.StartCall(DmOla);
                 break;
             case "imgedit": sh.Go(Eg, Ogolne); sh.DemoImageEditor(); break;
+            case "accounts": sh.Go(Eg, Ogolne); break; // kropka „3” przy panelu „ja” (konta w tle)
             case "later":
             {
                 sh.C.DemoScheduled = true;

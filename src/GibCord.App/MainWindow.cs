@@ -93,7 +93,9 @@ public sealed class MainWindow : Window
             Client = Demo.CreateClient(UiRun);
             Client.Voice.Options = App.Prefs.Voice;
             if (Options.View == "overlay") _overlay = new GameOverlay(Client, Dq, () => true); // obraz nakładki zapisuje się obok zrzutu
-            if (Options.View == "login") ShowLogin(null); else ShowShell();
+            if (Options.View is "accounts" or "loginacc")
+                Accounts.Demo = [(new AccountInfo { Id = 7, Username = "bonkus", Name = "bonkus", Color = "#ffd27a" }, 3), (new AccountInfo { Id = 8, Username = "gibek_test", Name = "Gibek (test)", Color = "#9fe3d5" }, 0)];
+            if (Options.View is "login" or "loginacc") ShowLogin(null); else ShowShell();
             Activate();
             if (Options.Screenshot is { } path) _ = Screenshot(path);
             return;

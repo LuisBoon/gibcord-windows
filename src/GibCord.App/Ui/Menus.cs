@@ -147,7 +147,7 @@ static class StatusMenu
         var f = new MenuFlyout();
         var cur = sh.S.Me.Status;
         // kilka kont: przełącznik na górze
-        if (!sh.C.Offline)
+        if (!sh.C.Offline || Accounts.Demo is not null)
         {
             var me = sh.S.Me;
             var others = Accounts.Others(me.Id).ToList();

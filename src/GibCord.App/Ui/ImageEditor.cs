@@ -25,7 +25,7 @@ namespace GibCord.App.Ui;
 static class ImageEditor
 {
     enum Tool { Crop, Blur, Draw, Text }
-    const int ViewW = 720, ViewH = 430;
+    const int ViewW = 720, ViewH = 380;
     static readonly string[] Colors = ["#ffb98f", "#ff4d6a", "#ffd34d", "#6fe3a5", "#7cc7ff", "#ffffff", "#111111"];
 
     public static bool CanEdit(string name, string? mime) =>
@@ -214,6 +214,11 @@ static class ImageEditor
             XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,
         };
         dlg.Resources["ContentDialogMaxWidth"] = 820.0;
+        // akcent GibCorda zamiast systemowego niebieskiego (przycisk „Gotowe” i wybrane narzędzie)
+        foreach (var k in new[] { "AccentButtonBackground", "AccentButtonBackgroundPointerOver", "AccentButtonBackgroundPressed", "ToggleButtonBackgroundChecked", "ToggleButtonBackgroundCheckedPointerOver", "ToggleButtonBackgroundCheckedPressed" })
+            dlg.Resources[k] = Theme.Accent;
+        foreach (var k in new[] { "AccentButtonForeground", "AccentButtonForegroundPointerOver", "AccentButtonForegroundPressed", "ToggleButtonForegroundChecked", "ToggleButtonForegroundCheckedPointerOver", "ToggleButtonForegroundCheckedPressed" })
+            dlg.Resources[k] = Theme.OnAccent;
         dlg.Resources["ContentDialogMaxHeight"] = 760.0;
         dlg.KeyDown += async (_, e) =>
         {

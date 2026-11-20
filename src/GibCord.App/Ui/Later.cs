@@ -81,7 +81,7 @@ static class Later
         readonly ChatView _v;
         public Border Root { get; } = new();
         public bool Visible => Root.Visibility == Visibility.Visible;
-        readonly TextBlock _text = U.T("", 12.5, null, Theme.Mu);
+        readonly TextBlock _text = U.T("", 12.5, null, Theme.Mu).With(t => { t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; });
         readonly TextBlock _fail = U.T("", 12.5, U.Semi, Theme.Red2);
 
         public Bar(ChatView v)
@@ -95,7 +95,7 @@ static class Later
             Root.Visibility = Visibility.Collapsed;
             var show = U.Ghost("Pokaż", Open, 28);
             Root.Child = new Grid().Cols("auto", "*", "auto").Add(U.I("", 13, Theme.Accent).With(i => i.Margin = U.Th(0, 0, 8, 0)).At(0, 0),
-                U.H(10, _text, _fail).With(p => p.VerticalAlignment = VerticalAlignment.Center).At(0, 1), show.At(0, 2));
+                new Grid { ColumnSpacing = 10, VerticalAlignment = VerticalAlignment.Center }.Cols("*", "auto").Add(_text.At(0, 0), _fail.At(0, 1)).At(0, 1), show.At(0, 2));
         }
 
         public void Refresh()
@@ -104,8 +104,7 @@ static class Later
             Root.Visibility = list.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (list.Count == 0) return;
             var next = list.Where(s => !s.Failed).OrderBy(s => s.SendAt).FirstOrDefault();
-            _text.Text = list.Count == 1 ? $"Zaplanowana wiadomość · {(next is null ? "nie wysłano" : When(next.SendAt))}"
-                : $"Zaplanowane: {list.Count} · najbliższa {(next is null ? "—" : When(next.SendAt))}";
+            _text.Text = (list.Count == 1 ? "Zaplanowana" : $"Zaplanowane ({list.Count})") + (next is null ? "" : " · " + When(next.SendAt));
             var failed = list.Count(s => s.Failed);
             _fail.Text = failed > 0 ? $"nie wysłano: {failed}" : "";
         }

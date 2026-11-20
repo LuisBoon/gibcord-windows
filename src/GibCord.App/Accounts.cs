@@ -42,9 +42,12 @@ public static class Accounts
         Save();
     }
 
+    /// <summary>Tryb pokazowy (zrzuty CI): przykładowe zapisane konta i ich nowe wiadomości.</summary>
+    public static List<(AccountInfo Info, int Unread)>? Demo;
+
     /// <summary>Konta inne niż <paramref name="active"/>, które mają zapisany token.</summary>
-    public static IEnumerable<AccountInfo> Others(long active) =>
-        List.Where(a => a.Id != active && File.Exists(TokenPath(a.Id))).OrderByDescending(a => a.LastUsed);
+    public static IEnumerable<AccountInfo> Others(long active) => Demo is { } d ? d.Select(x => x.Info).Where(a => a.Id != active)
+        : List.Where(a => a.Id != active && File.Exists(TokenPath(a.Id))).OrderByDescending(a => a.LastUsed);
 
     /// <summary>Zapomnij konto (po wylogowaniu): token, pamięć podręczna i wpis.</summary>
     public static void Forget(long id)
@@ -84,8 +87,8 @@ public static class Accounts
         public static event Action? UnreadChanged;
         public static Action<Action>? Ui;
 
-        public static int UnreadOf(long id) => _bg.TryGetValue(id, out var b) ? b.Unread : 0;
-        public static int UnreadTotal => _bg.Values.Sum(b => b.Unread);
+        public static int UnreadOf(long id) => Demo is { } d ? d.FirstOrDefault(x => x.Info.Id == id).Unread : _bg.TryGetValue(id, out var b) ? b.Unread : 0;
+        public static int UnreadTotal => Demo is { } d ? d.Sum(x => x.Unread) : _bg.Values.Sum(b => b.Unread);
         public static bool IsRunning(long id) => _bg.ContainsKey(id);
 
         public static void Start(long id, Uri server)
