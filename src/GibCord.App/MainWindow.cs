@@ -738,6 +738,22 @@ public sealed class MainWindow : Window
         catch (Exception ex) { return "błąd: " + ex.Message; }
     }
 
+    async Task SavePng(UIElement target, string path)
+    {
+        var rtb = new RenderTargetBitmap();
+        await rtb.RenderAsync(target);
+        var pixels = await rtb.GetPixelsAsync();
+        using var stream = new InMemoryRandomAccessStream();
+        var enc = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);
+        var dpi = 96 * _root.XamlRoot.RasterizationScale;
+        enc.SetPixelData(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied, (uint)rtb.PixelWidth, (uint)rtb.PixelHeight, dpi, dpi, pixels.ToArray());
+        await enc.FlushAsync();
+        stream.Seek(0);
+        var bytes = new byte[stream.Size];
+        await stream.ReadAsync(bytes.AsBuffer(), (uint)stream.Size, InputStreamOptions.None);
+        await File.WriteAllBytesAsync(path, bytes);
+    }
+
     async Task Screenshot(string path)
     {
         try
@@ -779,24 +795,17 @@ public sealed class MainWindow : Window
                 ov.Notify("Ola · #ogólne · Ekipa Gibka", "wbijacie dziś na Minecrafta? 🎮");
                 ov.Notify("Kuba", "zaraz będę, robię herbatę");
             }
-            if (Options.View is "switcher" or "profile" or "emoji" or "overlay" or "menu" or "confirm" or "screenpick") await Task.Delay(2500);
-            var rtb = new RenderTargetBitmap();
-            // okienko (ContentDialog) leży w warstwie wyskakujących — zrzut z niej, gdy jest otwarte
+            if (Options.View is "switcher" or "profile" or "emoji" or "overlay" or "menu" or "confirm" or "screenpick" or "fields" or "dropdown" or "calendar" or "timepick" or "files") await Task.Delay(2500);
+            if (Options.View == "tray") { Tray.DemoMenu(this); await Task.Delay(1500); }
+            // własne okienka leżą w samym oknie (wchodzą na zrzut z przyciemnieniem); menu i listy rozwijane — w warstwie wyskakujących
             UIElement target = _root;
             var popups = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetOpenPopupsForXamlRoot(_root.XamlRoot);
-            if (Options.View is "imgedit" or "confirm" && popups.FirstOrDefault(p => p.Child is ContentDialog) is { Child: { } dc }) target = dc;
             if (Options.View == "menu" && popups.FirstOrDefault(p => p.Child is not null) is { Child: { } mc }) target = mc; // samo menu (dymki nie wchodzą na zrzut okna)
-            await rtb.RenderAsync(target);
-            var pixels = await rtb.GetPixelsAsync();
-            using var stream = new InMemoryRandomAccessStream();
-            var enc = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);
-            var dpi = 96 * _root.XamlRoot.RasterizationScale;
-            enc.SetPixelData(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied, (uint)rtb.PixelWidth, (uint)rtb.PixelHeight, dpi, dpi, pixels.ToArray());
-            await enc.FlushAsync();
-            stream.Seek(0);
-            var bytes = new byte[stream.Size];
-            await stream.ReadAsync(bytes.AsBuffer(), (uint)stream.Size, InputStreamOptions.None);
-            await File.WriteAllBytesAsync(path, bytes);
+            if (Options.View == "tray" && Ui.TrayMenu.DemoRoot is { } tr) target = tr;
+            await SavePng(target, path);
+            // lista rozwijana / kalendarz / godzina: osobny zrzut samej karty (wyskakujące nie wchodzą na zrzut okna)
+            if (Options.View is "dropdown" or "calendar" or "timepick" && popups.LastOrDefault(p => p.Child is Border) is { Child: { } pc })
+                await SavePng(pc, path.Replace(".png", "-lista.png"));
         }
         catch (Exception ex) { await File.WriteAllTextAsync(path + ".blad.txt", ex.ToString()); }
         Quit();

@@ -29,22 +29,21 @@ static class M
         return i;
     }
 
-    public static bool DialogOpen(XamlRoot? root) =>
-        root is not null && Microsoft.UI.Xaml.Media.VisualTreeHelper.GetOpenPopupsForXamlRoot(root).Any(p => p.Child is ContentDialog);
+    public static bool DialogOpen(XamlRoot? root) => AppDialog.OpenCount > 0;
 
-    /// <summary>Czeka, aż zamknie się inne okienko (dwa ContentDialogi naraz = wyjątek).</summary>
+    /// <summary>Czeka, aż zamknie się inne okienko (żeby nowe nie wyskoczyło nad formularzem, który ktoś wypełnia).</summary>
     public static async Task WaitNoDialog(XamlRoot? root)
     {
-        for (var i = 0; i < 150 && root is not null && Microsoft.UI.Xaml.Media.VisualTreeHelper.GetOpenPopupsForXamlRoot(root).Any(p => p.Child is ContentDialog); i++)
+        for (var i = 0; i < 150 && AppDialog.OpenCount > 0; i++)
             await Task.Delay(100);
     }
 
     public static async Task<bool> Confirm(Shell sh, string title, string text, string ok)
     {
         await WaitNoDialog(sh.XamlRoot);
-        var d = new ContentDialog
+        var d = new AppDialog
         {
-            Title = title, Content = U.T(text, 14, null, null, wrap: true), PrimaryButtonText = ok, CloseButtonText = "Anuluj",
+            Title = title, Content = text, PrimaryButtonText = ok, CloseButtonText = "Anuluj",
             DefaultButton = ContentDialogButton.Close, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,
         };
         return await d.ShowAsync() == ContentDialogResult.Primary;
@@ -174,11 +173,11 @@ static class StatusMenu
         f.Items.Add(M.Item("Ustaw opis statusu…", "", async () =>
         {
             var box = new TextBox { Text = sh.S.Me.CustomStatus ?? "", PlaceholderText = "np. gram w Minecrafta", MaxLength = 100 };
-            var clear = new ComboBox { Header = "Wyczyść po", HorizontalAlignment = HorizontalAlignment.Stretch };
+            var clear = new DropField { Header = "Wyczyść po", HorizontalAlignment = HorizontalAlignment.Stretch };
             var vals = new[] { 0L, 30, 60, 240, -1 };
             foreach (var l in new[] { "Nie czyść", "30 minutach", "Godzinie", "4 godzinach", "Końcu dnia" }) clear.Items.Add(l);
             clear.SelectedIndex = 0;
-            var d = new ContentDialog
+            var d = new AppDialog
             {
                 Title = "Opis statusu", Content = U.V(10, box, clear).With(p => p.Width = 340), PrimaryButtonText = "Zapisz", SecondaryButtonText = "Wyczyść", CloseButtonText = "Anuluj",
                 DefaultButton = ContentDialogButton.Primary, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -315,7 +314,7 @@ static class AddServerDialog
             U.T("Albo załóż własny serwer:", 13, U.Semi, Theme.Mu), name,
             new ScrollViewer { Content = list, MaxHeight = 230 },
             link, preview).With(p => p.Width = 420);
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = "Dodaj serwer", Content = new ScrollViewer { Content = panel, MaxHeight = 600 }, PrimaryButtonText = "Dołącz", SecondaryButtonText = "Załóż serwer", CloseButtonText = "Anuluj",
             DefaultButton = ContentDialogButton.Primary, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,

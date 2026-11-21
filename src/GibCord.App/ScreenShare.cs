@@ -72,17 +72,6 @@ public sealed class ScreenShare : IDisposable
     public bool AudioActive => _audio?.Active == true;
     public long StartedAt { get; private set; }
 
-    /// <summary>Okienko wyboru ekranu/okna i start transmisji. Zwraca komunikat błędu albo null.</summary>
-    public async Task<string?> Start(IntPtr hwnd, int fps = 30, string quality = "1080p", bool withAudio = false)
-    {
-        if (!GraphicsCaptureSession.IsSupported()) return "Ten Windows nie pozwala nagrywać ekranu (potrzebny Windows 10 1903 albo nowszy).";
-        var picker = new GraphicsCapturePicker();
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-        var item = await picker.PickSingleItemAsync();
-        if (item is null) return null; // anulowano
-        return await Start(item, fps, quality, withAudio);
-    }
-
     public static bool Supported { get { try { return GraphicsCaptureSession.IsSupported(); } catch { return false; } } }
 
     /// <summary>Start transmisji wybranego ekranu albo okna (własne okienko wyboru GibCorda). Zwraca komunikat błędu albo null.</summary>

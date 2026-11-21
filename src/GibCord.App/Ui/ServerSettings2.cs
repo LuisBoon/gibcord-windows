@@ -93,7 +93,7 @@ public sealed partial class ServerSettingsPage
         foreach (var role in srv.Roles.Where(x => x.Name != "@everyone").OrderByDescending(x => x.Position))
         {
             var id = role.Id;
-            var t = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Content = U.H(6, new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 10, Height = 10, Fill = U.B(role.Color ?? "#8b8599") }, U.T(role.Name, 12.5, U.Semi)), CornerRadius = new CornerRadius(12), Padding = U.Th(10, 4) };
+            var t = new ChipField { Content = U.H(6, new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 10, Height = 10, Fill = U.B(role.Color ?? "#8b8599") }, U.T(role.Name, 12.5, U.Semi)), CornerRadius = new CornerRadius(12), Padding = U.Th(10, 4) };
             t.Checked += (_, _) => { sel.Add(id); _ = Load(); };
             t.Unchecked += (_, _) => { sel.Remove(id); _ = Load(); };
             chips.Children.Add(t);
@@ -101,7 +101,7 @@ public sealed partial class ServerSettingsPage
         var body = U.V(10, U.T("Zaznacz role — zobaczysz, co osoba z dokładnie takimi rolami widzi i może na każdym kanale. Bez zaznaczenia: tylko @wszyscy.", 12.5, null, Theme.Mu, wrap: true),
             chips, table, summary);
         body.Width = 600;
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = "Podgląd jako rola", Content = new ScrollViewer { Content = body, MaxHeight = 560 }, CloseButtonText = "Zamknij",
             XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -158,7 +158,7 @@ public sealed partial class ServerSettingsPage
             foreach (var r in roles.Where(r => r.Position < top))
             {
                 var rid = r.Id;
-                var cb = new CheckBox { Content = r.Name, IsChecked = picked.Contains(rid) };
+                var cb = new CheckField { Content = r.Name, IsChecked = picked.Contains(rid) };
                 cb.Checked += (_, _) => picked.Add(rid);
                 cb.Unchecked += (_, _) => picked.Remove(rid);
                 autos.Add(cb);
@@ -179,7 +179,7 @@ public sealed partial class ServerSettingsPage
             p.Add(Label(group));
             foreach (var (bit, name, desc) in items)
             {
-                var t = new ToggleSwitch { IsOn = (perms & bit) == bit, OnContent = "", OffContent = "", IsEnabled = !locked && (allowed?.Invoke(bit) ?? true), Tag = bit, MinWidth = 0 };
+                var t = new SwitchField { IsOn = (perms & bit) == bit, OnContent = "", OffContent = "", IsEnabled = !locked && (allowed?.Invoke(bit) ?? true), Tag = bit, MinWidth = 0 };
                 p.Add(new Grid().Cols("*", "auto").Add(U.V(0, U.T(name, 13.5, U.Semi), string.IsNullOrEmpty(desc) ? null : U.T(desc, 11.5, null, Theme.Mu2, wrap: true)).At(0, 0), t.At(0, 1)));
             }
         }
@@ -189,7 +189,7 @@ public sealed partial class ServerSettingsPage
     static long ReadPerms(StackPanel p, long keep)
     {
         var v = keep;
-        foreach (var t in p.Children.OfType<Grid>().SelectMany(g => g.Children.OfType<ToggleSwitch>()))
+        foreach (var t in p.Children.OfType<Grid>().SelectMany(g => g.Children.OfType<SwitchField>()))
         {
             var bit = (long)t.Tag;
             v = t.IsOn ? v | bit : v & ~bit;
@@ -303,7 +303,7 @@ public sealed partial class ServerSettingsPage
         if (!list.Any(o => o.Type == "everyone")) list.Insert(0, new PermOverride { Type = "everyone", Id = 0 });
         var voice = ch?.IsVoice == true;
         var bits = ChannelPerms.Where(p => ch is null || (voice ? p.Voice : p.Text)).ToList();
-        var targets = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var targets = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
         var editor = new StackPanel { Spacing = 6 };
         var changed = new HashSet<(string, long)>();
         string Label2(PermOverride o) => o.Type switch { "everyone" => "@wszyscy", "role" => "Rola: " + (srv.Roles.Find(r => r.Id == o.Id)?.Name ?? "?"), _ => "Osoba: " + S.NameOf(o.Id, srv) };
@@ -343,7 +343,7 @@ public sealed partial class ServerSettingsPage
         targets.SelectionChanged += (_, _) => DrawEditor();
         DrawTargets(0);
         DrawEditor();
-        var add = new ComboBox { PlaceholderText = "+ Dodaj rolę albo osobę", HorizontalAlignment = HorizontalAlignment.Stretch };
+        var add = new DropField { PlaceholderText = "+ Dodaj rolę albo osobę", HorizontalAlignment = HorizontalAlignment.Stretch };
         var addable = srv.Roles.Where(r => !list.Any(o => o.Type == "role" && o.Id == r.Id)).OrderByDescending(r => r.Position).Select(r => ("role", r.Id, "Rola: " + r.Name))
             .Concat(srv.Members.Where(m => !list.Any(o => o.Type == "member" && o.Id == m.UserId)).Take(200).Select(m => ("member", m.UserId, "Osoba: " + S.NameOf(m.UserId, srv)))).ToList();
         foreach (var a in addable) add.Items.Add(a.Item3);
@@ -390,7 +390,7 @@ public sealed partial class ServerSettingsPage
         _body.Add(tabs);
         var name = new TextBox { PlaceholderText = _exprTab == "emoji" ? "nazwa: małe litery, cyfry i _ (np. kotek)" : "nazwa", MaxLength = 32, Width = 260 };
         var emo = new TextBox { PlaceholderText = "emoji, np. 📯", MaxLength = 8, Width = 110 };
-        var vol = new Slider { Minimum = 10, Maximum = 100, Value = 100, Width = 160, Header = "Głośność" };
+        var vol = new SliderField { Minimum = 10, Maximum = 100, Value = 100, Width = 160, Header = "Głośność" };
         var (exts, hint) = _exprTab switch
         {
             "stickers" => (new[] { ".png", ".gif", ".webp" }, "PNG, GIF albo WebP do 2 MB"),
@@ -464,7 +464,7 @@ public sealed partial class ServerSettingsPage
         catch (Exception ex) { host.Children.Clear(); host.Add(U.T(GibCordClient.Friendly(ex), 13, null, Theme.Red, wrap: true)); return; }
         host.Children.Clear();
         var canEdit = Can(Perm.ManageServer);
-        var level = new RadioButtons();
+        var level = new RadioField();
         foreach (var t in new[] { "Wyłączona", "Łagodna — spam i Twoje słowa", "Średnia — do tego oszustwa i linki od nowych osób", "Ostra — do tego wulgaryzmy i KRZYK" }) level.Items.Add(t);
         level.SelectedIndex = (int)(cfg.Long("level") ?? 0);
         level.IsEnabled = canEdit;
@@ -479,7 +479,7 @@ public sealed partial class ServerSettingsPage
         foreach (var r in srv.Roles.OrderByDescending(r => r.Position))
         {
             var rid = r.Id;
-            var cb = new CheckBox { Content = r.Name, IsChecked = exRoles.Contains(rid), IsEnabled = canEdit, MinWidth = 0 };
+            var cb = new CheckField { Content = r.Name, IsChecked = exRoles.Contains(rid), IsEnabled = canEdit, MinWidth = 0 };
             cb.Checked += (_, _) => exRoles.Add(rid); cb.Unchecked += (_, _) => exRoles.Remove(rid);
             roles.Children.Add(cb);
         }
@@ -488,11 +488,11 @@ public sealed partial class ServerSettingsPage
         foreach (var c in texts)
         {
             var cid = c.Id;
-            var cb = new CheckBox { Content = "#" + c.Name, IsChecked = exChans.Contains(cid), IsEnabled = canEdit, MinWidth = 0 };
+            var cb = new CheckField { Content = "#" + c.Name, IsChecked = exChans.Contains(cid), IsEnabled = canEdit, MinWidth = 0 };
             cb.Checked += (_, _) => exChans.Add(cid); cb.Unchecked += (_, _) => exChans.Remove(cid);
             chans.Children.Add(cb);
         }
-        var log = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, IsEnabled = canEdit };
+        var log = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch, IsEnabled = canEdit };
         log.Items.Add("Bez kanału (tylko zakładka Zgłoszenia)");
         foreach (var c in texts) log.Items.Add("# " + c.Name);
         log.SelectedIndex = cfg.Long("logChannelId") is long lc && texts.FindIndex(c => c.Id == lc) is var ix and >= 0 ? ix + 1 : 0;

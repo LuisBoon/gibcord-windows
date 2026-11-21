@@ -71,7 +71,7 @@ static class ImageEditor
         void Push() { history.Push(cur!); cur = (Bitmap)cur!.Clone(); }
 
         // ── narzędzia ──
-        var toolBtns = new Dictionary<Tool, ToggleButton>();
+        var toolBtns = new Dictionary<Tool, ChipField>();
         var swatches = U.H(6);
         void SetTool(Tool t)
         {
@@ -79,9 +79,9 @@ static class ImageEditor
             foreach (var (k, b) in toolBtns) b.IsChecked = k == t;
             swatches.Visibility = t is Tool.Draw or Tool.Text ? Visibility.Visible : Visibility.Collapsed;
         }
-        ToggleButton TB(Tool t, string glyph, string label)
+        ChipField TB(Tool t, string glyph, string label)
         {
-            var b = new ToggleButton { Content = U.H(6, U.I(glyph, 14), U.T(label, 13)), Padding = U.Th(10, 5), CornerRadius = new CornerRadius(8) };
+            var b = new ChipField { Content = U.H(6, U.I(glyph, 14), U.T(label, 13)), Padding = U.Th(10, 5), CornerRadius = new CornerRadius(8) };
             b.Click += (_, _) => SetTool(t);
             toolBtns[t] = b;
             return b;
@@ -208,7 +208,7 @@ static class ImageEditor
         await Show();
         var hint = U.T("Przeciągnij po obrazku: zamaż albo przytnij zaznaczony fragment. Rysuj — trzymaj i prowadź. Tekst — kliknij w miejsce.", 12, null, Theme.Mu, wrap: true);
         var body = U.V(10, bar, swatches, host, new Grid { ColumnSpacing = 16 }.Cols("*", "auto").Add(hint.At(0, 0), info.At(0, 1)));
-        var dlg = new ContentDialog
+        var dlg = new AppDialog
         {
             Title = "Edytuj obrazek", Content = body, PrimaryButtonText = "Gotowe", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary,
             XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,

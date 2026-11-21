@@ -574,17 +574,15 @@ public sealed partial class AdminMail : Grid
     {
         try
         {
-            var picker = new Windows.Storage.Pickers.FileSavePicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads, SuggestedFileName = Path.GetFileNameWithoutExtension(a.Filename) };
             var ext = Path.GetExtension(a.Filename);
-            picker.FileTypeChoices.Add("Plik", [string.IsNullOrEmpty(ext) ? ".bin" : ext]);
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, _sh.W.Hwnd);
-            var f = await picker.PickSaveFileAsync();
+            if (string.IsNullOrEmpty(ext)) ext = ".bin";
+            var f = await FileBrowser.SaveFile(XamlRoot, Path.GetFileNameWithoutExtension(a.Filename) + ext, ext);
             if (f is null) return;
             var path = a.Url.StartsWith("/api/") ? a.Url[5..] : a.Url;
             var bytes = await Api.GetBytes(path);
-            await Windows.Storage.FileIO.WriteBytesAsync(f, bytes);
-            U.MarkFromInternet(f.Path); // załącznik z maila: Widok chroniony w Office, SmartScreen dla programów
-            _sh.Info("Zapisano: " + f.Name);
+            await File.WriteAllBytesAsync(f, bytes);
+            U.MarkFromInternet(f); // załącznik z maila: Widok chroniony w Office, SmartScreen dla programów
+            _sh.Info("Zapisano: " + Path.GetFileName(f));
         }
         catch (Exception ex) { _sh.Info("Nie udało się zapisać: " + GibCordClient.Friendly(ex), true); }
     }
@@ -604,7 +602,7 @@ public sealed partial class AdminMail : Grid
     async Task Compose(Mail? reply, Mail? fwd, bool all)
     {
         if (_boxes.Count == 0) { _sh.Info("Brak skrzynek — dodaj je na stronie.", true); return; }
-        var fromBox = new ComboBox { Header = "Od", HorizontalAlignment = HorizontalAlignment.Stretch };
+        var fromBox = new DropField { Header = "Od", HorizontalAlignment = HorizontalAlignment.Stretch };
         var usable = _boxes.ToList();
         foreach (var b in usable) fromBox.Items.Add($"{b.DisplayName ?? b.LocalPart} <{b.Address}>");
         var defBox = (reply ?? fwd)?.BoxId ?? _box;
@@ -614,7 +612,7 @@ public sealed partial class AdminMail : Grid
         var subject = new TextBox { Header = "Temat", MaxLength = 300 };
         var text = new TextBox { Header = "Treść", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 230 };
         ScrollViewer.SetVerticalScrollBarVisibility(text, ScrollBarVisibility.Auto);
-        var sig = new CheckBox { Content = "Dołącz podpis skrzynki", IsChecked = true };
+        var sig = new CheckField { Content = "Dołącz podpis skrzynki", IsChecked = true };
         var note = U.T("", 11.5, null, Theme.Mu2, wrap: true);
         var err = U.T("", 12, null, Theme.Red, wrap: true);
         var files = new List<(long Id, string Name, ulong Size)>();
@@ -624,10 +622,7 @@ public sealed partial class AdminMail : Grid
         const ulong maxBytes = 10UL * 1048576; // jak na stronie: załączniki razem najwyżej 10 MB
         var addFile = U.Ghost("Dołącz plik…", async () =>
         {
-            var picker = new Windows.Storage.Pickers.FileOpenPicker();
-            picker.FileTypeFilter.Add("*");
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, _sh.W.Hwnd);
-            var f = await picker.PickSingleFileAsync();
+            var f = await FileBrowser.PickFile(XamlRoot);
             if (f is null) return;
             var size = (await f.GetBasicPropertiesAsync()).Size;
             if (files.Aggregate(0UL, (n, x) => n + x.Size) + pendingBytes + size > maxBytes) { err.Text = "Załączniki razem mogą mieć najwyżej 10 MB."; return; }
@@ -668,7 +663,7 @@ public sealed partial class AdminMail : Grid
         }
         var body = U.V(10, fromBox, to, cc, subject, text, U.H(10, sig, addFile), fileList, note, err);
         body.Width = 600;
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = reply is not null ? "Odpowiedź" : fwd is not null ? "Przekaż dalej" : "Nowa wiadomość",
             Content = new ScrollViewer { Content = body, MaxHeight = 620 }, PrimaryButtonText = "Wyślij", CloseButtonText = "Anuluj",

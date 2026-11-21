@@ -29,7 +29,7 @@ static class People
         var chips = new WrapPanel { Spacing = 6 };
         var list = new StackPanel { Spacing = 2 };
         var friends = s.Friends.Where(f => f.Value.Status == "friends").Select(f => f.Key).ToHashSet();
-        ContentDialog? d = null;
+        AppDialog? d = null;
         void Draw()
         {
             chips.Children.Clear();
@@ -46,7 +46,7 @@ static class People
             {
                 var uid = id;
                 var on = picked.Contains(id);
-                var check = new CheckBox { IsChecked = on, MinWidth = 0, IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center };
+                var check = new CheckField { IsChecked = on, MinWidth = 0, IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center };
                 var g = new Grid().Cols("auto", "*", "auto").Add(new Avatar(30, true).Set(s, sh.C.Api, id, null, true).At(0, 0),
                     U.V(0, U.T(s.U(id)!.Name, 13.5, U.Semi), U.T("@" + s.U(id)!.Username + (friends.Contains(id) ? " · znajomy" : ""), 11, null, Theme.Mu2)).With(p => p.Margin = U.Th(10, 0)).At(0, 1),
                     check.At(0, 2));
@@ -62,7 +62,7 @@ static class People
             if (d is not null) { d.PrimaryButtonText = okLabel(picked.Count); d.IsPrimaryButtonEnabled = picked.Count > 0; }
         }
         search.TextChanged += (_, _) => Draw();
-        d = new ContentDialog
+        d = new AppDialog
         {
             Title = title, Content = U.V(10, search, chips, new ScrollViewer { Content = list, Height = 340 }).With(p => p.Width = 420),
             PrimaryButtonText = okLabel(0), IsPrimaryButtonEnabled = false, CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary,
@@ -103,14 +103,11 @@ static class People
         var s = sh.S;
         if (s.DmById(dmId) is not { IsGroup: true } d) return;
         var own = d.OwnerId == s.Me.Id;
-        ContentDialog? dlg = null;
+        AppDialog? dlg = null;
         var name = new TextBox { Text = d.Name ?? "", PlaceholderText = s.DmTitle(d), MaxLength = 100 };
         var icon = U.Ghost("Zmień obrazek", async () =>
         {
-            var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
-            foreach (var ext in new[] { ".png", ".jpg", ".jpeg", ".gif", ".webp" }) picker.FileTypeFilter.Add(ext);
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, sh.W.Hwnd);
-            var f = await picker.PickSingleFileAsync();
+            var f = await FileBrowser.PickFile(sh.XamlRoot, [".png", ".jpg", ".jpeg", ".gif", ".webp"], FileBrowser.Place.Pictures);
             if (f is null) return;
             try
             {
@@ -154,7 +151,7 @@ static class People
             };
             dlg?.Hide();
         }, 32).With(b => ((TextBlock)b.Content).Foreground = Theme.Red);
-        dlg = new ContentDialog
+        dlg = new AppDialog
         {
             Title = "Ustawienia grupy",
             Content = new ScrollViewer

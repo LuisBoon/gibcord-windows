@@ -65,7 +65,7 @@ public sealed partial class ChatView
             f.Items.Add(M.Item("Zmień nazwę", GT.Edit, async () =>
             {
                 var box = new TextBox { Text = t.Name, MaxLength = 100, SelectionStart = t.Name.Length };
-                var d = new ContentDialog
+                var d = new AppDialog
                 {
                     Title = "Nazwa wątku", Content = box, PrimaryButtonText = "Zapisz", CloseButtonText = "Anuluj",
                     DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -158,7 +158,7 @@ public sealed partial class ChatView
         if (plain.Length > 60) { plain = plain[..60]; var sp = plain.LastIndexOf(' '); if (sp > 20) plain = plain[..sp]; plain += "…"; }
         var box = new TextBox { Text = plain, PlaceholderText = "Nazwa wątku", MaxLength = 100 };
         box.Loaded += (_, _) => { box.SelectAll(); box.Focus(FocusState.Programmatic); };
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = "Nowy wątek", Content = U.V(8, U.T("Rozmowa z boku, przy tej wiadomości — kanał zostaje czysty.", 13, null, Theme.Mu, wrap: true), box),
             PrimaryButtonText = "Utwórz wątek", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,

@@ -132,10 +132,10 @@ static class UserMenu
     {
         var name = sh.S.NameOf(uid, srv);
         var reason = new TextBox { PlaceholderText = "Powód (opcjonalnie, widać go w dzienniku serwera)", MaxLength = 200 };
-        var del = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var del = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var label in new[] { "Nie usuwaj wiadomości", "Usuń wiadomości z ostatniej godziny", "Usuń wiadomości z ostatniej doby", "Usuń wiadomości z ostatnich 7 dni" }) del.Items.Add(label);
         del.SelectedIndex = 0;
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = $"Zbanować {name}?", Content = U.V(10, U.T("Wyrzuci tę osobę i zablokuje jej powrót na serwer.", 13, null, Theme.Mu, wrap: true), reason, del),
             PrimaryButtonText = "Zbanuj", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Close, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -150,7 +150,7 @@ static class UserMenu
         var me = uid == sh.S.Me.Id;
         var cur = sh.S.MemberOf(srv, uid)?.Nick ?? "";
         var box = new TextBox { Text = cur, PlaceholderText = sh.S.U(uid)?.Name ?? "", MaxLength = 32 };
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = me ? $"Twój nick na {srv.Name}" : $"Nick: {sh.S.U(uid)?.Name}", Content = U.V(8, U.T("Pusty = zwykła nazwa.", 12.5, null, Theme.Mu), box),
             PrimaryButtonText = "Zapisz", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -163,13 +163,13 @@ static class UserMenu
     public static async void Report(Shell sh, Message m)
     {
         var reasons = new[] { ("spam", "Spam lub reklama"), ("harassment", "Nękanie, obrażanie"), ("nsfw", "Treści 18+"), ("scam", "Oszustwo, wyłudzenie"), ("other", "Coś innego") };
-        var radios = new RadioButtons();
+        var radios = new RadioField();
         foreach (var (_, label) in reasons) radios.Items.Add(label);
         radios.SelectedIndex = 0;
         var note = new TextBox { PlaceholderText = "Dodatkowe informacje (opcjonalnie)", MaxLength = 500, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 64 };
         var srv = sh.S.ServerOfChannel(m.ChannelId);
         var snap = U.Box(U.V(2, U.T(sh.S.NameOf(m.AuthorId, srv), 12.5, U.Bold), U.T(sh.S.PlainText(m, 240), 12.5, null, Theme.Mu, wrap: true)), U.W(.06), 8, U.Th(10, 8));
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = "Zgłoś wiadomość",
             Content = U.V(10, snap, radios, note, U.T(srv is not null ? "Zgłoszenie zobaczą moderatorzy tego serwera i właściciele GibCorda." : "Zgłoszenie z rozmowy prywatnej zobaczą tylko właściciele GibCorda — tylko tę jedną wiadomość.", 11.5, null, Theme.Mu2, wrap: true)),

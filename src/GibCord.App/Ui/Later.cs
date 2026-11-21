@@ -60,10 +60,10 @@ static class Later
         await M.WaitNoDialog(sh.XamlRoot);
         var start = initial?.LocalDateTime ?? DateTime.Now.AddHours(1);
         if (initial is null) start = start.AddMinutes(-start.Minute).AddMinutes(start.Minute >= 30 ? 60 : 30).AddSeconds(-start.Second);
-        var date = new CalendarDatePicker { Date = start.Date, MinDate = DateTimeOffset.Now.Date, MaxDate = DateTimeOffset.Now.Date.AddDays(30), HorizontalAlignment = HorizontalAlignment.Stretch };
-        var time = new TimePicker { Time = start.TimeOfDay, ClockIdentifier = "24HourClock", MinuteIncrement = 5 };
+        var date = new DateField { Date = start.Date, MinDate = DateTimeOffset.Now.Date, MaxDate = DateTimeOffset.Now.Date.AddDays(30), HorizontalAlignment = HorizontalAlignment.Stretch };
+        var time = new TimeField { Time = start.TimeOfDay, ClockIdentifier = "24HourClock", MinuteIncrement = 5 };
         var hint = U.T("Wiadomość wyśle serwer, nawet gdy komputer będzie wyłączony. Najdalej za 30 dni.", 12.5, null, Theme.Mu, wrap: true);
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = title,
             Content = U.V(10, new Grid { ColumnSpacing = 8 }.Cols("*", "auto").Add(date.At(0, 0), time.At(0, 1)), hint).With(p => p.Width = 380),
@@ -139,7 +139,7 @@ static class Later
                 fly.Hide();
                 await M.WaitNoDialog(sh.XamlRoot);
                 var box = new TextBox { Text = s.Content, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 80, MaxLength = 4000, Width = 380 };
-                var d = new ContentDialog { Title = "Popraw zaplanowaną wiadomość", Content = box, PrimaryButtonText = "Zapisz", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark };
+                var d = new AppDialog { Title = "Popraw zaplanowaną wiadomość", Content = box, PrimaryButtonText = "Zapisz", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark };
                 if (await d.ShowAsync() != ContentDialogResult.Primary || box.Text.Trim() == s.Content) return;
                 var r = await c.EditScheduled(s.Id, box.Text.Trim());
                 sh.Info(r ?? "Zapisano", r is not null);

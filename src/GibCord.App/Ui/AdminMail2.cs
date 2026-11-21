@@ -177,7 +177,7 @@ public sealed partial class AdminMail
     {
         var to = new TextBox { PlaceholderText = "adres@example.com", Text = _sh.S.Me.Email ?? "", Width = 360 };
         var err = U.T("", 12, null, Theme.Red, wrap: true);
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = "Mail testowy", PrimaryButtonText = "Wyślij test", CloseButtonText = "Anuluj", XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
             Content = U.V(10, U.T("Wyślemy krótki mail w wyglądzie GibCorda, żeby sprawdzić, czy dochodzi (zajrzyj też do spamu).", 12.5, null, Theme.Mu, wrap: true), to, err),

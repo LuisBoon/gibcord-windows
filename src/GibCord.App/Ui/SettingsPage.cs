@@ -236,7 +236,7 @@ public sealed class SettingsPage : Grid
                 await M.WaitNoDialog(XamlRoot);
                 var box = new TextBox { Text = GameDetect.Pretty(title.Split(" - ")[0].Split(" — ")[0]), PlaceholderText = "Nazwa gry", MaxLength = 64 };
                 box.Loaded += (_, _) => { box.SelectAll(); box.Focus(FocusState.Programmatic); };
-                var d = new ContentDialog
+                var d = new AppDialog
                 {
                     Title = "Dodaj grę", Content = U.V(8, U.T($"Gdy działa {exe}, inni zobaczą przy Twoim nicku:", 13, null, Theme.Mu, wrap: true), box),
                     PrimaryButtonText = "Dodaj", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -256,19 +256,16 @@ public sealed class SettingsPage : Grid
     void Ok(string msg) => _sh.Info(msg);
     void Err(Exception ex) => _sh.Info(GibCordClient.Friendly(ex), true);
 
-    static ToggleSwitch Toggle(string header, bool on, Action<bool> set)
+    static SwitchField Toggle(string header, bool on, Action<bool> set)
     {
-        var t = new ToggleSwitch { Header = U.T(header, 13.5, U.Semi), IsOn = on, OnContent = "Włączone", OffContent = "Wyłączone" };
+        var t = new SwitchField { Header = U.T(header, 13.5, U.Semi), IsOn = on, OnContent = "Włączone", OffContent = "Wyłączone" };
         t.Toggled += (_, _) => set(t.IsOn);
         return t;
     }
 
     async Task<(Stream Data, string? Mime)?> PickImage()
     {
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
-        foreach (var ext in new[] { ".png", ".jpg", ".jpeg", ".gif", ".webp" }) picker.FileTypeFilter.Add(ext);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, _sh.W.Hwnd);
-        var f = await picker.PickSingleFileAsync();
+        var f = await FileBrowser.PickFile(XamlRoot, [".png", ".jpg", ".jpeg", ".gif", ".webp"], FileBrowser.Place.Pictures);
         if (f is null) return null;
         var props = await f.GetBasicPropertiesAsync();
         if (props.Size > 10 * 1024 * 1024) { _sh.Info("Obrazek może mieć najwyżej 10 MB", true); return null; }
@@ -334,8 +331,8 @@ public sealed class SettingsPage : Grid
         }
         DrawColors();
         DateTimeOffset? bday = DateTime.TryParse(me.Birthday, out var bd) ? new DateTimeOffset(bd) : null;
-        var birthday = new CalendarDatePicker { Date = bday, PlaceholderText = "Wybierz datę", MinDate = new DateTimeOffset(1930, 1, 1, 0, 0, 0, TimeSpan.Zero), MaxDate = DateTimeOffset.Now };
-        var showAge = new CheckBox { Content = "Pokazuj mój wiek", IsChecked = me.BirthdayShowAge };
+        var birthday = new DateField { Date = bday, PlaceholderText = "Wybierz datę", MinDate = new DateTimeOffset(1930, 1, 1, 0, 0, 0, TimeSpan.Zero), MaxDate = DateTimeOffset.Now };
+        var showAge = new CheckField { Content = "Pokazuj mój wiek", IsChecked = me.BirthdayShowAge };
         var save = U.Primary("Zapisz zmiany", async () =>
         {
             try
@@ -498,7 +495,7 @@ public sealed class SettingsPage : Grid
     async void MfaEnable()
     {
         var pass = new PasswordBox { PlaceholderText = "Twoje hasło" };
-        var d1 = new ContentDialog { Title = "Włącz logowanie dwuetapowe", Content = U.V(8, U.T("Najpierw potwierdź, że to Ty.", 13, null, Theme.Mu), pass), PrimaryButtonText = "Dalej", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark };
+        var d1 = new AppDialog { Title = "Włącz logowanie dwuetapowe", Content = U.V(8, U.T("Najpierw potwierdź, że to Ty.", 13, null, Theme.Mu), pass), PrimaryButtonText = "Dalej", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark };
         if (await d1.ShowAsync() != ContentDialogResult.Primary) return;
         System.Text.Json.JsonElement setup;
         try { setup = await Api.PostJson("mfa/setup", new { password = pass.Password }); }
@@ -517,7 +514,7 @@ public sealed class SettingsPage : Grid
         }
         var code = new TextBox { PlaceholderText = "123456", MaxLength = 7, FontSize = 18, TextAlignment = TextAlignment.Center };
         var secret = setup.Str("secret") ?? "";
-        var d2 = new ContentDialog
+        var d2 = new AppDialog
         {
             Title = "Zeskanuj kod",
             Content = U.V(10, U.T("1. Otwórz aplikację do kodów i zeskanuj kod QR (albo wpisz klucz ręcznie).", 13, null, Theme.Mu, wrap: true),
@@ -544,7 +541,7 @@ public sealed class SettingsPage : Grid
     {
         var pass = new PasswordBox { PlaceholderText = "Twoje hasło" };
         var code = new TextBox { PlaceholderText = "Kod z aplikacji albo kod zapasowy" };
-        var d = new ContentDialog { Title = "Wyłączyć logowanie dwuetapowe?", Content = U.V(8, U.T("Konto będzie chronione tylko hasłem.", 13, null, Theme.Mu, wrap: true), pass, code), PrimaryButtonText = "Wyłącz", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark };
+        var d = new AppDialog { Title = "Wyłączyć logowanie dwuetapowe?", Content = U.V(8, U.T("Konto będzie chronione tylko hasłem.", 13, null, Theme.Mu, wrap: true), pass, code), PrimaryButtonText = "Wyłącz", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark };
         if (await d.ShowAsync() != ContentDialogResult.Primary) return;
         try
         {
@@ -558,7 +555,7 @@ public sealed class SettingsPage : Grid
     async void MfaCodes()
     {
         var code = new TextBox { PlaceholderText = "Kod z aplikacji" };
-        var d = new ContentDialog { Title = "Nowe kody zapasowe", Content = U.V(8, U.T("Stare kody przestaną działać.", 13, null, Theme.Mu), code), PrimaryButtonText = "Wygeneruj", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark };
+        var d = new AppDialog { Title = "Nowe kody zapasowe", Content = U.V(8, U.T("Stare kody przestaną działać.", 13, null, Theme.Mu), code), PrimaryButtonText = "Wygeneruj", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark };
         if (await d.ShowAsync() != ContentDialogResult.Primary) return;
         try { var r = await Api.PostJson("mfa/backup-codes", new { code = code.Text.Replace(" ", "") }); ShowCodes(r.Prop("backupCodes")); }
         catch (Exception ex) { Err(ex); }
@@ -568,7 +565,7 @@ public sealed class SettingsPage : Grid
     {
         var list = codes.ValueKind == System.Text.Json.JsonValueKind.Array ? codes.EnumerateArray().Select(c => c.GetString() ?? "").ToList() : [];
         var text = string.Join("\n", list);
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = "Kody zapasowe",
             Content = U.V(10, U.T("Zapisz je w bezpiecznym miejscu. Każdy działa raz — gdy zgubisz telefon, zalogujesz się kodem zamiast cyfr z aplikacji.", 13, null, Theme.Mu, wrap: true),
@@ -697,7 +694,7 @@ public sealed class SettingsPage : Grid
             _ => null,
         };
         _body.Add(Card(Label("Motyw"), themes, U.T("Motyw zapisuje się na koncie — strona i telefon też go dostaną.", 11.5, null, Theme.Mu2, wrap: true), glass));
-        var fontSize = new ComboBox { Header = U.T("Rozmiar tekstu wiadomości", 13.5, U.Semi), Width = 220 };
+        var fontSize = new DropField { Header = U.T("Rozmiar tekstu wiadomości", 13.5, U.Semi), Width = 220 };
         var sizes = new[] { 13.0, 14.5, 16.5, 18.0 };
         foreach (var label in new[] { "Mały", "Zwykły", "Duży", "Bardzo duży" }) fontSize.Items.Add(label);
         fontSize.SelectedIndex = Math.Max(0, Array.IndexOf(sizes, p.MessageFontSize));
@@ -711,15 +708,15 @@ public sealed class SettingsPage : Grid
             Toggle("Zamykanie do zasobnika (obok zegara)", p.CloseToTray, v => { p.CloseToTray = v; p.Save(); }),
             Toggle("Uruchamiaj razem z Windowsem", AutoStart.Enabled, AutoStart.Set),
             Toggle("Lista osób po prawej", p.MembersPanel, _ => _sh.ToggleMembers())));
-        var mode = new RadioButtons { Header = U.T("Kiedy pokazywać", 13.5, U.Semi) };
+        var mode = new RadioField { Header = U.T("Kiedy pokazywać", 13.5, U.Semi) };
         foreach (var label in new[] { "Wyłączona", "Tylko gdy grasz", "Zawsze w rozmowie" }) mode.Items.Add(label);
         mode.SelectedIndex = p.OverlayMode switch { "off" => 0, "always" => 2, _ => 1 };
         mode.SelectionChanged += (_, _) => { p.OverlayMode = mode.SelectedIndex switch { 0 => "off", 2 => "always", _ => "game" }; p.Save(); };
-        var corner = new ComboBox { Header = U.T("Róg ekranu", 13.5, U.Semi), Width = 220 };
+        var corner = new DropField { Header = U.T("Róg ekranu", 13.5, U.Semi), Width = 220 };
         foreach (var label in new[] { "Lewy górny", "Prawy górny", "Lewy dolny", "Prawy dolny" }) corner.Items.Add(label);
         corner.SelectedIndex = p.OverlayCorner switch { "tr" => 1, "bl" => 2, "br" => 3, _ => 0 };
         corner.SelectionChanged += (_, _) => { p.OverlayCorner = corner.SelectedIndex switch { 1 => "tr", 2 => "bl", 3 => "br", _ => "tl" }; p.Save(); };
-        var size = new ComboBox { Header = U.T("Rozmiar", 13.5, U.Semi), Width = 220 };
+        var size = new DropField { Header = U.T("Rozmiar", 13.5, U.Semi), Width = 220 };
         foreach (var label in new[] { "Mała", "Zwykła", "Duża" }) size.Items.Add(label);
         size.SelectedIndex = p.OverlaySize switch { "s" => 0, "l" => 2, _ => 1 };
         size.SelectionChanged += (_, _) => { p.OverlaySize = size.SelectedIndex switch { 0 => "s", 2 => "l", _ => "m" }; p.Save(); };

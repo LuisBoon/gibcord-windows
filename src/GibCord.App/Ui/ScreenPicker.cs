@@ -8,7 +8,7 @@ namespace GibCord.App.Ui;
 
 /// <summary>
 /// Własne okienko „Udostępnij ekran” (zamiast systemowego): zakładki Ekrany / Okna z podglądami, jakość, płynność,
-/// dźwięk z komputera i „Na żywo”. Podwójne kliknięcie podglądu = od razu na żywo. Systemowe okienko zostaje jako zapasowe.
+/// dźwięk z komputera i „Na żywo”. Podwójne kliknięcie podglądu = od razu na żywo. Systemowego okienka Windows już nie ma — zamiast niego „Odśwież listę”.
 /// </summary>
 static class ScreenPicker
 {
@@ -122,25 +122,23 @@ static class ScreenPicker
             }
         }
         DrawOptions();
-        var audio = new CheckBox { Content = U.T("Dźwięk z komputera", 12.5, U.Semi), IsChecked = p.StreamAudio, MinWidth = 0 };
+        var audio = new CheckField { Content = U.T("Dźwięk z komputera", 12.5, U.Semi), IsChecked = p.StreamAudio, MinWidth = 0 };
         ToolTipService.SetToolTip(audio, "Gra, film, muzyka — bez dźwięków rozmowy");
         var options = new WrapPanel { Spacing = 18 }.Add(
             U.V(4, U.T("JAKOŚĆ", 10.5, U.Bold, Theme.Mu2), qRow),
             U.V(4, U.T("PŁYNNOŚĆ", 10.5, U.Bold, Theme.Mu2), fRow),
             U.V(4, U.T("DŹWIĘK", 10.5, U.Bold, Theme.Mu2), audio));
 
-        var system = new HyperlinkButton { Content = U.T("Systemowe okienko wyboru…", 12, U.Semi, Theme.Mu), Padding = U.Th(0) };
-        system.Click += async (_, _) =>
+        var refresh = new HyperlinkButton { Content = U.H(6, U.I("\uE72C", 12, Theme.Mu), U.T("Odśwież listę", 12, U.Semi, Theme.Mu)), Padding = U.Th(0) };
+        refresh.Click += (_, _) =>
         {
-            Save();
-            sh.CloseOverlay();
-            if (sh.W.Screen is not { } ss) return;
-            var err = await ss.Start(sh.W.Hwnd, fps, quality, audio.IsChecked == true);
-            if (err is not null) sh.Info(err, true);
-            sh.RefreshVoice();
+            screens = []; apps = [];
+            status.Text = "Szukam ekranów i okien…";
+            Draw();
+            _ = Load();
         };
         var cancel = U.Ghost("Anuluj", sh.CloseOverlay, 40);
-        var footer = new Grid { ColumnSpacing = 10 }.Cols("*", "auto", "auto").Add(system.With(s => s.VerticalAlignment = VerticalAlignment.Center).At(0, 0), cancel.At(0, 1), go.At(0, 2));
+        var footer = new Grid { ColumnSpacing = 10 }.Cols("*", "auto", "auto").Add(refresh.With(s => s.VerticalAlignment = VerticalAlignment.Center).At(0, 0), cancel.At(0, 1), go.At(0, 2));
         var head = new Grid().Cols("*", "auto").Add(
             U.V(2, U.T("Udostępnij ekran", 19, U.Bold), U.T(max != "1440p" ? $"Na tym kanale najwyżej {max}." : "Wybierz ekran albo okno — inni zobaczą je na żywo.", 12, null, Theme.Mu)).At(0, 0),
             U.IconButton(G.Close, "Zamknij (Esc)", sh.CloseOverlay, 14, 32).At(0, 1));
@@ -162,7 +160,7 @@ static class ScreenPicker
             Windows.Graphics.Capture.GraphicsCaptureItem? item = null;
             try { item = ScreenSources.ItemFor(s); }
             catch (Exception ex) { App.Log("Wybór ekranu: " + ex.Message); }
-            if (item is null) { sh.Info("Nie da się udostępnić tego " + (s.IsScreen ? "ekranu" : "okna") + " — spróbuj „Systemowe okienko wyboru…”.", true); return; }
+            if (item is null) { sh.Info("Nie da się udostępnić tego " + (s.IsScreen ? "ekranu" : "okna") + " — odśwież listę i spróbuj jeszcze raz.", true); return; }
             var err = await ss.Start(item, fps, quality, audio.IsChecked == true);
             if (err is not null) sh.Info(err, true);
             sh.RefreshVoice();
@@ -192,7 +190,7 @@ static class ScreenPicker
             catch (Exception ex)
             {
                 App.Log("Wybór ekranu: " + ex.Message);
-                sh.DispatcherQueue.TryEnqueue(() => { status.Text = "Nie udało się pobrać listy — użyj „Systemowe okienko wyboru…”."; status.Visibility = Visibility.Visible; });
+                sh.DispatcherQueue.TryEnqueue(() => { status.Text = "Nie udało się pobrać listy — kliknij „Odśwież listę”."; status.Visibility = Visibility.Visible; });
             }
         }
     }

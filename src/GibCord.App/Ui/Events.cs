@@ -106,20 +106,20 @@ static class Events
         var name = new TextBox { Text = ev?.Name ?? "", PlaceholderText = "np. Wieczór z Minecraftem", MaxLength = 100 };
         var start = ev is null ? DateTime.Now.AddHours(1) : Format.Local(ev.StartAt);
         if (ev is null) start = start.AddMinutes(-start.Minute).AddMinutes(start.Minute >= 30 ? 60 : 30).AddSeconds(-start.Second);
-        var date = new CalendarDatePicker { Date = start.Date, MinDate = DateTimeOffset.Now.Date, HorizontalAlignment = HorizontalAlignment.Stretch };
-        var time = new TimePicker { Time = start.TimeOfDay, ClockIdentifier = "24HourClock", MinuteIncrement = 5 };
-        var hasEnd = new CheckBox { Content = "Podaj godzinę końca", IsChecked = ev?.EndAt is not null };
-        var endTime = new TimePicker { Time = ev?.EndAt is long ee ? Format.Local(ee).TimeOfDay : start.AddHours(2).TimeOfDay, ClockIdentifier = "24HourClock", MinuteIncrement = 5, Visibility = ev?.EndAt is null ? Visibility.Collapsed : Visibility.Visible };
+        var date = new DateField { Date = start.Date, MinDate = DateTimeOffset.Now.Date, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var time = new TimeField { Time = start.TimeOfDay, ClockIdentifier = "24HourClock", MinuteIncrement = 5 };
+        var hasEnd = new CheckField { Content = "Podaj godzinę końca", IsChecked = ev?.EndAt is not null };
+        var endTime = new TimeField { Time = ev?.EndAt is long ee ? Format.Local(ee).TimeOfDay : start.AddHours(2).TimeOfDay, ClockIdentifier = "24HourClock", MinuteIncrement = 5, Visibility = ev?.EndAt is null ? Visibility.Collapsed : Visibility.Visible };
         hasEnd.Checked += (_, _) => endTime.Visibility = Visibility.Visible;
         hasEnd.Unchecked += (_, _) => endTime.Visibility = Visibility.Collapsed;
-        var place = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var place = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
         var channels = s.ChannelTree(srv).SelectMany(g => g.Channels).ToList();
         place.Items.Add("Bez kanału (wpiszę miejsce)");
         foreach (var c in channels) place.Items.Add((c.IsVoice ? "🔊 " : "# ") + c.Name);
         place.SelectedIndex = ev?.ChannelId is long ecid && channels.FindIndex(c => c.Id == ecid) is var ix and >= 0 ? ix + 1 : Math.Max(0, channels.FindIndex(c => c.IsVoice) + 1);
         var location = new TextBox { Text = ev?.Location ?? "", PlaceholderText = "np. Discord MC, boisko przy szkole", MaxLength = 100 };
         var desc = new TextBox { Text = ev?.Description ?? "", PlaceholderText = "Co, gdzie, co zabrać… (opcjonalnie)", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 80, MaxLength = 1000 };
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = ev is null ? "Nowe wydarzenie" : "Edytuj wydarzenie",
             Content = new ScrollViewer

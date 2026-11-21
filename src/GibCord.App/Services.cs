@@ -142,10 +142,6 @@ public static partial class Tray
     [DllImport("comctl32.dll")] static extern IntPtr DefSubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr LoadImageW(IntPtr hinst, string name, uint type, int cx, int cy, uint flags);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern uint RegisterWindowMessageW(string name);
-    [DllImport("user32.dll")] static extern IntPtr CreatePopupMenu();
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool AppendMenuW(IntPtr menu, uint flags, UIntPtr id, string? text);
-    [DllImport("user32.dll")] static extern uint TrackPopupMenuEx(IntPtr menu, uint flags, int x, int y, IntPtr hwnd, IntPtr tpm);
-    [DllImport("user32.dll")] static extern bool DestroyMenu(IntPtr menu);
     [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);
@@ -203,19 +199,27 @@ public static partial class Tray
         return DefSubclassProc(hwnd, msg, wParam, lParam);
     }
 
+    /// <summary>Własne menu GibCorda (Ui/TrayMenu) zamiast szarego menu Windows.</summary>
     static void ShowMenu(IntPtr hwnd)
     {
-        var menu = CreatePopupMenu();
-        AppendMenuW(menu, 0, (UIntPtr)1, "Otwórz GibCord");
-        AppendMenuW(menu, 0x800 /* MF_SEPARATOR */, UIntPtr.Zero, null);
-        AppendMenuW(menu, 0, (UIntPtr)2, "Zamknij GibCord");
         GetCursorPos(out var p);
         SetForegroundWindow(hwnd);
-        var cmd = TrackPopupMenuEx(menu, 0x0100 /* TPM_RETURNCMD */ | 0x0002 /* TPM_RIGHTBUTTON */, p.X, p.Y, hwnd, IntPtr.Zero);
-        DestroyMenu(menu);
-        if (cmd == 1) _w?.BringToFront();
-        else if (cmd == 2) _w?.Quit();
+        if (_w is { } w) w.DispatcherQueue.TryEnqueue(() =>
+        {
+            try { Ui.TrayMenu.Show(w, p.X, p.Y); }
+            catch (Exception ex) { App.Log("Menu zasobnika: " + ex.Message); }
+        });
     }
+
+    /// <summary>Zrzut w CI: menu otwarte jak po prawym kliku przy zegarze (prawy dolny róg ekranu).</summary>
+    public static void DemoMenu(MainWindow w)
+    {
+        var a = Microsoft.UI.Windowing.DisplayArea.Primary.WorkArea;
+        Ui.TrayMenu.Show(w, a.X + a.Width - 120, a.Y + a.Height - 4);
+    }
+
+    /// <summary>Napis do menu: „nieprzeczytane: 3” albo null.</summary>
+    public static string? UnreadText => _unread ? _tip.Replace("GibCord — ", "") : null;
 
     public static void SetUnread(bool unread, int n = 0)
     {

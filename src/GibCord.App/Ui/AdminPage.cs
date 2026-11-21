@@ -219,12 +219,12 @@ public sealed class AdminPage : Grid
         if (suspended) f.Items.Add(M.Item("Zdejmij zawieszenie", "", async () => { if (await Run(() => Api.DeleteJson($"admin/users/{id}/suspend"), "Zawieszenie zdjęte")) Draw(); }));
         else if (!admin && id != S.Me.Id) f.Items.Add(M.Item("Zawieś konto…", "", async () =>
         {
-            var hours = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+            var hours = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
             var vals = new[] { 1, 24, 72, 168, 720, 0 };
             foreach (var h in vals) hours.Items.Add(h switch { 0 => "Bezterminowo", 1 => "1 godzina", 24 => "1 dzień", 72 => "3 dni", 168 => "Tydzień", _ => "30 dni" });
             hours.SelectedIndex = 1;
             var reason = new TextBox { PlaceholderText = "Powód (zobaczy go przy logowaniu)", MaxLength = 300 };
-            var d = new ContentDialog { Title = $"Zawiesić {u.Name}?", Content = U.V(8, U.T("Wyloguje tę osobę wszędzie.", 13, null, Theme.Mu), hours, reason).With(x => x.Width = 360),
+            var d = new AppDialog { Title = $"Zawiesić {u.Name}?", Content = U.V(8, U.T("Wyloguje tę osobę wszędzie.", 13, null, Theme.Mu), hours, reason).With(x => x.Width = 360),
                 PrimaryButtonText = "Zawieś", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark };
             if (await d.ShowAsync() != ContentDialogResult.Primary) return;
             if (await Run(() => Api.PostJson($"admin/users/{id}/suspend", new { hours = vals[Math.Max(0, hours.SelectedIndex)], reason = reason.Text.Trim() }), "Konto zawieszone")) Draw();
@@ -237,7 +237,7 @@ public sealed class AdminPage : Grid
         f.Items.Add(M.Item("Ustaw nowe hasło…", "", async () =>
         {
             var pass = new TextBox { PlaceholderText = "Nowe hasło (co najmniej 8 znaków)" };
-            var d = new ContentDialog { Title = $"Nowe hasło dla {u.Name}", Content = U.V(8, U.T("Wyloguje tę osobę wszędzie. Przekaż jej hasło bezpiecznie.", 13, null, Theme.Mu, wrap: true), pass).With(x => x.Width = 360),
+            var d = new AppDialog { Title = $"Nowe hasło dla {u.Name}", Content = U.V(8, U.T("Wyloguje tę osobę wszędzie. Przekaż jej hasło bezpiecznie.", 13, null, Theme.Mu, wrap: true), pass).With(x => x.Width = 360),
                 PrimaryButtonText = "Ustaw", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark };
             if (await d.ShowAsync() == ContentDialogResult.Primary) await Run(() => Api.PostJson($"admin/users/{id}/password", new { newPassword = pass.Text }), "Hasło ustawione");
         }));
@@ -302,7 +302,7 @@ public sealed class AdminPage : Grid
                 f.Items.Add(M.Item("Usuń serwer…", "", async () =>
                 {
                     var reason = new TextBox { PlaceholderText = "Powód (do dziennika)" };
-                    var d = new ContentDialog { Title = $"Usunąć {name}?", Content = U.V(8, U.T("Wszystkie kanały i wiadomości znikną. Tego nie da się cofnąć.", 13, null, Theme.Red, wrap: true), reason).With(x => x.Width = 360),
+                    var d = new AppDialog { Title = $"Usunąć {name}?", Content = U.V(8, U.T("Wszystkie kanały i wiadomości znikną. Tego nie da się cofnąć.", 13, null, Theme.Red, wrap: true), reason).With(x => x.Width = 360),
                         PrimaryButtonText = "Usuń", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark };
                     if (await d.ShowAsync() == ContentDialogResult.Primary && await Run(() => Api.DeleteJson($"admin/servers/{id}", new { reason = reason.Text.Trim() }), "Serwer usunięty")) Draw();
                 }, danger: true));
@@ -321,7 +321,7 @@ public sealed class AdminPage : Grid
         try { full = await Api.GetJson($"admin/servers/{sid}"); Users(full.Prop("users")); }
         catch (Exception ex) { _sh.Info(GibCordClient.Friendly(ex), true); return; }
         var chans = full.Prop("server").Prop("channels").EnumerateArray().Where(c => c.Str("type") == "text").Select(c => (Id: c.Long("id") ?? 0, Name: c.Str("name") ?? "")).ToList();
-        var pick = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var pick = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var c in chans) pick.Items.Add("# " + c.Name);
         var list = new StackPanel { Spacing = 6 };
         var armed = new HashSet<long>();
@@ -356,7 +356,7 @@ public sealed class AdminPage : Grid
         }
         pick.SelectionChanged += (_, _) => Load();
         if (chans.Count > 0) pick.SelectedIndex = 0;
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = $"Podgląd: {name}", Content = U.V(10, pick, new ScrollViewer { Content = list, Height = 420 }).With(x => x.Width = 520), CloseButtonText = "Zamknij",
             XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -452,7 +452,7 @@ public sealed class AdminPage : Grid
         if (cur?.Text is { Length: > 0 } t) _body.Add(U.Box(U.V(6, U.T("TERAZ WIDAĆ", 11, U.Bold, Theme.Mu2), U.T(t, 14, U.Semi, wrap: true),
             U.Ghost("Usuń ogłoszenie", async () => { if (await Run(() => Api.DeleteJson("admin/announce"), "Ogłoszenie usunięte")) Draw(); }, 30).With(b => b.HorizontalAlignment = HorizontalAlignment.Left)), U.W(.05), 12, U.Th(16, 12)));
         var text = new TextBox { PlaceholderText = "np. Dziś o 22:00 krótka przerwa techniczna (ok. 5 minut).", MaxLength = 300, AcceptsReturn = false, TextWrapping = TextWrapping.Wrap };
-        var warn = new CheckBox { Content = "Ważne (czerwony pasek)" };
+        var warn = new CheckField { Content = "Ważne (czerwony pasek)" };
         _body.Add(text);
         _body.Add(warn);
         _body.Add(U.Primary("Wyślij do wszystkich", async () =>

@@ -13,7 +13,7 @@ static class ServerProfile
         var s = sh.S;
         var me = s.MemberOf(srv, s.Me.Id);
         var nick = new TextBox { Text = me?.Nick ?? "", PlaceholderText = s.Me.Name, MaxLength = 32 };
-        ContentDialog? d = null;
+        AppDialog? d = null;
         async void Avatar(bool remove)
         {
             try
@@ -21,10 +21,7 @@ static class ServerProfile
                 if (remove) await sh.C.Api.DeleteJson($"servers/{srv.Id}/members/@me/avatar");
                 else
                 {
-                    var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
-                    foreach (var ext in new[] { ".png", ".jpg", ".jpeg", ".gif", ".webp" }) picker.FileTypeFilter.Add(ext);
-                    WinRT.Interop.InitializeWithWindow.Initialize(picker, sh.W.Hwnd);
-                    var f = await picker.PickSingleFileAsync();
+                    var f = await FileBrowser.PickFile(sh.XamlRoot, [".png", ".jpg", ".jpeg", ".gif", ".webp"], FileBrowser.Place.Pictures);
                     if (f is null) return;
                     using var st = await f.OpenStreamForReadAsync();
                     await sh.C.Api.PostImage($"servers/{srv.Id}/members/@me/avatar", st, f.ContentType);
@@ -39,7 +36,7 @@ static class ServerProfile
             U.T("NICK", 11, U.Bold, Theme.Mu2), nick,
             U.T("AWATAR NA TYM SERWERZE", 11, U.Bold, Theme.Mu2),
             U.H(12, new Avatar(56).Set(s, sh.C.Api, s.Me.Id, srv), U.V(6, U.Ghost("Zmień", () => Avatar(false), 30), me?.Avatar is not null ? U.Ghost("Przywróć zwykły", () => Avatar(true), 30) : null)));
-        d = new ContentDialog
+        d = new AppDialog
         {
             Title = "Mój profil na serwerze", Content = content.With(p => p.Width = 380), PrimaryButtonText = "Zapisz nick", CloseButtonText = "Zamknij",
             DefaultButton = ContentDialogButton.Primary, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -62,7 +59,7 @@ static class ServerProfile
             {
                 var rid = r.Id;
                 var on = mine.Contains(rid);
-                var t = new ToggleSwitch { IsOn = on, OnContent = "", OffContent = "", MinWidth = 0 };
+                var t = new SwitchField { IsOn = on, OnContent = "", OffContent = "", MinWidth = 0 };
                 t.Toggled += async (_, _) =>
                 {
                     try
@@ -79,7 +76,7 @@ static class ServerProfile
                     t.At(0, 2)));
             }
         }
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = "Wybierz role", Content = new ScrollViewer { Content = panel, MaxHeight = 480 }, CloseButtonText = "Gotowe",
             XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,

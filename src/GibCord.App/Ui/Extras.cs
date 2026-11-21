@@ -35,19 +35,16 @@ public static class Lightbox
         {
             try
             {
-                var picker = new Windows.Storage.Pickers.FileSavePicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary, SuggestedFileName = Path.GetFileNameWithoutExtension(name) };
                 var ext = Path.GetExtension(name);
                 if (string.IsNullOrEmpty(ext)) ext = Path.GetExtension(url.AbsolutePath);
                 // tylko rozszerzenia obrazów (nazwa pochodzi od nadawcy — np. „zdjęcie.scr” nie może podpowiedzieć programu)
                 if (ext.ToLowerInvariant() is not (".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".bmp" or ".avif")) ext = ".png";
-                picker.FileTypeChoices.Add("Obraz", [ext]);
-                WinRT.Interop.InitializeWithWindow.Initialize(picker, sh.W.Hwnd);
-                var f = await picker.PickSaveFileAsync();
+                var f = await FileBrowser.SaveFile(sh.XamlRoot, Path.GetFileNameWithoutExtension(name) + ext, ext, FileBrowser.Place.Pictures);
                 if (f is null) return;
                 var bytes = await Http.GetByteArrayAsync(url);
-                await Windows.Storage.FileIO.WriteBytesAsync(f, bytes);
-                U.MarkFromInternet(f.Path);
-                sh.Info("Zapisano: " + f.Name);
+                await File.WriteAllBytesAsync(f, bytes);
+                U.MarkFromInternet(f);
+                sh.Info("Zapisano: " + Path.GetFileName(f));
             }
             catch (Exception ex) { sh.Info("Nie udało się zapisać: " + ex.Message, true); }
         });

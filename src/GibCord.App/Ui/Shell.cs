@@ -130,7 +130,8 @@ public sealed class Shell : Grid
     void Accel(VirtualKey key, VirtualKeyModifiers mod, Action a)
     {
         var k = new KeyboardAccelerator { Key = key, Modifiers = mod };
-        k.Invoked += (_, e) => { e.Handled = true; a(); };
+        // przy otwartym okienku skróty aplikacji milczą (klawisz trafia do pola w okienku)
+        k.Invoked += (_, e) => { if (AppDialog.OpenCount > 0) return; e.Handled = true; a(); };
         KeyboardAccelerators.Add(k);
         // skróty są na całym oknie — bez tego Windows pokazywał przy najechaniu gdziekolwiek dymek „Ctrl+K”
         KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
@@ -600,7 +601,7 @@ public sealed class Shell : Grid
         if (M.DialogOpen(XamlRoot)) return;
         var list = new StackPanel { Spacing = 8 };
         foreach (var (k, w) in SettingsPage.Shortcuts) list.Add(SettingsPage.Shortcut(k, w));
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = "Skróty klawiszowe", Content = new ScrollViewer { Content = list, MaxHeight = 460 }.With(s => s.Width = 480), CloseButtonText = "Zamknij",
             XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -825,7 +826,7 @@ public sealed class Shell : Grid
                             U.V(2, U.T(it.Str("title") ?? "", 13.5, U.Bold, wrap: true), U.T(it.Str("text") ?? "", 12.5, null, Theme.Mu, wrap: true)).At(0, 1)));
             }
             await M.WaitNoDialog(XamlRoot);
-            var d = new ContentDialog
+            var d = new AppDialog
             {
                 Title = "Co nowego w GibCordzie", Content = new ScrollViewer { Content = panel, MaxHeight = 520 }, PrimaryButtonText = "Super!",
                 SecondaryButtonText = "Cała historia zmian", XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -925,7 +926,7 @@ public sealed class Shell : Grid
         if (S.ServerById(ServerId) is { } srv) ServerMenu.Build(this, srv).ShowAt(_side, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions { Position = new Windows.Foundation.Point(20, 60) });
     }
 
-    /// <summary>Zrzut w CI: okienko potwierdzenia (ContentDialog w barwach motywu).</summary>
+    /// <summary>Zrzut w CI: własne okienko potwierdzenia (wariant A · Karta).</summary>
     public void DemoConfirm() => _ = M.Confirm(this, "Usunąć wiadomość?", "Tej operacji nie da się cofnąć. Wiadomość zniknie u wszystkich.", "Usuń");
 
     /// <summary>Zrzut w CI: karta profilu na środku (dymki nie trafiają na zrzut okna).</summary>

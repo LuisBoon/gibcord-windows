@@ -21,7 +21,7 @@ public sealed partial class WatchPanel : Grid, IDisposable
     readonly Grid _reactLayer = new() { IsHitTestVisible = false };
     readonly TextBlock _title = U.T("", 14, U.Bold);
     readonly TextBlock _time = U.T("0:00", 12, U.Semi, Theme.Mu);
-    readonly Slider _seek = new() { Minimum = 0, Maximum = 1, StepFrequency = 1, VerticalAlignment = VerticalAlignment.Center };
+    readonly SliderField _seek = new() { Minimum = 0, Maximum = 1, StepFrequency = 1, VerticalAlignment = VerticalAlignment.Center };
     readonly Button _play;
     readonly StackPanel _queue = new() { Spacing = 4 };
     readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _timer;
@@ -308,7 +308,7 @@ static partial class WatchUi
         if (sh.C.VoiceChannelId == 0) { sh.Info("Wspólne oglądanie działa w rozmowie — najpierw wejdź na kanał głosowy.", true); return; }
         var box = new TextBox { PlaceholderText = "Wklej link z YouTube" };
         var title = new TextBox { PlaceholderText = "Tytuł (opcjonalnie)", MaxLength = 200 };
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = queue ? "Dodaj do kolejki" : "Oglądajcie razem", Content = U.V(8, U.T("Wszyscy w rozmowie zobaczą ten sam film w tym samym momencie.", 13, null, Theme.Mu, wrap: true), box, title).With(p => p.Width = 380),
             PrimaryButtonText = queue ? "Dodaj" : "Oglądaj", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,

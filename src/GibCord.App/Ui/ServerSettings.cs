@@ -146,21 +146,18 @@ public sealed partial class ServerSettingsPage : Grid
 
     async Task<(Stream Data, string? Mime, string Name)?> PickFile(params string[] exts)
     {
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
-        foreach (var ext in exts) picker.FileTypeFilter.Add(ext);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, _sh.W.Hwnd);
-        var f = await picker.PickSingleFileAsync();
+        var f = await FileBrowser.PickFile(XamlRoot, exts, FileBrowser.Place.Pictures);
         if (f is null) return null;
         return (await f.OpenStreamForReadAsync(), string.IsNullOrEmpty(f.ContentType) ? null : f.ContentType, Path.GetFileNameWithoutExtension(f.Name));
     }
 
-    ContentDialog Dialog(string title, UIElement content, string ok, bool danger = false) => new()
+    AppDialog Dialog(string title, UIElement content, string ok, bool danger = false) => new()
     {
         Title = title, Content = new ScrollViewer { Content = content, MaxHeight = 560 }, PrimaryButtonText = ok, CloseButtonText = "Anuluj",
         DefaultButton = danger ? ContentDialogButton.Close : ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
     };
 
-    static ToggleSwitch Toggle(string header, bool on) => new() { Header = U.T(header, 13.5, U.Semi), IsOn = on, OnContent = "Tak", OffContent = "Nie" };
+    static SwitchField Toggle(string header, bool on) => new() { Header = U.T(header, 13.5, U.Semi), IsOn = on, OnContent = "Tak", OffContent = "Nie" };
 
     // ───────────────────────── Przegląd ─────────────────────────
 
@@ -195,7 +192,7 @@ public sealed partial class ServerSettingsPage : Grid
         // poziomy
         var levels = Toggle("Poziomy (XP za pisanie i rozmowy)", srv.Levels);
         var msgs = Toggle("Wiadomość o awansie", srv.LevelMessages);
-        var chan = new ComboBox { Header = U.T("Gdzie pisać o awansach", 13.5, U.Semi), HorizontalAlignment = HorizontalAlignment.Stretch };
+        var chan = new DropField { Header = U.T("Gdzie pisać o awansach", 13.5, U.Semi), HorizontalAlignment = HorizontalAlignment.Stretch };
         var texts = srv.Channels.Where(c => !c.IsVoice).OrderBy(c => c.Position).ToList();
         chan.Items.Add("Tam, gdzie padła wiadomość");
         foreach (var c in texts) chan.Items.Add("# " + c.Name);
@@ -368,23 +365,23 @@ public sealed partial class ServerSettingsPage : Grid
         var voice = type == "voice";
         var name = new TextBox { Text = c?.Name ?? "", PlaceholderText = voice ? "np. Pogaduchy" : "np. ogólny", MaxLength = 100 };
         var topic = new TextBox { Text = c?.Topic ?? "", PlaceholderText = "O czym jest ten kanał (opcjonalnie)", MaxLength = 1024, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 64 };
-        var cat = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var cat = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
         var cats = srv.Categories.OrderBy(x => x.Position).ToList();
         cat.Items.Add("Bez kategorii");
         foreach (var k in cats) cat.Items.Add(k.Name);
         cat.SelectedIndex = categoryId is long cid && cats.FindIndex(k => k.Id == cid) is var ix and >= 0 ? ix + 1 : 0;
-        var sync = new CheckBox { Content = "Skopiuj uprawnienia z kategorii", IsChecked = c is null && categoryId is not null };
-        var slow = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var sync = new CheckField { Content = "Skopiuj uprawnienia z kategorii", IsChecked = c is null && categoryId is not null };
+        var slow = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
         var slowVals = new[] { 0, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 21600 };
         foreach (var v in slowVals) slow.Items.Add(v == 0 ? "Wyłączony" : v < 60 ? $"{v} s" : v < 3600 ? $"{v / 60} min" : $"{v / 3600} h");
         slow.SelectedIndex = Math.Max(0, Array.IndexOf(slowVals, c?.Slowmode ?? 0));
-        var ro = new CheckBox { Content = "Tylko do czytania (piszą moderatorzy)", IsChecked = c?.Readonly == true };
-        var limit = new NumberBox { Header = "Limit osób (0 = bez limitu)", Value = c?.UserLimit ?? 0, Minimum = 0, Maximum = 99, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
-        var bitrate = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var ro = new CheckField { Content = "Tylko do czytania (piszą moderatorzy)", IsChecked = c?.Readonly == true };
+        var limit = new NumberField { Header = "Limit osób (0 = bez limitu)", Value = c?.UserLimit ?? 0, Minimum = 0, Maximum = 99, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
+        var bitrate = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
         var bitVals = new[] { 32, 64, 96, 128 };
         foreach (var v in bitVals) bitrate.Items.Add($"{v} kb/s" + (v == 64 ? " (zwykła)" : v == 128 ? " (najlepsza)" : ""));
         bitrate.SelectedIndex = Math.Max(0, Array.IndexOf(bitVals, c?.Bitrate is > 0 ? c.Bitrate : 64));
-        var stream = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var stream = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
         var streamVals = new[] { "720p", "1080p", "1440p" };
         foreach (var v in streamVals) stream.Items.Add("Transmisje do " + v);
         stream.SelectedIndex = Math.Max(0, Array.IndexOf(streamVals, c?.MaxStream ?? "1080p"));

@@ -35,7 +35,7 @@ static class Fun
         catch (Exception ex) { v.Sh.Info(GibCordClient.Friendly(ex), true); }
     }
 
-    static ContentDialog Dialog(ChatView v, string title, UIElement content, string ok) => new()
+    static AppDialog Dialog(ChatView v, string title, UIElement content, string ok) => new()
     {
         Title = title, Content = content, PrimaryButtonText = ok, CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary,
         XamlRoot = v.XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -43,10 +43,10 @@ static class Fun
 
     static async void DiceDialog(ChatView v)
     {
-        var count = new NumberBox { Header = "Ile kości", Minimum = 1, Maximum = 10, Value = 2, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
-        var sides = new NumberBox { Header = "Ścianek", Minimum = 2, Maximum = 1000, Value = 6, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
+        var count = new NumberField { Header = "Ile kości", Minimum = 1, Maximum = 10, Value = 2, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
+        var sides = new NumberField { Header = "Ścianek", Minimum = 2, Maximum = 1000, Value = 6, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
         var quick = U.H(6);
-        ContentDialog? d = null;
+        AppDialog? d = null;
         foreach (var (c, s) in new[] { (1, 6), (2, 6), (3, 6), (1, 20), (1, 100) })
             quick.Add(U.Ghost($"{c}k{s}", () => { d?.Hide(); Create(v, new { kind = "dice", count = c, sides = s }); }, 30));
         d = Dialog(v, "🎲 Rzut kośćmi", U.V(12, quick, new Grid { ColumnSpacing = 10 }.Cols("*", "*").Add(count.At(0, 0), sides.At(0, 1))), "🎲 Rzuć");
@@ -73,7 +73,7 @@ static class Fun
         if (people.Count == 1) { Create(v, new { kind, opponentId = people[0] }); return; }
         var search = new TextBox { PlaceholderText = "Szukaj osoby" };
         var list = new StackPanel { Spacing = 2 };
-        ContentDialog? d = null;
+        AppDialog? d = null;
         void Draw()
         {
             list.Children.Clear();
@@ -86,7 +86,7 @@ static class Fun
         }
         search.TextChanged += (_, _) => Draw();
         Draw();
-        d = new ContentDialog
+        d = new AppDialog
         {
             Title = kind == "ttt" ? "⭕ Kółko i krzyżyk — z kim?" : "✊ Kamień, papier, nożyce — z kim?",
             Content = U.V(8, search, new ScrollViewer { Content = list, MaxHeight = 320 }), CloseButtonText = "Anuluj", XamlRoot = v.XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -101,11 +101,11 @@ static class Fun
         void AddOpt() { if (opts.Children.Count < 10) opts.Children.Add(new TextBox { PlaceholderText = $"Odpowiedź {opts.Children.Count + 1}", MaxLength = 100 }); }
         AddOpt(); AddOpt();
         var add = U.Ghost("+ Dodaj odpowiedź", AddOpt, 30);
-        var hours = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var hours = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
         var choices = (v.Sh.C.Info?.PollHours is { Length: > 0 } ph ? ph : [0, 1, 4, 8, 24, 72, 168]).ToList();
         foreach (var h in choices) hours.Items.Add(h switch { 0 => "Bez limitu czasu", 1 => "1 godzina", < 24 => $"{h} {Format.Plural(h, "godzina", "godziny", "godzin")}", 24 => "1 dzień", 168 => "1 tydzień", _ => $"{h / 24} {Format.Plural(h / 24, "dzień", "dni", "dni")}" });
         hours.SelectedIndex = Math.Max(0, choices.IndexOf(24));
-        var multi = new CheckBox { Content = "Można zaznaczyć kilka odpowiedzi" };
+        var multi = new CheckField { Content = "Można zaznaczyć kilka odpowiedzi" };
         var d = Dialog(v, "📊 Nowa ankieta", new ScrollViewer { MaxHeight = 480, Content = U.V(10, U.T("Pytanie", 12.5, U.Semi, Theme.Mu), q, U.T("Odpowiedzi", 12.5, U.Semi, Theme.Mu), opts, add,
             U.T("Czas trwania", 12.5, U.Semi, Theme.Mu), hours, multi) }, "Wyślij ankietę");
         if (await d.ShowAsync() != ContentDialogResult.Primary) return;

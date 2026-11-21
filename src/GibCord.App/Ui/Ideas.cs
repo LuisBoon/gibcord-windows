@@ -114,11 +114,11 @@ public sealed class IdeasView : Grid, IDisposable
         panel.Add(U.T(i.Str("title") ?? "", 18, U.Bold, wrap: true));
         panel.Add(U.T($"{S.NameOf(i.Long("authorId") ?? 0)} · {Format.When(i.Long("createdAt") ?? 0)}", 12, null, Theme.Mu));
         if (!string.IsNullOrWhiteSpace(i.Str("body"))) panel.Add(RichText.Build(i.Str("body")!, new RichText.Ctx(S, Api, S.ServerOfChannel(_cid), null, 13.5)));
-        ContentDialog? d = null;
+        AppDialog? d = null;
         Func<Task>? after = null; // akcja z kolejnym okienkiem — dopiero po zamknięciu tego
         if (mod)
         {
-            var st = new ComboBox { Header = U.T("Status", 12.5, U.Semi, Theme.Mu) };
+            var st = new DropField { Header = U.T("Status", 12.5, U.Semi, Theme.Mu) };
             foreach (var (k, v) in Status) st.Items.Add(v.Label);
             st.SelectedIndex = Status.Keys.ToList().IndexOf(i.Str("status") ?? "new");
             st.SelectionChanged += async (_, _) =>
@@ -147,7 +147,7 @@ public sealed class IdeasView : Grid, IDisposable
                 U.V(1, U.H(6, U.T(S.NameOf(k.Long("authorId") ?? 0), 13, U.Bold), U.T(Format.When(k.Long("createdAt") ?? 0), 11, null, Theme.Mu2)), U.T(k.Str("content") ?? "", 13, null, Theme.Fg, wrap: true)).At(0, 1)));
         var box = new TextBox { PlaceholderText = "Napisz komentarz…", MaxLength = 1000, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 60 };
         if (r.Bool("canComment") == true) panel.Add(box);
-        d = new ContentDialog
+        d = new AppDialog
         {
             Title = "Pomysł", Content = new ScrollViewer { Content = panel, MaxHeight = 560 }, CloseButtonText = "Zamknij",
             PrimaryButtonText = r.Bool("canComment") == true ? "Wyślij komentarz" : "", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
@@ -166,7 +166,7 @@ public sealed class IdeasView : Grid, IDisposable
         if (i is null && !_canPost) { _sh.Info("Nie możesz dodawać pomysłów na tym kanale.", true); return; }
         var title = new TextBox { Text = i?.Str("title") ?? "", PlaceholderText = "Krótko: co dodać albo zmienić?", MaxLength = 120 };
         var body = new TextBox { Text = i?.Str("body") ?? "", PlaceholderText = "Szczegóły: po co, jak to widzisz… (opcjonalnie)", MaxLength = 2000, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 140 };
-        var d = new ContentDialog
+        var d = new AppDialog
         {
             Title = i is null ? "💡 Nowy pomysł" : "Edytuj pomysł", Content = U.V(8, title, body).With(p => p.Width = 460),
             PrimaryButtonText = i is null ? "Dodaj" : "Zapisz", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,

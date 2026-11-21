@@ -612,10 +612,7 @@ public sealed partial class Composer : StackPanel
 
     async Task PickFiles()
     {
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.Downloads };
-        picker.FileTypeFilter.Add("*");
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, _v.Sh.W.Hwnd);
-        var files = await picker.PickMultipleFilesAsync();
+        var files = await FileBrowser.PickFiles(XamlRoot);
         foreach (var f in files) await AddFile(f);
     }
 

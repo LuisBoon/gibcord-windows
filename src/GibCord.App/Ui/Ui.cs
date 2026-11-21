@@ -118,11 +118,6 @@ public static class Theme
         focus.GradientStops.Add(new GradientStop { Offset = 1, Color = a });
         focus.GradientStops.Add(new GradientStop { Offset = 1, Color = Color.FromArgb(0x1f, 255, 255, 255) });
         r["TextControlElevationBorderFocusedBrush"] = focus;
-        // okienka (ContentDialog): treść na powierzchni motywu, pasek przycisków ciemniejszy — zamiast szarego Windows
-        r["ContentDialogBackground"] = new SolidColorBrush(U.C(_s.Page));
-        r["ContentDialogTopOverlay"] = new SolidColorBrush(U.C(_s.Surface));
-        r["ContentDialogBorderBrush"] = U.W(.12);
-        r["ContentDialogSeparatorBorderBrush"] = U.W(.08);
         // menu, okienka wysuwane i dymki podpowiedzi
         Set(U.B("#F5" + _s.Surface[1..]), "MenuFlyoutPresenterBackground", "FlyoutPresenterBackground", "ToolTipBackground");
         Set(U.W(.12), "MenuFlyoutPresenterBorderBrush", "FlyoutBorderThemeBrush", "ToolTipBorderBrush");

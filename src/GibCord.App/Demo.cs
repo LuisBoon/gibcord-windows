@@ -84,6 +84,11 @@ public static class Demo
                 sh.StartCall(DmOla);
                 break;
             case "imgedit": sh.Go(Eg, Ogolne); sh.DemoImageEditor(); break;
+            case "fields": sh.Go(Eg, Ogolne); FieldsDemo.Show(sh, ""); break;
+            case "dropdown": sh.Go(Eg, Ogolne); FieldsDemo.Show(sh, "drop"); break;
+            case "calendar": sh.Go(Eg, Ogolne); FieldsDemo.Show(sh, "date"); break;
+            case "timepick": sh.Go(Eg, Ogolne); FieldsDemo.Show(sh, "time"); break;
+            case "files": sh.Go(Eg, Ogolne); FieldsDemo.Files(sh); break;
             case "accounts": sh.Go(Eg, Ogolne); break; // kropka „3” przy panelu „ja” (konta w tle)
             case "later":
             {

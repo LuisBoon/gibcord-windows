@@ -220,7 +220,7 @@ static class VoiceUi
     {
         var o = sh.C.Voice.Options;
         var label = U.T($"Głośność: {Math.Round(o.VolumeOf(uid) * 100)}%", 12.5, U.Semi, Theme.Mu);
-        var slider = new Slider { Minimum = 0, Maximum = 200, StepFrequency = 5, Value = Math.Round(o.VolumeOf(uid) * 100), Width = 220 };
+        var slider = new SliderField { Minimum = 0, Maximum = 200, StepFrequency = 5, Value = Math.Round(o.VolumeOf(uid) * 100), Width = 220 };
         slider.ValueChanged += (_, e) =>
         {
             o.UserVolume[uid] = e.NewValue / 100.0;
@@ -228,7 +228,7 @@ static class VoiceUi
             label.Text = $"Głośność: {Math.Round(e.NewValue)}%";
             App.Prefs.Save();
         };
-        var mute = new ToggleSwitch { Header = "Wycisz tylko u mnie", IsOn = o.UserMuted.Contains(uid) };
+        var mute = new SwitchField { Header = "Wycisz tylko u mnie", IsOn = o.UserMuted.Contains(uid) };
         mute.Toggled += (_, _) => { if (mute.IsOn) o.UserMuted.Add(uid); else o.UserMuted.Remove(uid); App.Prefs.Save(); };
         var panel = U.V(8, U.T(sh.S.NameOf(uid, srv), 14, U.Bold), label, slider, mute);
         panel.Padding = U.Th(4);
@@ -436,7 +436,7 @@ public sealed class VoiceView : Grid, IDisposable
             big.Add(new Border { Background = U.B("#cc08040f"), CornerRadius = new CornerRadius(14), Child = img });
             var who = U.T($"{s.NameOf(watched.UserId, srv)} nadaje ekran", 12.5, U.Semi);
             var stop = U.Ghost("Przestań oglądać", () => { if (_sh.FocusMode) _sh.ToggleFocus(); C.Voice.Unwatch(watched.UserId); Refresh(); }, 30);
-            var vol = new Slider { Minimum = 0, Maximum = 200, StepFrequency = 5, Width = 120, Value = Math.Round(C.Voice.Options.StreamVolume * 100), VerticalAlignment = VerticalAlignment.Center };
+            var vol = new SliderField { Minimum = 0, Maximum = 200, StepFrequency = 5, Width = 120, Value = Math.Round(C.Voice.Options.StreamVolume * 100), VerticalAlignment = VerticalAlignment.Center };
             vol.ValueChanged += (_, e) => { C.Voice.Options.StreamVolume = e.NewValue / 100; App.Prefs.Save(); };
             ToolTipService.SetToolTip(vol, "Głośność transmisji");
             var full = U.IconButton(_sh.FocusMode ? "\uE73F" : "\uE740", _sh.FocusMode ? "Wyjdź z pełnego ekranu (Esc)" : "Pełny ekran", () => { _sh.ToggleFocus(); Refresh(); }, 15, 30);
@@ -618,18 +618,18 @@ static class VoiceSettings
         var o = sh.C.Voice.Options;
         var inputs = AudioDevices.Inputs();
         var outputs = AudioDevices.Outputs();
-        ComboBox Combo(List<AudioDevice> list, string cur, Action<string> set)
+        DropField Combo(List<AudioDevice> list, string cur, Action<string> set)
         {
-            var cb = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+            var cb = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
             foreach (var d in list) cb.Items.Add(d.Name);
             var i = list.FindIndex(d => d.Id == cur);
             cb.SelectedIndex = i < 0 ? 0 : i;
             cb.SelectionChanged += (_, _) => { if (cb.SelectedIndex >= 0) { set(list[cb.SelectedIndex].Id); App.Prefs.Save(); host?.Restart(); } };
             return cb;
         }
-        Slider Vol(double v, Action<double> set)
+        SliderField Vol(double v, Action<double> set)
         {
-            var s = new Slider { Minimum = 0, Maximum = 200, StepFrequency = 5, Value = Math.Round(v * 100) };
+            var s = new SliderField { Minimum = 0, Maximum = 200, StepFrequency = 5, Value = Math.Round(v * 100) };
             s.ValueChanged += (_, e) => { set(e.NewValue / 100); App.Prefs.Save(); };
             return s;
         }
@@ -640,7 +640,7 @@ static class VoiceSettings
 
         var meter = new ProgressBar { Maximum = 100, Value = 0, Height = 8, CornerRadius = new CornerRadius(4), Foreground = Theme.Green };
         var thr = U.T("", 11.5, null, Theme.Mu);
-        var mode = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var mode = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
         mode.Items.Add("Wykrywanie głosu (mówisz — słychać)");
         mode.Items.Add("Naciśnij, aby mówić");
         mode.SelectedIndex = o.Mode == "ptt" ? 1 : 0;
@@ -651,11 +651,11 @@ static class VoiceSettings
         pttRow.Visibility = o.Mode == "ptt" ? Visibility.Visible : Visibility.Collapsed;
         mode.SelectionChanged += (_, _) => { o.Mode = mode.SelectedIndex == 1 ? "ptt" : "vad"; pttRow.Visibility = o.Mode == "ptt" ? Visibility.Visible : Visibility.Collapsed; App.Prefs.Save(); };
 
-        var auto = new ToggleSwitch { Header = "Automatyczna czułość", IsOn = o.AutoSens };
-        var sens = new Slider { Minimum = -80, Maximum = -10, StepFrequency = 1, Value = o.Sens, IsEnabled = !o.AutoSens };
+        var auto = new SwitchField { Header = "Automatyczna czułość", IsOn = o.AutoSens };
+        var sens = new SliderField { Minimum = -80, Maximum = -10, StepFrequency = 1, Value = o.Sens, IsEnabled = !o.AutoSens };
         auto.Toggled += (_, _) => { o.AutoSens = auto.IsOn; sens.IsEnabled = !auto.IsOn; App.Prefs.Save(); };
         sens.ValueChanged += (_, e) => { o.Sens = e.NewValue; App.Prefs.Save(); };
-        ToggleSwitch Sw(string header, bool on, Action<bool> set) { var t = new ToggleSwitch { Header = header, IsOn = on }; t.Toggled += (_, _) => { set(t.IsOn); App.Prefs.Save(); }; return t; }
+        SwitchField Sw(string header, bool on, Action<bool> set) { var t = new SwitchField { Header = header, IsOn = on }; t.Toggled += (_, _) => { set(t.IsOn); App.Prefs.Save(); }; return t; }
 
         var panel = U.V(10,
             U.T("Mikrofon", 12, U.Bold, Theme.Mu), micBox, U.T("Głośność mikrofonu", 11.5, null, Theme.Mu2), inVol,
@@ -669,7 +669,7 @@ static class VoiceSettings
             Sw("Usuwanie echa", o.EchoCancellation, v => o.EchoCancellation = v),
             Sw("Automatyczna głośność mikrofonu", o.AutoGain, v => o.AutoGain = v));
         panel.Width = 420;
-        var dlg = new ContentDialog
+        var dlg = new AppDialog
         {
             Title = "Głos i dźwięk", Content = new ScrollViewer { Content = panel, MaxHeight = 560, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
             CloseButtonText = "Gotowe", XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,

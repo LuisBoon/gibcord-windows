@@ -270,7 +270,7 @@ public sealed class AdminActivity : StackPanel
     {
         var body = new StackPanel { Spacing = 12, Width = 560 };
         body.Children.Add(U.T("Wczytywanie…", 13, null, Theme.Mu));
-        var d = new ContentDialog { Title = "Karta osoby", Content = new ScrollViewer { Content = body, MaxHeight = 560 }, CloseButtonText = "Zamknij", XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark };
+        var d = new AppDialog { Title = "Karta osoby", Content = new ScrollViewer { Content = body, MaxHeight = 560 }, CloseButtonText = "Zamknij", XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark };
         d.Resources["ContentDialogMaxWidth"] = 680.0;
         _ = Fill();
         await M.WaitNoDialog(XamlRoot);
