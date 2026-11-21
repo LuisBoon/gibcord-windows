@@ -19,7 +19,8 @@ public sealed class ApiException(int status, string message, string? code = null
 /// <summary>REST /api/v1 z tokenem aplikacji (API.md, sekcja 2b).</summary>
 public sealed class GibCordApi : IDisposable
 {
-    public const string UserAgent = "GibCord-Windows/6.0";
+    /// <summary>Nazwa programu w zapytaniach — z pełną wersją (panel admina pokazuje, kto ma którą); aplikacja ustawia ją przy starcie.</summary>
+    public static string UserAgent { get; set; } = "GibCord-Windows/6.0";
     readonly HttpClient _http;
 
     public Uri BaseUri { get; }

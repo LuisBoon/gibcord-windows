@@ -183,7 +183,7 @@ public sealed class AdminPage : Grid
                     + (u.Long("lastSeen") is long ls ? " · ostatnio " + Format.When(ls) : "") + (u.Str("lastIp") is { } ip ? " · " + ip : "");
                 var g = new Grid { Padding = U.Th(12, 8) }.Cols("auto", "*", "auto").Add(
                     new Avatar(36).SetRaw(user.Name, Store.ColorOfUser(user), Api.Abs(user.Avatar), null).At(0, 0),
-                    U.V(2, U.H(8, U.T(user.Name, 14, U.Bold), badges), U.T(meta, 11.5, null, Theme.Mu, wrap: true),
+                    U.V(2, U.H(8, U.T(user.Name, 14, U.Bold), badges), U.T(meta, 11.5, null, Theme.Mu, wrap: true), Clients(u),
                         sus && u.Str("suspendReason") is { Length: > 0 } why ? U.T("Powód: " + why, 11.5, null, Theme.Red, wrap: true) : null).With(x => x.Margin = U.Th(12, 0)).At(0, 1));
                 var more = U.IconButton("", "Akcje", () => { }, 14, 32);
                 more.Flyout = UserActions(id, user, u.Bool("isAdmin") == true, sus);
@@ -193,6 +193,21 @@ public sealed class AdminPage : Grid
             if (offset + n < total) p.Add(U.Ghost("Więcej", () => _ = FillUsers(p, offset + n), 32).With(b => b.HorizontalAlignment = HorizontalAlignment.Stretch));
         }
         catch (Exception ex) { Fail(p, ex); }
+    }
+
+    /// <summary>Czego używa: programy i wersje (najnowsze pierwsze) — aplikacja na Windows z numerem wersji, przeglądarka, telefon.</summary>
+    static FrameworkElement? Clients(System.Text.Json.JsonElement u)
+    {
+        if (u.Prop("clients").ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+        var w = new WrapPanel { Spacing = 6 };
+        foreach (var c in u.Prop("clients").EnumerateArray())
+        {
+            var label = c.Str("label") ?? "?";
+            var icon = label.Contains("GibCord") || label.Contains("aplikacja") ? "\uE7F4" : label.StartsWith("iPhone") || label.StartsWith("Android") || label.StartsWith("iPad") ? "\uE8EA" : "\uE774";
+            var when = c.Long("lastAt") is long la ? " · " + Format.When(la) : "";
+            w.Children.Add(U.Box(U.H(5, U.I(icon, 11, Theme.Mu), U.T(label + when, 11, U.Semi, Theme.Mu)), U.W(.06), 6, U.Th(7, 2)));
+        }
+        return w.Children.Count > 0 ? w.With(x => x.Margin = U.Th(0, 3, 0, 0)) : null;
     }
 
     MenuFlyout UserActions(long id, User u, bool admin, bool suspended)

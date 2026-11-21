@@ -24,9 +24,15 @@ public sealed class UpdateSplash : Window
         var box = U.V(16, Splash.Gibek(gibek).With(g => g.HorizontalAlignment = HorizontalAlignment.Center), text, bar);
         box.HorizontalAlignment = HorizontalAlignment.Center;
         box.VerticalAlignment = VerticalAlignment.Center;
+        // mały napis z wersją na dole okienka
+        var ver = U.T("GibCord " + Updater.Version, 10.5, null, Theme.Mu2);
+        ver.HorizontalAlignment = HorizontalAlignment.Center;
+        ver.VerticalAlignment = VerticalAlignment.Bottom;
+        ver.Margin = U.Th(0, 0, 0, 12);
         var root = new Grid();
         root.Children.Add(Theme.Backdrop());
         root.Children.Add(box);
+        root.Children.Add(ver);
         return (root, text, bar);
     }
 

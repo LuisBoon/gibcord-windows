@@ -21,7 +21,7 @@ public sealed class AdminActivity : StackPanel
     int _ver;
 
     static readonly System.Globalization.CultureInfo Pl = new("pl-PL");
-    static readonly Brush OnBrush = U.B("#ffaa78"), BgBrush = U.B("#66ffaa78");
+    static readonly Brush OnBrush = U.B("#ffaa78"), BgBrush = U.B("#66ffaa78"), ReleaseBrush = U.B("#7cc7ff"), UpdateBrush = U.B("#6fe3a5");
 
     Store S => _sh.S;
 
@@ -31,7 +31,9 @@ public sealed class AdminActivity : StackPanel
         Spacing = 12;
         var legend = U.H(16,
             U.H(6, new Rectangle { Width = 14, Height = 8, RadiusX = 3, RadiusY = 3, Fill = OnBrush }, U.T("na ekranie", 12, null, Theme.Mu)),
-            U.H(6, new Rectangle { Width = 14, Height = 8, RadiusX = 3, RadiusY = 3, Fill = BgBrush }, U.T("w tle (np. zasobnik, inna karta)", 12, null, Theme.Mu)));
+            U.H(6, new Rectangle { Width = 14, Height = 8, RadiusX = 3, RadiusY = 3, Fill = BgBrush }, U.T("w tle (np. zasobnik, inna karta)", 12, null, Theme.Mu)),
+            U.H(6, new Rectangle { Width = 2, Height = 14, Fill = ReleaseBrush }, U.T("wydanie aplikacji", 12, null, Theme.Mu)),
+            U.H(6, new Ellipse { Width = 10, Height = 10, Fill = UpdateBrush, Stroke = U.B("#1b1531"), StrokeThickness = 1.5 }, U.T("ktoś pobrał aktualizację", 12, null, Theme.Mu)));
         var axis = new Grid { Margin = U.Th(236, 0, 0, 0) }.Cols("*", "*", "*", "*", "auto");
         var labels = new[] { "0:00", "6:00", "12:00", "18:00", "24:00" };
         for (var i = 0; i < labels.Length; i++) axis.Add(U.T(labels[i], 10.5, null, Theme.Mu2).At(0, i));
@@ -81,7 +83,9 @@ public sealed class AdminActivity : StackPanel
             var since = Num(d, "since");
             var dayStart = Num(d, "dayStart") ?? 0;
             var now = Num(d, "now") ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var releases = d.Prop("releases").ValueKind == JsonValueKind.Array ? d.Prop("releases").EnumerateArray().ToList() : [];
             _sum.Text = $"Aktywnych tego dnia: {users.Count} z {Num(d, "total") ?? 0:0} kont." +
+                (releases.Count > 0 ? " Wydania: " + string.Join(", ", releases.Select(rl => $"{rl.Str("version")} ({Time(Num(rl, "at") ?? 0)})")) + "." : "") +
                 (since is { } s && s > dayStart ? $" Historia zbiera się od {Time(s)} tego dnia." : since is null ? " Historia zapisuje się od wersji 5.10.2." : "");
             _rows.Children.Clear();
             if (users.Count == 0) { _rows.Children.Add(U.T("Tego dnia nikt nie był w GibCordzie (albo historia jeszcze się nie zbierała).", 13, null, Theme.Mu, wrap: true)); return; }
@@ -93,7 +97,7 @@ public sealed class AdminActivity : StackPanel
                 var uid = uj.Long("id") ?? 0;
                 var onMin = Num(x, "onMin") ?? 0;
                 var who = U.H(8, new Avatar(28).Set(S, _sh.C.Api, uid, null),
-                    U.V(0, U.T(S.NameOf(uid), 13, U.Bold), U.T((uj.Str("email") ?? "brak maila") + " · " + (onMin > 0 ? Dur(onMin) + " na ekranie" : "tylko w tle"), 10.5, null, Theme.Mu2)));
+                    U.V(0, U.T(S.NameOf(uid), 13, U.Bold), U.T((x.Str("client") is { } cl ? cl + " · " : "") + (onMin > 0 ? Dur(onMin) + " na ekranie" : "tylko w tle"), 10.5, null, Theme.Mu2)));
                 var whoBtn = U.Row(who, () => _ = Card(uid), false, 8, U.Th(6, 3), U.Th(0)).With(r => r.Width = 228);
                 ToolTipService.SetToolTip(whoBtn, "Karta osoby");
                 // pasek doby
@@ -118,6 +122,26 @@ public sealed class AdminActivity : StackPanel
                         var devs = g.Prop("devices").ValueKind == JsonValueKind.Array ? string.Join(", ", g.Prop("devices").EnumerateArray().Select(v => v.GetString())) : "";
                         ToolTipService.SetToolTip(r, $"{S.NameOf(uid)}: {Time(Math.Max(Num(g, "start") ?? 0, dayStart))} – {(g.Prop("live").ValueKind == JsonValueKind.True ? "teraz" : Time(Math.Min(Num(g, "end") ?? 0, dayStart + DAY - 1)))} · {(on ? "na ekranie" : "w tle")}{(devs.Length > 0 ? " · " + devs : "")}");
                         canvas.Children.Add(r);
+                    }
+                    // wydania aplikacji (pionowa kreska) i chwila, gdy ta osoba pobrała nową wersję (kropka)
+                    foreach (var rl in releases)
+                    {
+                        var at = Num(rl, "at") ?? 0;
+                        var line = new Rectangle { Width = 2, Height = 22, Fill = ReleaseBrush, Opacity = .85 };
+                        Canvas.SetLeft(line, Pos(at) - 1);
+                        ToolTipService.SetToolTip(line, $"Wydanie GibCorda {rl.Str("version")} — {Time(at)}");
+                        canvas.Children.Add(line);
+                    }
+                    foreach (var up in x.Prop("updates").ValueKind == JsonValueKind.Array ? x.Prop("updates").EnumerateArray() : Enumerable.Empty<JsonElement>())
+                    {
+                        var at = Num(up, "at") ?? 0;
+                        var dot = new Ellipse { Width = 12, Height = 12, Fill = UpdateBrush, Stroke = U.B("#1b1531"), StrokeThickness = 2 };
+                        Canvas.SetLeft(dot, Pos(at) - 6);
+                        Canvas.SetTop(dot, 5);
+                        var rel = releases.FirstOrDefault(rr => rr.Str("version") == up.Str("version"));
+                        var after = Num(rel, "at") is double ra && at >= ra ? $" (po {Dur((at - ra) / 60_000)} od wydania)" : "";
+                        ToolTipService.SetToolTip(dot, $"{S.NameOf(uid)} pobrał(a) {up.Str("version")} o {Time(at)}{after} · {up.Str("label")}");
+                        canvas.Children.Add(dot);
                     }
                     if (now < dayStart + DAY)
                     {
@@ -221,6 +245,26 @@ public sealed class AdminActivity : StackPanel
                 }
                 if (devices.Children.Count == 0) devices.Children.Add(U.T("Nie jest nigdzie zalogowany.", 12, null, Theme.Mu));
                 body.Children.Add(Section("Zalogowane urządzenia", devices));
+                // czego używa: programy i wersje (od kiedy, kiedy ostatnio) + aktualizacje na tle wydań
+                var apps = new StackPanel { Spacing = 4 };
+                foreach (var cx in r.Prop("clients").ValueKind == JsonValueKind.Array ? r.Prop("clients").EnumerateArray() : Enumerable.Empty<JsonElement>())
+                {
+                    var first = Num(cx, "firstAt") is { } fa ? DateTimeOffset.FromUnixTimeMilliseconds((long)fa).ToLocalTime().ToString("d MMM HH:mm", Pl) : "";
+                    apps.Children.Add(new Grid().Cols("*", "auto").Add(
+                        U.V(0, U.T(cx.Str("label") ?? "?", 12.5, U.Semi), U.T("pierwszy raz " + first, 11, null, Theme.Mu2)).At(0, 0),
+                        U.T(Num(cx, "lastAt") is { } la ? Format.When((long)la) : "", 11.5, U.Semi, Theme.Mu).At(0, 1)));
+                }
+                var rels = r.Prop("releases").ValueKind == JsonValueKind.Array ? r.Prop("releases").EnumerateArray().ToList() : [];
+                foreach (var up in r.Prop("updates").ValueKind == JsonValueKind.Array ? r.Prop("updates").EnumerateArray() : Enumerable.Empty<JsonElement>())
+                {
+                    var at = Num(up, "at") ?? 0;
+                    var rel = rels.FirstOrDefault(rr => rr.Str("version") == up.Str("version"));
+                    var after = Num(rel, "at") is double ra && at >= ra ? $" · {Dur((at - ra) / 60_000)} po wydaniu" : "";
+                    apps.Children.Add(U.HG(8, new Ellipse { Width = 9, Height = 9, Fill = UpdateBrush },
+                        U.T($"Pobrał(a) {up.Str("version")} — {DayName(DateTimeOffset.FromUnixTimeMilliseconds((long)at).LocalDateTime)} {Time(at)}{after}", 11.5, null, Theme.Mu)));
+                }
+                if (apps.Children.Count == 0) apps.Children.Add(U.T("Jeszcze brak danych — zapisują się od wersji 6.0.10.", 12, null, Theme.Mu));
+                body.Children.Add(Section("Czego używa (aplikacja i wersja)", apps));
             }
             catch (Exception ex) { body.Children.Clear(); body.Children.Add(U.T(GibCordClient.Friendly(ex), 13, null, Theme.Red, wrap: true)); }
         }

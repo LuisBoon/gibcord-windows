@@ -41,6 +41,7 @@ public sealed class App : Application, IXamlMetadataProvider
             Resources.MergedDictionaries.Add(new XamlControlsResources());
             Directory.CreateDirectory(DataDir);
             Prefs = Prefs.Load(DataDir);
+            GibCord.Core.GibCordApi.UserAgent = "GibCord-Windows/" + Updater.Version; // pełna wersja (np. 6.0.10) — panel admina: kto ma którą
             Ui.Theme.Apply(Prefs.Theme);
             Log("OnLaunched: okno");
             Window = new MainWindow();
