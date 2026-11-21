@@ -103,7 +103,7 @@ public sealed partial class Composer : StackPanel
         row.Margin = U.Th(6, 2, 6, 2);
         var inner = U.V(0, _files, row);
         _frame = new Border { Child = inner, CornerRadius = new CornerRadius(14), Background = Theme.Input, BorderBrush = Theme.InputLine, BorderThickness = U.Th(1) };
-        _box.GotFocus += (_, _) => _frame.BorderBrush = U.Alpha("#ffb98f", .45);
+        _box.GotFocus += (_, _) => _frame.BorderBrush = Theme.AccentA(.45);
         _box.LostFocus += (_, _) => { _frame.BorderBrush = Theme.InputLine; HideSuggest(); };
 
         var cancelRec = U.Ghost("Anuluj", () => _ = StopRecording(false), 32);

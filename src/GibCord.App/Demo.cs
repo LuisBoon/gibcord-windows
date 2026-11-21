@@ -109,7 +109,7 @@ public static class Demo
             [MajaId] = Usr(MajaId, "Maja", "#f4a3b8", "offline", false),
             [BartekId] = Usr(BartekId, "Bartek", "#a3c9f4", "offline", false),
         };
-        Member Mem(long uid, params long[] roles) => new() { UserId = uid, RoleIds = [.. roles] };
+        Member Mem(long uid, params long[] roles) => new() { UserId = uid, RoleIds = [.. roles], JoinedAt = DateTimeOffset.UtcNow.AddDays(-30 - uid % 40).ToUnixTimeMilliseconds() };
         Channel Ch(long id, long sid, string name, long cat, int pos, string type = "text", long? last = null, string? topic = null) =>
             new() { Id = id, ServerId = sid, Name = name, CategoryId = cat, Position = pos, Type = type, LastMessageId = last, Topic = topic };
         var eg = new Server

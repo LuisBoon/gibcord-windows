@@ -461,7 +461,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
                 SaveSoon(cid);
             }
             catch (ApiException ex) when (ex.IsAuth) { _ui(() => EndSession("Sesja wygasła — zaloguj się ponownie.")); return; }
-            catch (Exception ex) { _ui(() => Error?.Invoke(Friendly(ex))); }
+            catch (Exception ex) { if (session == _session) _ui(() => { Store.FetchFailed(cid); Error?.Invoke(Friendly(ex)); }); }
         }
         if (WindowActive && ActiveChannelId == cid) ScheduleRead(cid, 0); // w międzyczasie mógł się otworzyć inny kanał
     }
@@ -578,8 +578,11 @@ public sealed partial class GibCordClient : IAsyncDisposable
             _ui(() => { if (session != _session) return; Store.SetWindow(-tid, msgs, hasOlder: msgs.Count >= 50); _fresh.Add(-tid); });
             if (WindowActive && ActiveThreadId == tid) ScheduleRead(-tid, 0);
         }
-        catch (Exception ex) { _ui(() => Error?.Invoke(Friendly(ex))); }
+        catch (Exception ex) { if (session == _session) _ui(() => { Store.FetchFailed(-tid); Error?.Invoke(Friendly(ex)); }); }
     }
+
+    /// <summary>Ponowne pobranie najnowszych wiadomości kanału albo wątku (po nieudanym wczytaniu).</summary>
+    public Task Reload(long key) { _fresh.Remove(key); return key < 0 ? LoadThread(-key) : OpenChannel(key); }
 
     public void CloseThread() { if (ActiveThreadId != 0 && !Offline) Store.Windows.Remove(-ActiveThreadId); ActiveThreadId = 0; }
 

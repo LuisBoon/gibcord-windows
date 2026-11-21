@@ -159,7 +159,7 @@ public sealed partial class MessageView : Grid
         };
         var g = new Grid { Padding = U.Th(16, 5, 16, 5) }.Cols("56", "*").Add(
             U.I(glyph, 15, m.Type == "levelup" ? Theme.Yellow : m.Type == "call" ? Theme.Green : Theme.Mu).With(i => i.HorizontalAlignment = HorizontalAlignment.Center).At(0, 0),
-            U.H(8, U.T(text, 13.5, null, Theme.Mu, wrap: true), U.T(Format.When(m.CreatedAt), 11, null, Theme.Mu2)).At(0, 1));
+            U.HG(8, U.T(text, 13.5, null, Theme.Mu, wrap: true).Fill(), U.T(Format.When(m.CreatedAt), 11, null, Theme.Mu2)).At(0, 1));
         if (m.Type == "pin" && m.RefIdLong is long target) g.Tapped += async (_, _) => await _v.JumpTo(target);
         return g;
     }
@@ -178,7 +178,8 @@ public sealed partial class MessageView : Grid
             grid.Rows("auto", "auto");
             var who = U.T(S.NameOf(rep.AuthorId, Srv), 12, U.Bold, U.B(S.NameColor(rep.AuthorId, Srv)));
             var snip = U.T(string.IsNullOrWhiteSpace(rep.Content) ? "załącznik" : Markup.Plain(rep.Content, id => "@" + S.NameOf(id, Srv), S.RoleName), 12, null, Theme.Mu);
-            var line = U.H(6, U.T("↱", 13, null, Theme.Mu2), new Avatar(16).Set(S, Api, rep.AuthorId, Srv), who, snip);
+            who.MaxWidth = 200;
+            var line = U.HG(6, U.T("↱", 13, null, Theme.Mu2), new Avatar(16).Set(S, Api, rep.AuthorId, Srv), who, snip.Fill());
             line.Margin = U.Th(30, 0, 0, 3);
             line.Tapped += async (_, e) => { e.Handled = true; await _v.JumpTo(rep.Id); };
             grid.Add(line.At(0, 0, colSpan: 2));
@@ -399,7 +400,7 @@ public sealed partial class MessageView : Grid
             var b = new Border
             {
                 CornerRadius = new CornerRadius(8), Padding = U.Th(8, 2), Height = 28,
-                Background = mine ? U.Alpha("#ffb98f", .16) : U.W(.08), BorderBrush = mine ? U.Alpha("#ffb98f", .5) : U.W(.12), BorderThickness = U.Th(1),
+                Background = mine ? Theme.AccentA(.16) : U.W(.08), BorderBrush = mine ? Theme.AccentA(.5) : U.W(.12), BorderThickness = U.Th(1),
                 Child = U.H(6, em, numHost),
             };
             // reakcja się zmieniła: nowa wyskakuje cała, przybyła — emoji podskakuje i licznik wjeżdża od dołu, ubyła — licznik od góry
@@ -432,7 +433,7 @@ public sealed partial class MessageView : Grid
         var known = S.ThreadById(tid);
         var unread = known?.Unread == true;
         var last = t.Long("lastAt") is long la && count > 0 ? " · " + Format.When(la) : "";
-        var chip = U.Box(U.H(8, U.I(GT.Thread, 13, Theme.Accent), U.T(known?.Name ?? t.Str("name") ?? "Wątek", 12.5, U.Bold, Theme.Accent),
+        var chip = U.Box(U.HG(8, U.I(GT.Thread, 13, Theme.Accent), U.T(known?.Name ?? t.Str("name") ?? "Wątek", 12.5, U.Bold, Theme.Accent).With(n => n.MaxWidth = 220),
             U.T(count > 0 ? $"{count} {Format.Plural(count, "odpowiedź", "odpowiedzi", "odpowiedzi")}{last}" : "Brak odpowiedzi — napisz pierwszą", 12, null, Theme.Mu),
             unread ? new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = Theme.Red } : null), U.W(.06), 10, U.Th(10, 6));
         chip.BorderBrush = Theme.Accent;
@@ -464,7 +465,7 @@ public sealed partial class MessageView : Grid
             var pct = total == 0 ? 0 : votes.Count * 100.0 / total;
             var bar = new Grid { Height = 34 };
             bar.Add(new Border { Background = U.W(.06), CornerRadius = new CornerRadius(8) },
-                new Border { Background = mine ? U.Alpha("#ffb98f", .35) : U.W(.12), CornerRadius = new CornerRadius(8), HorizontalAlignment = HorizontalAlignment.Left, Width = 3.4 * pct },
+                new Border { Background = mine ? Theme.AccentA(.35) : U.W(.12), CornerRadius = new CornerRadius(8), HorizontalAlignment = HorizontalAlignment.Left, Width = 3.4 * pct },
                 new Grid { Padding = U.Th(10, 0) }.Cols("*", "auto").Add(U.T(o.Str("text") ?? "", 13, mine ? U.Bold : U.Semi).At(0, 0), U.T($"{votes.Count} · {pct:0}%", 12, null, Theme.Mu).At(0, 1)));
             bar.Width = 340;
             if (!closed && o.Long("id") is long oid)
@@ -638,7 +639,7 @@ public sealed partial class MessageView : Grid
     /// <summary>Krótkie podświetlenie po skoku do wiadomości.</summary>
     public void Flash()
     {
-        var b = U.Alpha("#ffb98f", .22);
+        var b = Theme.AccentA(.22);
         Background = b;
         var anim = new DoubleAnimation { From = .22, To = 0, Duration = TimeSpan.FromSeconds(1.6), BeginTime = TimeSpan.FromSeconds(.6) };
         var sb = new Storyboard();

@@ -325,7 +325,7 @@ public static class Picker
         };
         if (cur == Tab.Gif && pickGif is null) cur = Tab.Emoji;
         Draw();
-        if (demoHost is not null) { demoHost(new Border { Child = root, Background = U.B("#FA2a2147"), CornerRadius = new CornerRadius(12), Padding = U.Th(10) }); return; }
+        if (demoHost is not null) { demoHost(new Border { Child = root, Background = Theme.Surface, CornerRadius = new CornerRadius(12), Padding = U.Th(10) }); return; }
         fly.Content = root;
         fly.Opened += (_, _) => search.Focus(FocusState.Programmatic);
         fly.ShowAt(anchor);

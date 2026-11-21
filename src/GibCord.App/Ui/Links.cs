@@ -116,7 +116,7 @@ static partial class Links
             ? new ImageBrush { ImageSource = Images.Get(bu, 760), Stretch = Stretch.UniformToFill }
             : new LinearGradientBrush { StartPoint = new(0, 0), EndPoint = new(1, 1), GradientStops = { new GradientStop { Color = U.C(g[0]), Offset = 0 }, new GradientStop { Color = U.C(g[1]), Offset = .6 }, new GradientStop { Color = U.C(g[2]), Offset = 1 } } };
         var banner = new Border { Height = 64, Background = bannerBrush, CornerRadius = new CornerRadius(14, 14, 0, 0) };
-        var icon = new Avatar(52, false, "#2a2140").SetRaw(info.Name, "#7cc7ff", api.Abs(info.Icon), null);
+        var icon = new Avatar(52, false, Theme.RingHex).SetRaw(info.Name, "#7cc7ff", api.Abs(info.Icon), null);
         icon.Margin = U.Th(14, -28, 0, 0);
         icon.HorizontalAlignment = HorizontalAlignment.Left;
         var mine = sh.S.ServerById(info.Id) is not null;

@@ -25,7 +25,7 @@ public sealed class LoginPage : Grid
         _error = U.T("", 13, null, Theme.Red, wrap: true).With(t => t.Visibility = Visibility.Collapsed);
         var card = new Border
         {
-            Width = 420, Padding = U.Th(36, 32), CornerRadius = new CornerRadius(22), Background = U.B("#B3221a3d"),
+            Width = 420, Padding = U.Th(36, 32), CornerRadius = new CornerRadius(22), Background = Theme.Glass70,
             BorderBrush = U.W(.12), BorderThickness = U.Th(1), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Child = _form,
         };

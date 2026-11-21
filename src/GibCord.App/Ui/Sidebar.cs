@@ -422,7 +422,7 @@ public sealed class Sidebar : Grid
         _me.ColumnDefinitions.Clear();
         _me.Cols("auto", "*", "auto");
         var me = S.Me;
-        var av = new Avatar(34, withStatus: true, ring: "#2a2140").Set(S, _sh.C.Api, me.Id, null, status: true);
+        var av = new Avatar(34, withStatus: true, ring: Theme.RingHex).Set(S, _sh.C.Api, me.Id, null, status: true);
         var status = S.StatusOf(me.Id);
         var sub = !string.IsNullOrEmpty(me.CustomStatus) ? me.CustomStatus! : Format.StatusPl.GetValueOrDefault(me.Status == "invisible" ? "invisible" : status, "Dostępny");
         var who = U.V(0, U.T(me.Name, 12.5, U.Bold).With(t => t.TextTrimming = TextTrimming.CharacterEllipsis), U.T(sub, 11, null, Theme.Mu).With(t => t.TextTrimming = TextTrimming.CharacterEllipsis));

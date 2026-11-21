@@ -212,7 +212,7 @@ public sealed partial class ServerSettingsPage
         var name = new TextBox { Text = r.Name, MaxLength = 100, IsEnabled = !locked };
         var color = r.Color;
         var colorBox = new ContentControl();
-        var hex = new TextBox { Text = r.Color ?? "", PlaceholderText = "#hex", Width = 110, IsEnabled = !locked };
+        var hex = new TextBox { Text = r.Color ?? "", PlaceholderText = "#hex", Width = 110, IsEnabled = !locked, HorizontalAlignment = HorizontalAlignment.Left };
         void DrawColors()
         {
             var w = new WrapPanel { Spacing = 6 };
@@ -252,7 +252,7 @@ public sealed partial class ServerSettingsPage
                 }, 12, 30)).At(0, 1));
         ed.Add(head);
         if (locked) ed.Add(U.T("Ta rola jest na równi albo wyżej niż Twoja najwyższa — nie możesz jej zmieniać.", 12.5, null, Theme.Yellow, wrap: true));
-        ed.Add(Card(Label("Nazwa"), name, Label("Kolor"), colorBox, hex, Label("Ikona"), U.H(8, icon,
+        ed.Add(Card(Label("Nazwa"), name, Label("Kolor"), colorBox, hex, Label("Ikona"), new WrapPanel { Spacing = 8 }.Add(icon,
             locked ? null : U.Ghost("Wgraj obrazek", async () =>
             {
                 if (await PickFile(".png", ".gif", ".webp", ".jpg", ".jpeg") is not { } f) return;

@@ -46,6 +46,86 @@ public static class Theme
         };
         Accent = U.B(_p.A);
         OnAccent = U.B(_p.On);
+        _s = Name switch
+        {
+            "midnight" => ("#17171e", "#060609"),
+            "forest" => ("#1d2c23", "#0e1813"),
+            "cherry" => ("#2c1322", "#170912"),
+            _ => ("#2a2147", "#181230"),
+        };
+        try { if (Application.Current?.Resources is { } r) ApplyResources(r); } catch (Exception ex) { App.Log("Motyw (zasoby): " + ex.Message); }
+    }
+
+    // Powierzchnie zależne od motywu — wcześniej na sztywno śliwkowe, więc w Lesie i Wiśni okienka, dymki i ustawienia były fioletowe.
+    static (string Surface, string Page) _s = ("#2a2147", "#181230");
+    /// <summary>Okienka i karty nad treścią (profil, wydarzenia, ranking, dzwonek, wybór emoji).</summary>
+    public static Brush Surface => U.B("#FA" + _s.Surface[1..]);
+    /// <summary>Karta logowania na tle okna (półprzezroczysta).</summary>
+    public static Brush Glass70 => U.B("#B3" + (Name == "glass" ? "221a3d" : _s.Surface[1..]));
+    /// <summary>Dymki na dole okna.</summary>
+    public static Brush Toast => U.B("#F0" + _s.Surface[1..]);
+    /// <summary>Kolor obwódki kropki statusu na awatarach leżących na okienkach.</summary>
+    public static string RingHex => _s.Surface;
+    /// <summary>Obwódka kropki statusu na awatarach w kolumnach (tło okna).</summary>
+    public static string DotRingHex => Name switch { "midnight" => "#101015", "forest" => "#1a281f", "cherry" => "#26101d", _ => "#241c3b" };
+    /// <summary>Tło ustawień na całe okno: kryje czat pod spodem (przy szkle Windows lekko przepuszcza pulpit).</summary>
+    public static Brush Page => U.B((GlassOn ? "#F2" : "#FF") + _s.Page[1..]);
+    /// <summary>Akcent motywu z przezroczystością (tła zaznaczeń, ramki).</summary>
+    public static Brush AccentA(double a) => U.Alpha(_p.A, a);
+    public static Brush AccentHover => new SolidColorBrush(Mix(U.C(_p.A), Colors.White, .18));
+    public static Brush AccentPressed => new SolidColorBrush(Mix(U.C(_p.A), Colors.Black, .12));
+
+    static Color Mix(Color c, Color to, double t) => Color.FromArgb(255,
+        (byte)Math.Round(c.R + (to.R - c.R) * t), (byte)Math.Round(c.G + (to.G - c.G) * t), (byte)Math.Round(c.B + (to.B - c.B) * t));
+
+    /// <summary>
+    /// Kolory gotowych kontrolek WinUI w barwach motywu zamiast niebieskiego akcentu Windows: przełączniki, podkreślenie aktywnego pola,
+    /// zaznaczenie tekstu, suwaki, pola wyboru, przyciski domyślne w okienkach, tło okienek, menu i dymków podpowiedzi.
+    /// </summary>
+    public static void ApplyResources(ResourceDictionary r)
+    {
+        var a = U.C(_p.A);
+        var on = U.C(_p.On);
+        r["SystemAccentColor"] = Mix(a, Colors.Black, .15);
+        r["SystemAccentColorLight1"] = Mix(a, Colors.Black, .05);
+        r["SystemAccentColorLight2"] = a;
+        r["SystemAccentColorLight3"] = Mix(a, Colors.White, .25);
+        r["SystemAccentColorDark1"] = Mix(a, Colors.Black, .3);
+        r["SystemAccentColorDark2"] = Mix(a, Colors.Black, .45);
+        r["SystemAccentColorDark3"] = Mix(a, Colors.Black, .6);
+
+        Brush acc = new SolidColorBrush(a), accHover = AccentHover, accPressed = AccentPressed, onB = new SolidColorBrush(on);
+        void Set(Brush b, params string[] keys) { foreach (var k in keys) r[k] = b; }
+        Set(acc, "ToggleSwitchFillOn", "ToggleSwitchStrokeOn", "SliderTrackValueFill", "SliderThumbBackground",
+            "CheckBoxCheckBackgroundFillChecked", "CheckBoxCheckBackgroundStrokeChecked", "RadioButtonOuterEllipseCheckedFill", "RadioButtonOuterEllipseCheckedStroke",
+            "AccentButtonBackground", "HyperlinkButtonForeground", "ComboBoxItemPillFillBrush", "ProgressBarForeground", "ProgressRingForegroundThemeBrush",
+            "ListViewItemSelectionIndicatorBrush", "NavigationViewSelectionIndicatorForeground");
+        Set(accHover, "ToggleSwitchFillOnPointerOver", "ToggleSwitchStrokeOnPointerOver", "SliderTrackValueFillPointerOver", "SliderThumbBackgroundPointerOver",
+            "CheckBoxCheckBackgroundFillCheckedPointerOver", "CheckBoxCheckBackgroundStrokeCheckedPointerOver", "RadioButtonOuterEllipseCheckedFillPointerOver",
+            "RadioButtonOuterEllipseCheckedStrokePointerOver", "AccentButtonBackgroundPointerOver", "HyperlinkButtonForegroundPointerOver");
+        Set(accPressed, "ToggleSwitchFillOnPressed", "ToggleSwitchStrokeOnPressed", "SliderTrackValueFillPressed", "SliderThumbBackgroundPressed",
+            "CheckBoxCheckBackgroundFillCheckedPressed", "CheckBoxCheckBackgroundStrokeCheckedPressed", "RadioButtonOuterEllipseCheckedFillPressed",
+            "RadioButtonOuterEllipseCheckedStrokePressed", "AccentButtonBackgroundPressed", "HyperlinkButtonForegroundPressed");
+        Set(onB, "ToggleSwitchKnobFillOn", "ToggleSwitchKnobFillOnPointerOver", "ToggleSwitchKnobFillOnPressed",
+            "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver", "CheckBoxCheckGlyphForegroundCheckedPressed",
+            "RadioButtonCheckGlyphFill", "RadioButtonCheckGlyphFillPointerOver", "RadioButtonCheckGlyphFillPressed",
+            "AccentButtonForeground", "AccentButtonForegroundPointerOver", "AccentButtonForegroundPressed");
+        Set(Transparent, "AccentButtonBorderBrush", "AccentButtonBorderBrushPointerOver", "AccentButtonBorderBrushPressed");
+        // zaznaczony tekst: przyciemniony akcent, żeby biały tekst był czytelny
+        r["TextControlSelectionHighlightColor"] = new SolidColorBrush(Mix(a, Colors.Black, .45));
+        // podkreślenie aktywnego pola: 2 px akcentu na dole (jak w Windows, tylko w kolorze GibCorda)
+        var focus = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new(0, 0), EndPoint = new(0, 2), RelativeTransform = new ScaleTransform { ScaleY = -1, CenterY = .5 } };
+        focus.GradientStops.Add(new GradientStop { Offset = 1, Color = a });
+        focus.GradientStops.Add(new GradientStop { Offset = 1, Color = Color.FromArgb(0x1f, 255, 255, 255) });
+        r["TextControlElevationBorderFocusedBrush"] = focus;
+        // okienka (ContentDialog): treść na powierzchni motywu, pasek przycisków ciemniejszy — zamiast szarego Windows
+        r["ContentDialogBackground"] = new SolidColorBrush(U.C(_s.Page));
+        r["ContentDialogTopOverlay"] = new SolidColorBrush(U.C(_s.Surface));
+        r["ContentDialogBorderBrush"] = U.W(.12);
+        r["ContentDialogSeparatorBorderBrush"] = U.W(.08);
+        // menu, okienka wysuwane i dymki podpowiedzi
+        Set(U.B("#F5" + _s.Surface[1..]), "MenuFlyoutPresenterBackground", "FlyoutPresenterBackground", "ToolTipBackground");
+        Set(U.W(.12), "MenuFlyoutPresenterBorderBrush", "FlyoutBorderThemeBrush", "ToolTipBorderBrush");
     }
     public static readonly Brush Green = U.B("#6fe3a5");
     public static readonly Brush Red = U.B("#ff6b81");
@@ -175,6 +255,31 @@ public static class U
     public static StackPanel V(double spacing, params UIElement?[] children) =>
         new StackPanel { Orientation = Orientation.Vertical, Spacing = spacing }.Add(children);
 
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<UIElement, object> _fill = new();
+    /// <summary>Oznacza element, który w <see cref="HG"/> ma dostać resztę miejsca (i ewentualnie skrócić się „…”).</summary>
+    public static T Fill<T>(this T e) where T : UIElement { _fill.AddOrUpdate(e, true); return e; }
+
+    /// <summary>
+    /// Poziomo jak <see cref="H"/>, ale w siatce: element oznaczony .Fill() (domyślnie ostatni tekst) dostaje resztę szerokości,
+    /// więc długi tekst kończy się „…” albo zawija się, zamiast wyjeżdżać poza ramkę. Krótka treść nie rozpycha rzędu (wyrównanie do lewej).
+    /// </summary>
+    public static Grid HG(double spacing, params UIElement?[] children)
+    {
+        var items = children.Where(c => c is not null).Select(c => c!).ToList();
+        var star = items.FindIndex(c => _fill.TryGetValue(c, out _));
+        if (star < 0) star = items.FindLastIndex(c => c is TextBlock);
+        var g = new Grid { ColumnSpacing = spacing, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        for (var i = 0; i < items.Count; i++)
+        {
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = i == star ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
+            Grid.SetColumn((FrameworkElement)items[i], i);
+            g.Children.Add(items[i]);
+        }
+        return g;
+    }
+
+    public static WrapPanel Add(this WrapPanel p, params UIElement?[] els) { foreach (var e in els) if (e is not null) p.Children.Add(e); return p; }
+
     public static TextBlock T(string text, double size = 14, FontWeight? weight = null, Brush? fg = null, bool wrap = false) => new()
     {
         Text = text, FontSize = size, FontWeight = weight ?? FontWeights.Normal, Foreground = fg ?? Theme.Fg, FontFamily = Theme.Font,
@@ -208,6 +313,9 @@ public static class U
         };
         ToolTipService.SetToolTip(b, tip);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tip); // czytniki ekranu (Narrator) mówią, co robi przycisk
+        b.Resources["ButtonBackgroundDisabled"] = Theme.Transparent;
+        b.Resources["ButtonBorderBrushDisabled"] = Theme.Transparent;
+        DimWhenDisabled(b);
         b.Click += (_, _) => click();
         return Motion.Pressable(b, .88f);
     }
@@ -220,10 +328,23 @@ public static class U
             Content = T(text, 14, FontWeights.Bold, Theme.OnAccent), Height = height, Padding = Th(18, 0),
             Background = Theme.AccentGradient(), BorderThickness = Th(0), CornerRadius = new CornerRadius(12), HorizontalAlignment = HorizontalAlignment.Stretch,
         };
-        b.Resources["ButtonBackgroundPointerOver"] = U.B("#ffc9a6");
-        b.Resources["ButtonBackgroundPressed"] = U.B("#f0a986");
+        b.Resources["ButtonBackgroundPointerOver"] = Theme.AccentHover;
+        b.Resources["ButtonBackgroundPressed"] = Theme.AccentPressed;
+        b.Resources["ButtonBackgroundDisabled"] = Theme.AccentGradient();
+        DimWhenDisabled(b, .5);
         b.Click += (_, _) => click();
         return Motion.Pressable(b, .96f);
+    }
+
+    /// <summary>
+    /// Wyłączony przycisk: przygaszony, bez systemowego szarego tła (WinUI dawało wyłączonym przyciskom ramkę,
+    /// przez co np. nieaktywna strzałka „w górę” wyglądała na podświetloną).
+    /// </summary>
+    public static void DimWhenDisabled(Control b, double opacity = .35)
+    {
+        void Apply() => b.Opacity = b.IsEnabled ? 1 : opacity;
+        b.IsEnabledChanged += (_, _) => Apply();
+        Apply();
     }
 
     public static Button Ghost(string text, Action click, double height = 36)
@@ -233,6 +354,8 @@ public static class U
             Content = T(text, 13, FontWeights.SemiBold), Height = height, Padding = Th(14, 0), Background = U.W(.1),
             BorderThickness = Th(0), CornerRadius = new CornerRadius(10),
         };
+        b.Resources["ButtonBackgroundDisabled"] = U.W(.06);
+        DimWhenDisabled(b, .5);
         b.Click += (_, _) => click();
         return Motion.Pressable(b, .96f);
     }

@@ -8,7 +8,7 @@ namespace GibCord.App.Ui;
 public sealed class InboxPanel : Grid, IDisposable
 {
     readonly Shell _sh;
-    readonly StackPanel _tabs = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
+    readonly WrapPanel _tabs = new() { Spacing = 6 };
     readonly StackPanel _list = new() { Spacing = 6, Padding = U.Th(12, 4, 12, 16) };
     string _tab;
 
@@ -22,7 +22,7 @@ public sealed class InboxPanel : Grid, IDisposable
         var head = new Grid { Padding = U.Th(14, 10, 8, 4) }.Cols("auto", "*", "auto").Add(
             U.I("", 16, Theme.Accent).With(i => i.Margin = U.Th(0, 0, 10, 0)).At(0, 0), U.T("Skrzynka", 16, U.Bold).At(0, 1),
             U.IconButton(G.Close, "Zamknij (Esc)", sh.CloseSidePanel, 14, 32).At(0, 2));
-        this.Add(head.At(0), U.Scroll2(_tabs).With(t => t.Margin = U.Th(12, 4, 12, 8)).At(1), U.Scroll(_list).At(2));
+        this.Add(head.At(0), _tabs.With(t => t.Margin = U.Th(12, 4, 12, 8)).At(1), U.Scroll(_list).At(2));
         Inbox.Changed += Draw;
         if (_tab == "mentions") Inbox.MarkSeen();
         Draw();

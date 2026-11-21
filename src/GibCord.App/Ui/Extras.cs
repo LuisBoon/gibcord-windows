@@ -220,7 +220,7 @@ public static class ProfileCard
             Setters =
             {
                 new Setter(Control.PaddingProperty, new Thickness(0)),
-                new Setter(Control.BackgroundProperty, U.B("#FA2a2147")),
+                new Setter(Control.BackgroundProperty, Theme.Surface),
                 new Setter(Control.CornerRadiusProperty, new CornerRadius(14)),
                 new Setter(FrameworkElement.MaxWidthProperty, 340.0),
             },
@@ -255,8 +255,8 @@ public static class ProfileCard
             var err = await sh.C.SetNote(uid, t);
             if (err is not null) sh.Info(err, true);
         };
-        var head = new Grid().Cols("*", "auto").Add(U.T("NOTATKA · WIDZISZ TYLKO TY", 10.5, U.Bold, Theme.Mu2).At(0, 0), where.At(0, 1));
-        return U.Box(U.V(4, head, box), U.B("#4D0A0618"), 12, U.Th(12, 8, 12, 6), U.Alpha("#ffb98f", .35), 1);
+        var head = U.V(0, U.T("NOTATKA · WIDZISZ TYLKO TY", 10.5, U.Bold, Theme.Mu2), where); // dopisek pod spodem — obok nachodził na tytuł
+        return U.Box(U.V(4, head, box), U.B("#4D0A0618"), 12, U.Th(12, 8, 12, 6), Theme.AccentA(.35), 1);
     }
 
     public static FrameworkElement? Build(Shell sh, long uid, Action close)
@@ -269,7 +269,7 @@ public static class ProfileCard
             ? (Brush)new ImageBrush { ImageSource = Images.Get(bu, 680), Stretch = Stretch.UniformToFill }
             : u.Banner is { } bc ? U.B(bc) : Theme.AccentGradient();
         var banner = new Border { Height = 96, Background = bannerBrush, CornerRadius = new CornerRadius(14, 14, 0, 0) };
-        var av = new Avatar(80, true, "#2a2140").Set(s, sh.C.Api, uid, srv, true);
+        var av = new Avatar(80, true, Theme.RingHex).Set(s, sh.C.Api, uid, srv, true);
         av.HorizontalAlignment = HorizontalAlignment.Left;
         av.Margin = U.Th(16, -44, 0, 0);
         var body = U.V(10);

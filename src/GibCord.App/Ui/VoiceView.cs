@@ -249,7 +249,7 @@ static class VoiceUi
             U.T(title, 18, U.Bold).With(t => t.HorizontalAlignment = HorizontalAlignment.Center),
             U.T("dzwoni do Ciebie…", 13.5, null, Theme.Mu).With(t => t.HorizontalAlignment = HorizontalAlignment.Center),
             U.H(12, decline, accept).With(p => p.HorizontalAlignment = HorizontalAlignment.Center));
-        return new Border { Child = card, Background = U.B("#FA2a2147"), CornerRadius = new CornerRadius(18), Padding = U.Th(36, 28), BorderBrush = U.W(.12), BorderThickness = U.Th(1), Width = 360 };
+        return new Border { Child = card, Background = Theme.Surface, CornerRadius = new CornerRadius(18), Padding = U.Th(36, 28), BorderBrush = U.W(.12), BorderThickness = U.Th(1), Width = 360 };
     }
 }
 
@@ -575,9 +575,9 @@ public sealed class CallBar : Grid
         var avs = U.H(4);
         foreach (var m in members.Take(8))
         {
-            var av = new Avatar(40, ring: "#2a2140").Set(_sh.S, c.Api, m.UserId, null);
+            var av = new Avatar(40, ring: Theme.RingHex).Set(_sh.S, c.Api, m.UserId, null);
             _avs.Add((m.UserId, av));
-            avs.Add(new Border { Child = av, CornerRadius = new CornerRadius(22), BorderBrush = U.B("#2a2140"), BorderThickness = U.Th(2) });
+            avs.Add(new Border { Child = av, CornerRadius = new CornerRadius(22), BorderBrush = U.B(Theme.RingHex), BorderThickness = U.Th(2) });
         }
         var text = here ? U.T(VoiceUi.StateText(c), 13, U.Bold, VoiceUi.StateBrush(c)) : U.T("Rozmowa trwa — możesz dołączyć", 13, U.Bold);
         var right = U.H(8);

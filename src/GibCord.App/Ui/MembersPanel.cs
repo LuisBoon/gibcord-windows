@@ -103,7 +103,7 @@ public sealed class MembersPanel : Grid
             : o.Banner is { } bc ? U.B(bc) : Theme.AccentGradient();
         _list.Padding = U.Th(0, 0, 0, 16);
         _list.Children.Add(new Border { Height = 90, Background = bannerBrush });
-        var av = new Avatar(76, true, "#2a2140").Set(s, _sh.C.Api, o.Id, null, true);
+        var av = new Avatar(76, true, Theme.RingHex).Set(s, _sh.C.Api, o.Id, null, true);
         av.HorizontalAlignment = HorizontalAlignment.Left;
         av.Margin = U.Th(16, -40, 0, 0);
         _list.Children.Add(av);

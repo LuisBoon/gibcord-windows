@@ -10,7 +10,7 @@ static class Levels
     public static void Show(Shell sh, Server srv)
     {
         var list = new StackPanel { Spacing = 4 };
-        var card = new Border { Width = 560, MaxHeight = 640, Background = U.B("#FA2a2147"), CornerRadius = new CornerRadius(16), Padding = U.Th(22, 18), BorderBrush = U.W(.12), BorderThickness = U.Th(1) };
+        var card = new Border { Width = 560, MaxHeight = 640, Background = Theme.Surface, CornerRadius = new CornerRadius(16), Padding = U.Th(22, 18), BorderBrush = U.W(.12), BorderThickness = U.Th(1) };
         var head = new Grid().Cols("*", "auto").Add(U.H(10, U.T("🏆", 20), U.T($"Ranking · {srv.Name}", 18, U.Bold)).At(0, 0), U.IconButton(G.Close, "Zamknij", sh.CloseOverlay, 13, 32).At(0, 1));
         card.Child = new Grid().Rows("auto", "auto", "*").Add(head.At(0),
             U.T("XP za pisanie (raz na minutę) i rozmowy głosowe z innymi.", 12.5, null, Theme.Mu, wrap: true).With(t => t.Margin = U.Th(0, 4, 0, 10)).At(1),
@@ -39,7 +39,7 @@ static class Levels
                     U.V(1, U.T(sh.S.NameOf(uid, srv), 14, U.Bold, U.B(sh.S.NameColor(uid, srv))),
                         U.T($"{e.Long("messages") ?? 0} {Format.Plural(e.Long("messages") ?? 0, "wiadomość", "wiadomości", "wiadomości")} · {e.Long("voiceMinutes") ?? 0} min w rozmowach", 11.5, null, Theme.Mu2)).With(p => p.Margin = U.Th(12, 0)).At(0, 2),
                     U.V(0, U.T($"poziom {lvl}", 13, U.Bold, Theme.Yellow), U.T($"{e.Long("xp") ?? 0} XP", 11, null, Theme.Mu2)).With(p => p.HorizontalAlignment = HorizontalAlignment.Right).At(0, 3));
-                list.Add(new Border { Child = g, Background = me ? U.Alpha("#ffb98f", .1) : U.W(.035), CornerRadius = new CornerRadius(10) });
+                list.Add(new Border { Child = g, Background = me ? Theme.AccentA(.1) : U.W(.035), CornerRadius = new CornerRadius(10) });
             }
             if (list.Children.Count == 0) list.Add(U.T("Jeszcze nikt nie zdobył XP.", 13.5, null, Theme.Mu));
         }

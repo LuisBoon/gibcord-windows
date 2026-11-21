@@ -690,7 +690,7 @@ public sealed class Shell : Grid
     {
         var b = new Border
         {
-            Background = error ? U.B("#F0b8364f") : U.B("#F02a2147"), CornerRadius = new CornerRadius(12), Padding = U.Th(16, 10),
+            Background = error ? U.B("#F0b8364f") : Theme.Toast, CornerRadius = new CornerRadius(12), Padding = U.Th(16, 10),
             BorderBrush = U.W(.14), BorderThickness = U.Th(1), MaxWidth = 520,
             Child = U.H(10, U.I(error ? "" : "", 15), U.T(msg, 13.5, U.Semi, wrap: true)),
         };
@@ -831,7 +831,7 @@ public sealed class Shell : Grid
         var btn = new HyperlinkButton { Content = U.T(action, 13, U.Bold, Theme.Accent), Padding = U.Th(6, 0) };
         var b = new Border
         {
-            Background = U.B("#F02a2147"), CornerRadius = new CornerRadius(12), Padding = U.Th(16, 8), BorderBrush = U.W(.14), BorderThickness = U.Th(1), MaxWidth = 520,
+            Background = Theme.Toast, CornerRadius = new CornerRadius(12), Padding = U.Th(16, 8), BorderBrush = U.W(.14), BorderThickness = U.Th(1), MaxWidth = 520,
             Child = U.H(10, U.T(msg, 13.5, U.Semi), btn),
         };
         btn.Click += (_, _) => { _toasts.Children.Remove(b); a(); };
@@ -895,7 +895,7 @@ public sealed class Shell : Grid
     public void ShowProfileDemo()
     {
         if (ProfileCard.Build(this, Demo.OlaId, CloseOverlay) is { } card)
-            ShowOverlay(new Border { Child = card, Background = U.B("#FA2a2147"), CornerRadius = new CornerRadius(14) });
+            ShowOverlay(new Border { Child = card, Background = Theme.Surface, CornerRadius = new CornerRadius(14) });
     }
 
 }

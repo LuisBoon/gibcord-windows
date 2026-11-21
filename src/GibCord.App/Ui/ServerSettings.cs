@@ -32,7 +32,7 @@ public sealed partial class ServerSettingsPage : Grid
         _sid = serverId;
         _section = section;
         _role = selectRole;
-        Background = U.B("#F5181230");
+        Background = Theme.Page;
         this.Cols("250", "*", "auto");
         _sv = U.Scroll(_body);
         var close = U.IconButton(G.Close, "Zamknij (Esc)", sh.CloseServerSettings, 16, 40);
@@ -319,7 +319,7 @@ public sealed partial class ServerSettingsPage : Grid
                 var list = g.Channels;
                 var meta = c.IsVoice ? (c.UserLimit > 0 ? $"do {c.UserLimit} osób" : "") : (c.Readonly ? "tylko do czytania" : c.Slowmode > 0 ? $"tryb powolny {c.Slowmode} s" : c.Topic ?? "");
                 var row = new Grid { Padding = U.Th(10, 4) }.Cols("auto", "*", "auto").Add(
-                    U.T(c.IsVoice ? "🔊" : "#", 15, U.Semi, Theme.Mu).With(t => t.Margin = U.Th(0, 0, 10, 0)).At(0, 0),
+                    (c.IsVoice ? (FrameworkElement)U.I(G.Speaker, 14, Theme.Mu) : U.T("#", 15, U.Semi, Theme.Mu)).With(t => { t.Margin = U.Th(0, 0, 10, 0); t.Width = 16; }).At(0, 0),
                     U.V(0, U.T(c.Name, 14, U.Semi), string.IsNullOrEmpty(meta) ? null : U.T(meta, 11.5, null, Theme.Mu2)).At(0, 1),
                     U.H(2,
                         U.IconButton("", "W górę", () => _ = MoveChannel(list, idx, -1), 11, 28).With(b => b.IsEnabled = idx > 0),
@@ -424,7 +424,7 @@ public sealed partial class ServerSettingsPage : Grid
                 var timeout = m.TimeoutUntil is long t && t > Format.NowMs() ? U.Box(U.T("wyciszony do " + Format.When(t), 10.5, U.Bold, Theme.OnAccent), Theme.Yellow, 6, U.Th(6, 1)) : null;
                 var g = new Grid { Padding = U.Th(10, 6) }.Cols("auto", "*", "auto").Add(new Avatar(34, true).Set(S, Api, uid, srv, true).At(0, 0),
                     U.V(2, U.H(6, U.T(S.NameOf(uid, srv), 14, U.Semi, U.B(S.NameColor(uid, srv))), U.T("@" + (S.U(uid)?.Username ?? ""), 11.5, null, Theme.Mu2), srv.OwnerId == uid ? U.T("👑", 11) : null, timeout),
-                        roles, U.T("Dołączył(a) " + Format.Local(m.JoinedAt).ToString("d MMM yyyy", Format.Pl), 11, null, Theme.Mu2)).With(p => p.Margin = U.Th(12, 0)).At(0, 1));
+                        roles, m.JoinedAt > 0 ? U.T("Dołączył(a) " + Format.Local(m.JoinedAt).ToString("d MMM yyyy", Format.Pl), 11, null, Theme.Mu2) : null).With(p => p.Margin = U.Th(12, 0)).At(0, 1));
                 var more = U.IconButton("", "Akcje", () => { }, 14, 32);
                 var fly = UserMenu.Build(_sh, uid, srv);
                 if (Can(Perm.ManageRoles) && srv.Roles.Count > 0)

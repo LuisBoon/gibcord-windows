@@ -36,7 +36,7 @@ static class People
             foreach (var id in picked)
             {
                 var uid = id;
-                var x = new Button { Content = U.H(6, U.T(s.U(id)!.Name, 12, U.Semi), U.T("✕", 10, null, Theme.Mu)), Background = U.Alpha("#ffb98f", .18), BorderThickness = U.Th(0), CornerRadius = new CornerRadius(12), Padding = U.Th(10, 3) };
+                var x = new Button { Content = U.H(6, U.T(s.U(id)!.Name, 12, U.Semi), U.T("✕", 10, null, Theme.Mu)), Background = Theme.AccentA(.18), BorderThickness = U.Th(0), CornerRadius = new CornerRadius(12), Padding = U.Th(10, 3) };
                 x.Click += (_, _) => { picked.Remove(uid); Draw(); };
                 chips.Children.Add(x);
             }

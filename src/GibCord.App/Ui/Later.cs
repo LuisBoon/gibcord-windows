@@ -88,8 +88,8 @@ static class Later
         {
             _v = v;
             Root.CornerRadius = new CornerRadius(12, 12, 0, 0);
-            Root.Background = U.Alpha("#ffb98f", .08);
-            Root.BorderBrush = U.Alpha("#ffb98f", .25);
+            Root.Background = Theme.AccentA(.08);
+            Root.BorderBrush = Theme.AccentA(.25);
             Root.BorderThickness = U.Th(1, 1, 1, 0);
             Root.Padding = U.Th(14, 6, 8, 6);
             Root.Visibility = Visibility.Collapsed;

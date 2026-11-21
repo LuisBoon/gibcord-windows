@@ -165,12 +165,20 @@ public sealed partial class ChatView : Grid, IDisposable
         var unread = S.Window(Key).Items.Where(m => m.Id > _lastReadAtOpen && m.AuthorId != S.Me.Id && m.Send == SendState.Sent && !m.IsSystem).ToList();
         if (unread.Count < 3) return; // przy kilku nowych wystarczy znacznik NOWE
         var first = unread[0];
-        var jump = new HyperlinkButton { Content = U.T("Skocz do pierwszej", 12.5, U.Bold, U.B("#ffffff")), Padding = U.Th(8, 0) };
+        var jumpText = U.T("Skocz do pierwszej", 12.5, U.Bold, U.B("#ffffff"));
+        var jump = new HyperlinkButton { Content = jumpText, Padding = U.Th(8, 0) };
         jump.Click += async (_, _) => { _unreadBar.Visibility = Visibility.Collapsed; await JumpTo(first.Id); };
         var close = U.IconButton(G.Close, "Zamknij", () => _unreadBar.Visibility = Visibility.Collapsed, 10, 24, U.B("#ffffff"));
-        _unreadBar.Child = new Grid().Cols("*", "auto", "auto").Add(
-            U.T($"{unread.Count}{(S.Window(Key).HasOlder && unread.Count >= 40 ? "+" : "")} {Format.Plural(unread.Count, "nowa wiadomość", "nowe wiadomości", "nowych wiadomości")} od {Format.Time(first.CreatedAt)}", 12.5, U.Bold, U.B("#ffffff")).At(0, 0),
-            jump.At(0, 1), close.At(0, 2));
+        var count = $"{unread.Count}{(S.Window(Key).HasOlder && unread.Count >= 40 ? "+" : "")} {Format.Plural(unread.Count, "nowa wiadomość", "nowe wiadomości", "nowych wiadomości")}";
+        var label = U.T(count + " od " + Format.Time(first.CreatedAt), 12.5, U.Bold, U.B("#ffffff"));
+        var bar = new Grid().Cols("*", "auto", "auto").Add(label.At(0, 0), jump.At(0, 1), close.At(0, 2));
+        // wąsko (panel wątku, małe okno): „Skocz” i bez godziny — zamiast „3 nowe wiadomości o…”
+        bar.SizeChanged += (_, e) =>
+        {
+            jumpText.Text = e.NewSize.Width < 430 ? "Skocz" : "Skocz do pierwszej";
+            label.Text = e.NewSize.Width < 300 ? count : count + " od " + Format.Time(first.CreatedAt);
+        };
+        _unreadBar.Child = bar;
         _unreadBar.Visibility = Visibility.Visible;
     }
 
@@ -217,23 +225,25 @@ public sealed partial class ChatView : Grid, IDisposable
         var g = new Grid().Cols("auto", "auto", "*", "auto");
         if (Ch is { } c)
         {
-            g.Add(U.T("#", 20, U.Semi, Theme.Mu).With(t => t.Margin = U.Th(0, 0, 8, 2)).At(0, 0), U.T(c.Name, 15, U.Bold).At(0, 1));
+            g.Add(U.T("#", 20, U.Semi, Theme.Mu).With(t => t.Margin = U.Th(0, 0, 8, 2)).At(0, 0), U.T(c.Name, 15, U.Bold).With(t => { t.MaxWidth = 300; t.Tip(c.Name); }).At(0, 1));
             if (!string.IsNullOrWhiteSpace(c.Topic))
             {
                 var topic = U.T(c.Topic!.Replace('\n', ' '), 12.5, null, Theme.Mu);
                 topic.Tip(c.Topic!);
-                g.Add(new Border { BorderBrush = U.W(.14), BorderThickness = U.Th(1, 0, 0, 0), Margin = U.Th(12, 0, 12, 0), Padding = U.Th(12, 0, 0, 0), Child = topic, Height = 20 }.At(0, 2));
+                var tb = new Border { BorderBrush = U.W(.14), BorderThickness = U.Th(1, 0, 0, 0), Margin = U.Th(12, 0, 12, 0), Padding = U.Th(12, 0, 0, 0), Child = topic, Height = 20 };
+                tb.SizeChanged += (_, e) => tb.Opacity = e.NewSize.Width < 90 ? 0 : 1; // w wąskim nagłówku sam „…” z kreską wyglądał na błąd
+                g.Add(tb.At(0, 2));
             }
         }
         else if (DmObj is { } d)
         {
             if (d.IsGroup)
                 g.Add(new Avatar(26).SetRaw(S.DmTitle(d), "#b69cff", Sh.C.Api.Abs(d.Icon), null).At(0, 0),
-                    U.T(S.DmTitle(d), 15, U.Bold).With(t => t.Margin = U.Th(10, 0, 0, 0)).At(0, 1),
+                    U.T(S.DmTitle(d), 15, U.Bold).With(t => { t.Margin = U.Th(10, 0, 0, 0); t.MaxWidth = 300; }).At(0, 1),
                     U.T($"{d.UserIds.Count} {Format.Plural(d.UserIds.Count, "osoba", "osoby", "osób")}", 12.5, null, Theme.Mu).With(t => t.Margin = U.Th(12, 0, 0, 0)).At(0, 2));
             else if (S.DmOther(d) is { } o)
             {
-                var name = U.T(o.Name, 15, U.Bold).With(t => t.Margin = U.Th(10, 0, 0, 0));
+                var name = U.T(o.Name, 15, U.Bold).With(t => { t.Margin = U.Th(10, 0, 0, 0); t.MaxWidth = 260; });
                 name.Tapped += (_, _) => Sh.ShowProfile(o.Id, name);
                 g.Add(new Avatar(26, true).Set(S, Sh.C.Api, o.Id, null, true).At(0, 0), name.At(0, 1),
                     U.T(StatusLine(o), 12.5, null, Theme.Mu).With(t => t.Margin = U.Th(12, 0, 0, 0)).At(0, 2));
@@ -354,6 +364,22 @@ public sealed partial class ChatView : Grid, IDisposable
         {
             // starsze wiadomości: dwa szkielety nad listą (doczytują się przy przewijaniu w górę)
             for (var i = 0; i < 2; i++) _top.Children.Add(U.SkeletonMessage(i));
+            return;
+        }
+        if (w.Items.Count == 0 && w.HasOlder && (w.LoadFailed || Sh.C.Offline))
+        {
+            // nie wczytało się (brak sieci, błąd serwera) — zamiast szkieletów bez końca: informacja i ponowienie
+            var again = U.Ghost("Spróbuj ponownie", () => { }, 32).With(b => b.HorizontalAlignment = HorizontalAlignment.Left);
+            again.Click += async (_, _) =>
+            {
+                again.IsEnabled = false;
+                await Sh.C.Reload(Key);
+                if (!_disposed) again.IsEnabled = true;
+            };
+            _top.Add(U.I("\uE783", 28, Theme.Mu2).With(i => { i.HorizontalAlignment = HorizontalAlignment.Left; i.Margin = U.Th(0, 8, 0, 8); }),
+                U.T(Sh.C.Offline ? "Brak połączenia — wiadomości wczytają się same, gdy wróci internet." : "Nie udało się wczytać wiadomości.", 14, U.Semi, Theme.Mu, wrap: true),
+                Sh.C.Offline ? null : again.With(b => b.Margin = U.Th(0, 10, 0, 0)));
+            _skeleton = true; // pierwsza udana synchronizacja płynnie podmieni tę informację na treść
             return;
         }
         if (w.Items.Count == 0 && w.HasOlder)

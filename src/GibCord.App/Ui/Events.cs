@@ -12,7 +12,7 @@ static class Events
         var list = new StackPanel { Spacing = 10 };
         var card = new Border
         {
-            Width = 560, MaxHeight = 640, Background = U.B("#FA2a2147"), CornerRadius = new CornerRadius(16), Padding = U.Th(22, 18), BorderBrush = U.W(.12), BorderThickness = U.Th(1),
+            Width = 560, MaxHeight = 640, Background = Theme.Surface, CornerRadius = new CornerRadius(16), Padding = U.Th(22, 18), BorderBrush = U.W(.12), BorderThickness = U.Th(1),
         };
         var head = new Grid().Cols("*", "auto", "auto").Add(
             U.H(10, U.I("", 18, Theme.Accent), U.T("Wydarzenia", 19, U.Bold)).At(0, 0),

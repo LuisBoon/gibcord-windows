@@ -174,6 +174,9 @@ static class Fun
                         Width = 44, Height = 44, Padding = U.Th(0), CornerRadius = new CornerRadius(8), BorderThickness = U.Th(0),
                         Background = line.Contains(i) ? U.Alpha("#6fe3a5", .3) : U.W(myTurn && c == '.' ? .12 : .06), IsEnabled = myTurn && c == '.',
                     };
+                    // wyłączone pola (po końcu gry, nie Twój ruch) zachowują swoje tło — inaczej WinUI zakrywało zieloną wygraną linię szarym
+                    b.Resources["ButtonBackgroundDisabled"] = b.Background;
+                    b.Resources["ButtonBorderBrushDisabled"] = Theme.Transparent;
                     b.Click += async (_, _) => await Move(v, m, new { cell });
                     grid.Add(b.At(i / 3, i % 3));
                 }
@@ -182,7 +185,8 @@ static class Fun
                     pl.Count == 2 ? U.T($"{Name(pl[0])} ✕ · {Name(pl[1])} ○", 12, null, Theme.Mu, wrap: true) : null,
                     over && pl.Contains(me) ? Rematch(v, "ttt", pl.First(x => x != me)) : null);
                 side.MaxWidth = 220;
-                return Box(U.H(16, grid, side));
+                side.VerticalAlignment = VerticalAlignment.Center;
+                return Box(U.HG(16, grid, side.Fill())); // w wąskim czacie opis zawija się zamiast urywać („luisboon C”)
             }
             case "rps":
             {

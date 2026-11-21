@@ -24,7 +24,7 @@ public sealed class Avatar : Grid
     /// <summary>Głośność mówienia osoby 0–1 (ustawia powłoka: z silnika głosu).</summary>
     public static Func<long, double>? LevelOf;
 
-    public Avatar(double size, bool withStatus = false, string ring = "#241c3b")
+    public Avatar(double size, bool withStatus = false, string? ring = null)
     {
         _size = size;
         Width = Height = size;
@@ -43,7 +43,7 @@ public sealed class Avatar : Grid
         _dot.Width = _dot.Height = d;
         _dotWrap = new Border
         {
-            Child = _dot, Width = d + 5, Height = d + 5, CornerRadius = new CornerRadius((d + 5) / 2), Background = U.B(ring),
+            Child = _dot, Width = d + 5, Height = d + 5, CornerRadius = new CornerRadius((d + 5) / 2), Background = U.B(ring ?? Theme.DotRingHex),
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -2.5, -2.5),
             Padding = new Thickness(2.5), Visibility = withStatus ? Visibility.Visible : Visibility.Collapsed,
         };

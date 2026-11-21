@@ -14,8 +14,8 @@ public sealed class SearchPanel : Grid
 {
     readonly Shell _sh;
     readonly TextBox _box;
-    readonly StackPanel _scopes = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
-    readonly StackPanel _filters = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
+    readonly WrapPanel _scopes = new() { Spacing = 6 };
+    readonly WrapPanel _filters = new() { Spacing = 6 };
     readonly StackPanel _list = new() { Spacing = 6, Padding = U.Th(12, 4, 12, 16) };
     readonly TextBlock _status = U.T("", 12, U.Semi, Theme.Mu);
     readonly ScrollViewer _sv;
@@ -46,7 +46,7 @@ public sealed class SearchPanel : Grid
             U.I("", 16, Theme.Mu).With(i => i.Margin = U.Th(2, 0, 10, 0)).At(0, 0),
             _box.At(0, 1),
             U.IconButton(G.Close, "Zamknij wyszukiwanie (Esc)", _sh.CloseSidePanel, 14, 32).With(b => b.Margin = U.Th(4, 0, 0, 0)).At(0, 2));
-        var tools = U.V(8, U.Scroll2(_scopes), U.Scroll2(_filters));
+        var tools = U.V(8, _scopes, _filters); // zawijane: w wąskim panelu nic nie ucieka za krawędź
         tools.Margin = U.Th(12, 0, 12, 6);
         _status.Margin = U.Th(14, 4, 12, 4);
         _sv = U.Scroll(_list);

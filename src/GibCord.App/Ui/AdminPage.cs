@@ -28,7 +28,7 @@ public sealed class AdminPage : Grid
     {
         _sh = sh;
         _section = section;
-        Background = U.B("#F5181230");
+        Background = Theme.Page;
         this.Cols("250", "*", "auto");
         _sv = U.Scroll(_body);
         var close = U.IconButton(G.Close, "Zamknij (Esc)", sh.CloseAdmin, 16, 40);

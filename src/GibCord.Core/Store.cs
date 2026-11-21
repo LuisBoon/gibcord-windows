@@ -23,6 +23,8 @@ public sealed class MessageWindow
     public bool Fetching { get; set; }
     /// <summary>Wiadomości dodane na żywo od początku pobierania (tylko one przeżywają podmianę okna).</summary>
     public HashSet<long> Live { get; } = [];
+    /// <summary>Ostatnie pobieranie najnowszych się nie udało (sieć, serwer) — pusty kanał pokazuje „Spróbuj ponownie” zamiast szkieletów.</summary>
+    public bool LoadFailed { get; set; }
 }
 
 public sealed record ChannelGroup(Category? Category, List<Channel> Channels);
@@ -346,7 +348,7 @@ public sealed class Store
         // Tylko te z bieżącego pobierania: stare z dysku albo sprzed rozłączenia mogły zostać w międzyczasie usunięte.
         var newest = msgs.Count > 0 ? msgs.Max(x => x.Id) : 0;
         var live = atTail && !fromCache ? w.Items.Where(x => x.Send == SendState.Sent && x.Id > newest && x.Key == cid && w.Live.Contains(x.Id)).ToList() : [];
-        if (!fromCache) { w.Live.Clear(); w.Fetching = false; }
+        if (!fromCache) { w.Live.Clear(); w.Fetching = false; w.LoadFailed = false; }
         w.Items.Clear();
         w.Items.AddRange(msgs.Where(x => x.Key == cid).OrderBy(x => x.Id));
         w.Items.AddRange(live.OrderBy(x => x.Id));
@@ -355,6 +357,15 @@ public sealed class Store
         w.AtTail = atTail;
         w.FromCache = fromCache;
         Raise(ChangeKind.MessagesReset, cid, cid);
+    }
+
+    /// <summary>Pobieranie najnowszych się nie udało: okno przestaje czekać (pusty kanał pokaże przycisk ponowienia).</summary>
+    public void FetchFailed(long key)
+    {
+        var w = Window(key);
+        w.Fetching = false;
+        w.LoadFailed = true;
+        Raise(ChangeKind.MessagesReset, key, key);
     }
 
     /// <summary>Początek pobierania najnowszych wiadomości okna (patrz <see cref="MessageWindow.Live"/>).</summary>

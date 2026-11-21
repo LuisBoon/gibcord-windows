@@ -86,7 +86,7 @@ public sealed class IdeasView : Grid, IDisposable
         var voted = i.Bool("voted") == true;
         var vote = new Button
         {
-            Width = 54, Height = 58, CornerRadius = new CornerRadius(12), BorderThickness = U.Th(1), BorderBrush = voted ? Theme.Accent : U.W(.12), Background = voted ? U.Alpha("#ffb98f", .15) : U.W(.05),
+            Width = 54, Height = 58, CornerRadius = new CornerRadius(12), BorderThickness = U.Th(1), BorderBrush = voted ? Theme.Accent : U.W(.12), Background = voted ? Theme.AccentA(.15) : U.W(.05),
             Content = U.V(0, U.T("▲", 13, U.Bold, voted ? Theme.Accent : Theme.Mu).With(t => t.HorizontalAlignment = HorizontalAlignment.Center), U.T((i.Long("votes") ?? 0).ToString(), 15, U.Bold, voted ? Theme.Accent : Theme.Fg).With(t => t.HorizontalAlignment = HorizontalAlignment.Center)),
         };
         vote.Click += async (_, _) => { try { await Api.PostJson($"ideas/{id}/vote", new { on = !voted }); await Load(); } catch (Exception ex) { _sh.Info(GibCordClient.Friendly(ex), true); } };

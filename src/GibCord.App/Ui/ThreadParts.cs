@@ -29,9 +29,10 @@ public sealed partial class ChatView
         name.Tip(t?.Name ?? "");
         var sub = U.T($"w #{Ch?.Name ?? ""}" + (t?.Locked == true ? " · zamknięty" : ""), 11.5, null, Theme.Mu);
         var following = t?.Following == true;
+        var followText = U.T(following ? "Obserwujesz" : "Obserwuj", 12, U.Bold, following ? Theme.OnAccent : Theme.Fg);
         var follow = new Button
         {
-            Content = U.H(6, U.I(GT.Bell, 13, following ? Theme.OnAccent : Theme.Fg), U.T(following ? "Obserwujesz" : "Obserwuj", 12, U.Bold, following ? Theme.OnAccent : Theme.Fg)),
+            Content = U.H(6, U.I(GT.Bell, 13, following ? Theme.OnAccent : Theme.Fg), followText),
             Background = following ? Theme.Accent : U.W(.1), BorderThickness = U.Th(0), CornerRadius = new CornerRadius(14), Padding = U.Th(10, 4), Height = 28,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -49,6 +50,8 @@ public sealed partial class ChatView
             follow.With(b => b.Margin = U.Th(8, 0, 4, 0)).At(0, 2),
             more.At(0, 3),
             U.IconButton(GT.Close, "Zamknij wątek (Esc)", Sh.CloseThread, 14, 32).At(0, 4));
+        // w wąskim panelu sam dzwonek (kolor mówi, czy obserwujesz) — inaczej nazwa wątku kurczyła się do „Sobot…”
+        g.SizeChanged += (_, e) => followText.Visibility = e.NewSize.Width < 400 ? Visibility.Collapsed : Visibility.Visible;
         _header.Child = g;
     }
 
@@ -128,7 +131,7 @@ public sealed partial class ChatView
         {
             var authors = U.H(2);
             foreach (var a in t.LastAuthors.Take(3)) authors.Add(new Avatar(20).Set(S, Sh.C.Api, a, Srv));
-            var title = U.H(6, t.Unread ? new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = Theme.Fg } : null,
+            var title = U.HG(6, t.Unread ? new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = Theme.Fg } : null,
                 U.T(t.Name, 13.5, t.Unread ? U.Bold : U.Semi), t.Locked ? U.I(GT.Lock, 11, Theme.Mu2) : null);
             var meta = U.T($"{t.Count} {Format.Plural(t.Count, "odpowiedź", "odpowiedzi", "odpowiedzi")} · {Format.When(t.LastAt)}" + (t.Following == true ? " · obserwujesz" : ""), 11.5, null, Theme.Mu);
             var row = new Grid { Padding = U.Th(8, 8) }.Cols("*", "auto").Add(U.V(2, title, meta).At(0, 0), authors.With(a => a.VerticalAlignment = VerticalAlignment.Center).At(0, 1));

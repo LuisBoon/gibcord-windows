@@ -23,7 +23,7 @@ public sealed class EmailGatePage : Grid
         _w = w;
         var card = new Border
         {
-            Width = 460, Padding = U.Th(36, 32), CornerRadius = new CornerRadius(22), Background = U.B("#B3221a3d"),
+            Width = 460, Padding = U.Th(36, 32), CornerRadius = new CornerRadius(22), Background = Theme.Glass70,
             BorderBrush = U.W(.12), BorderThickness = U.Th(1), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = _form,
         };
         Children.Add(new ScrollViewer { Content = card, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });

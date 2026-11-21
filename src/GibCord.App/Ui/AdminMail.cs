@@ -396,7 +396,7 @@ public sealed partial class AdminMail : Grid
         var from = m.From is null ? "" : (string.IsNullOrWhiteSpace(m.From.Name) ? m.From.Address : $"{m.From.Name} <{m.From.Address}>");
         head.Add(U.T("Od: " + from, 12.5, U.Semi, wrap: true));
         head.Add(U.T("Do: " + string.Join(", ", m.To.Select(a => a.Address)) + (m.Cc.Count > 0 ? "   ·   DW: " + string.Join(", ", m.Cc.Select(a => a.Address)) : ""), 12, null, Theme.Mu, wrap: true));
-        var meta = U.H(8, U.T(Full(m.When), 11.5, null, Theme.Mu2));
+        var meta = new WrapPanel { Spacing = 8 }.Add(U.T(Full(m.When), 11.5, null, Theme.Mu2)); // znaczki SPF/DKIM/DMARC zawijają się w wąskim podglądzie
         if (m.Direction == "in")
             foreach (var k in new[] { "spf", "dkim", "dmarc" })
                 if (m.Auth.Str(k) is { } v)

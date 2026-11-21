@@ -49,11 +49,11 @@ public sealed partial class WatchPanel : Grid, IDisposable
 
         var player = new Grid { Background = U.B("#ff000000") }.Add(_web, _reactLayer);
         var playerBox = new Border { CornerRadius = new CornerRadius(14), Child = player, Margin = U.Th(16, 16, 16, 8) };
-        var reacts = U.H(2);
+        var reacts = U.H(0);
         foreach (var r in GibCordClient.WatchReactions)
         {
             var emo = r;
-            var b = new Button { Content = U.T(r, 16), Background = Theme.Transparent, BorderThickness = U.Th(0), Width = 34, Height = 34, Padding = U.Th(0), CornerRadius = new CornerRadius(17) };
+            var b = new Button { Content = U.T(r, 16), Background = Theme.Transparent, BorderThickness = U.Th(0), Width = 32, Height = 34, Padding = U.Th(0), CornerRadius = new CornerRadius(16) };
             b.Click += (_, _) => C.Watch(new { t = "watch_react", emoji = emo });
             reacts.Add(b);
         }
@@ -103,8 +103,7 @@ public sealed partial class WatchPanel : Grid, IDisposable
             var env = await CoreWebView2Environment.CreateWithOptionsAsync(null, Path.Combine(App.DataDir, "webview"),
                 new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required" });
             await _web.EnsureCoreWebView2Async(env);
-            if (_disposed) return;
-            var core = _web.CoreWebView2;
+            if (_disposed || _web.CoreWebView2 is not { } core) return; // panel zamknięty w trakcie startu odtwarzacza
             core.SetVirtualHostNameToFolderMapping("player.gibcord.local", dir, CoreWebView2HostResourceAccessKind.Allow);
             core.Settings.AreDefaultContextMenusEnabled = false;
             core.Settings.AreDevToolsEnabled = false;
@@ -115,7 +114,8 @@ public sealed partial class WatchPanel : Grid, IDisposable
         }
         catch (Exception ex)
         {
-            App.Log("Wspólne oglądanie: " + ex.Message);
+            App.Log("Wspólne oglądanie: " + ex);
+            if (_disposed) return;
             _sh.Info("Odtwarzacz nie działa — brakuje składnika Microsoft Edge WebView2 w Windowsie.", true);
         }
     }

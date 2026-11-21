@@ -28,7 +28,7 @@ public sealed class SettingsPage : Grid
     {
         _sh = sh;
         _section = section;
-        Background = U.B("#F5181230");
+        Background = Theme.Page;
         this.Cols("250", "*", "auto");
         _sv = U.Scroll(_body);
         var close = U.IconButton(G.Close, "Zamknij (Esc)", sh.CloseSettings, 16, 40);
@@ -229,7 +229,7 @@ public sealed class SettingsPage : Grid
         var preview = _sh.ActualWidth > 1150 ? ProfileCard.Build(_sh, me.Id, () => { }) : null;
         var grid = new Grid { ColumnSpacing = 24 }.Cols("*", "auto").Add(form.At(0, 0));
         if (preview is not null)
-            grid.Add(U.V(8, Label("Podgląd"), new Border { Child = preview, Background = U.B("#FA2a2147"), CornerRadius = new CornerRadius(14) }).With(p => p.VerticalAlignment = VerticalAlignment.Top).At(0, 1));
+            grid.Add(U.V(8, Label("Podgląd"), new Border { Child = preview, Background = Theme.Surface, CornerRadius = new CornerRadius(14) }).With(p => p.VerticalAlignment = VerticalAlignment.Top).At(0, 1));
         _body.MaxWidth = 1100;
         _body.Add(grid);
     }
