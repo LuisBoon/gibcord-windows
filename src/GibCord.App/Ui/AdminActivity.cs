@@ -98,30 +98,47 @@ public sealed class AdminActivity : StackPanel
                 var w = axisC.ActualWidth;
                 if (w <= 0) return;
                 double Pos(double t) => Math.Clamp((t - dayStart) / DAY, 0, 1) * w;
-                for (var h = 0; h <= 24; h += 3)
+                var step = w / 8 >= 38 ? 3 : w / 4 >= 38 ? 6 : 12;
+                for (var h = 0; h <= 24; h += step)
                 {
                     var lab = U.T($"{h}:00", 10.5, null, Theme.Mu2);
                     lab.Measure(new Windows.Foundation.Size(100, 20));
                     Canvas.SetLeft(lab, Math.Clamp(w * h / 24 - lab.DesiredSize.Width / 2, 0, w - lab.DesiredSize.Width));
                     axisC.Children.Add(lab);
                 }
-                double[] levelEnd = [-1e9, -1e9];
-                foreach (var rl in releases)
+                // wydania blisko siebie (mniej niż ~48 px) łączą się w jedną flagę „6.0.5 – 6.0.10”, lista w dymku
+                var groups = new List<List<(string V, double At, double X)>>();
+                foreach (var rl in releases.Select(rl => (V: rl.Str("version") ?? "", At: Num(rl, "at") ?? 0)).OrderBy(r => r.At))
                 {
-                    var at = Num(rl, "at") ?? 0;
-                    var x = Pos(at);
-                    var pill = U.Box(U.T(rl.Str("version") ?? "", 10, U.Bold, U.B("#0b1a2a")), ReleaseBrush, 5, U.Th(5, 1));
-                    pill.Measure(new Windows.Foundation.Size(200, 40));
+                    var x = Pos(rl.At);
+                    if (groups.Count > 0 && x - groups[^1][^1].X < 48) groups[^1].Add((rl.V, rl.At, x));
+                    else groups.Add([(rl.V, rl.At, x)]);
+                }
+                double[] levelEnd = [-1e9, -1e9];
+                foreach (var gr in groups)
+                {
+                    var cx = (gr[0].X + gr[^1].X) / 2;
+                    var label = gr.Count == 1 ? gr[0].V : $"{gr[0].V} – {gr[^1].V}";
+                    var pill = U.Box(U.T(label, 10, U.Bold, U.B("#0b1a2a")), ReleaseBrush, 5, U.Th(5, 1));
+                    pill.Measure(new Windows.Foundation.Size(300, 40));
+                    if (pill.DesiredSize.Width > Math.Max(60, gr[^1].X - gr[0].X + 70))
+                    {
+                        pill = U.Box(U.T($"{gr.Count} wydań", 10, U.Bold, U.B("#0b1a2a")), ReleaseBrush, 5, U.Th(5, 1));
+                        pill.Measure(new Windows.Foundation.Size(300, 40));
+                    }
                     var pw = pill.DesiredSize.Width;
-                    var left = Math.Clamp(x - pw / 2, 0, Math.Max(0, w - pw));
+                    var left = Math.Clamp(cx - pw / 2, 0, Math.Max(0, w - pw));
                     var level = left > levelEnd[0] + 4 ? 0 : left > levelEnd[1] + 4 ? 1 : (levelEnd[0] <= levelEnd[1] ? 0 : 1);
                     levelEnd[level] = left + pw;
                     var top = level == 0 ? 22 : 2;
                     Canvas.SetLeft(pill, left); Canvas.SetTop(pill, top);
-                    ToolTipService.SetToolTip(pill, $"Wydanie GibCorda {rl.Str("version")} — {Time(at)}");
-                    var stem = new Rectangle { Width = 1.5, Height = 44 - top - 16, Fill = ReleaseBrush, Opacity = .6 };
-                    Canvas.SetLeft(stem, x - .75); Canvas.SetTop(stem, top + 16);
-                    lane.Children.Add(stem);
+                    ToolTipService.SetToolTip(pill, string.Join("\n", gr.Select(r => $"Wydanie GibCorda {r.V} — {Time(r.At)}")));
+                    foreach (var r in gr)
+                    {
+                        var stem = new Rectangle { Width = 1.5, Height = Math.Max(2, 44 - top - 16), Fill = ReleaseBrush, Opacity = .6 };
+                        Canvas.SetLeft(stem, r.X - .75); Canvas.SetTop(stem, top + 16);
+                        lane.Children.Add(stem);
+                    }
                     lane.Children.Add(pill);
                 }
                 if (nowIn)
@@ -135,7 +152,9 @@ public sealed class AdminActivity : StackPanel
                 }
             }
             axisC.SizeChanged += (_, _) => RenderHead();
-            _rows.Children.Add(new Grid { ColumnSpacing = 10 }.Cols("228", "*", "76").Add(U.V(2, lane, axisC).At(0, 1)));
+            // wąsko (mało miejsca na pasek doby): imię i czas nad paskiem, pasek na całą szerokość
+            var wide = ActualWidth <= 0 || ActualWidth >= 760;
+            _rows.Children.Add(wide ? new Grid { ColumnSpacing = 10 }.Cols("228", "*", "76").Add(U.V(2, lane, axisC).At(0, 1)) : U.V(2, lane, axisC));
 
             foreach (var x in users)
             {
@@ -145,7 +164,7 @@ public sealed class AdminActivity : StackPanel
                 var onMin = Num(x, "onMin") ?? 0;
                 var who = U.HG(8, new Avatar(30).Set(S, _sh.C.Api, uid, null),
                     U.V(0, U.T(S.NameOf(uid), 13, U.Bold), U.T(x.Str("client") ?? "—", 10.5, null, Theme.Mu2)));
-                var whoBtn = U.Row(who, () => _ = Card(uid), false, 8, U.Th(6, 3), U.Th(0)).With(r => r.Width = 228);
+                var whoBtn = U.Row(who, () => _ = Card(uid), false, 8, U.Th(6, 3), U.Th(0)).With(r => { if (wide) r.Width = 228; });
                 ToolTipService.SetToolTip(whoBtn, "Karta osoby" + (x.Str("client") is { } cl ? " · " + cl : ""));
                 var time = U.T(onMin > 0 ? Dur(onMin) : "w tle", 12, U.Bold, onMin > 0 ? Theme.Fg : Theme.Mu2).With(t => { t.HorizontalAlignment = HorizontalAlignment.Right; });
                 // pasek doby
@@ -211,7 +230,9 @@ public sealed class AdminActivity : StackPanel
                     }
                 }
                 track.SizeChanged += (_, _) => Render();
-                _rows.Children.Add(new Grid { ColumnSpacing = 10 }.Cols("228", "*", "76").Add(whoBtn.At(0, 0), track.At(0, 1), time.At(0, 2)));
+                _rows.Children.Add(wide
+                    ? new Grid { ColumnSpacing = 10 }.Cols("228", "*", "76").Add(whoBtn.At(0, 0), track.At(0, 1), time.At(0, 2))
+                    : U.V(4, new Grid { ColumnSpacing = 10 }.Cols("*", "auto").Add(whoBtn.At(0, 0), time.At(0, 1)), track).With(v => v.Margin = U.Th(0, 4, 0, 4)));
             }
         }
         catch (Exception ex)
