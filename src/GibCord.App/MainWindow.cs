@@ -636,6 +636,8 @@ public sealed class MainWindow : Window
             if (Options.View == "switcher") _shell?.OpenSwitcher();
             if (Options.View == "profile") _shell?.ShowProfileDemo();
             if (Options.View == "emoji") _shell?.ShowPickerDemo();
+            if (Options.View == "menu") _shell?.DemoMenu();
+            if (Options.View == "confirm") _shell?.DemoConfirm();
             if (Options.View == "overlay" && _overlay is { } ov)
             {
                 ov.DemoGame = true;
@@ -643,11 +645,13 @@ public sealed class MainWindow : Window
                 ov.Notify("Ola · #ogólne · Ekipa Gibka", "wbijacie dziś na Minecrafta? 🎮");
                 ov.Notify("Kuba", "zaraz będę, robię herbatę");
             }
-            if (Options.View is "switcher" or "profile" or "emoji" or "overlay") await Task.Delay(1200);
+            if (Options.View is "switcher" or "profile" or "emoji" or "overlay" or "menu" or "confirm") await Task.Delay(1200);
             var rtb = new RenderTargetBitmap();
             // okienko (ContentDialog) leży w warstwie wyskakujących — zrzut z niej, gdy jest otwarte
             UIElement target = _root;
-            if (Options.View == "imgedit" && Microsoft.UI.Xaml.Media.VisualTreeHelper.GetOpenPopupsForXamlRoot(_root.XamlRoot).FirstOrDefault(p => p.Child is ContentDialog) is { Child: { } dc }) target = dc;
+            var popups = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetOpenPopupsForXamlRoot(_root.XamlRoot);
+            if (Options.View is "imgedit" or "confirm" && popups.FirstOrDefault(p => p.Child is ContentDialog) is { Child: { } dc }) target = dc;
+            if (Options.View == "menu" && popups.FirstOrDefault(p => p.Child is not null) is { Child: { } mc }) target = mc; // samo menu (dymki nie wchodzą na zrzut okna)
             await rtb.RenderAsync(target);
             var pixels = await rtb.GetPixelsAsync();
             using var stream = new InMemoryRandomAccessStream();

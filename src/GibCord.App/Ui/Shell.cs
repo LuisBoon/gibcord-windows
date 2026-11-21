@@ -891,6 +891,15 @@ public sealed class Shell : Grid
         Picker.Show(_chat, _chat, Picker.Tab.Emoji, _ => { }, _ => { }, _ => { }, demoHost: el => ShowOverlay(el));
     }
 
+    /// <summary>Zrzut w CI: menu serwera (sprawdzenie wyglądu menu w barwach motywu).</summary>
+    public void DemoMenu()
+    {
+        if (S.ServerById(ServerId) is { } srv) ServerMenu.Build(this, srv).ShowAt(_side, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions { Position = new Windows.Foundation.Point(20, 60) });
+    }
+
+    /// <summary>Zrzut w CI: okienko potwierdzenia (ContentDialog w barwach motywu).</summary>
+    public void DemoConfirm() => _ = M.Confirm(this, "Usunąć wiadomość?", "Tej operacji nie da się cofnąć. Wiadomość zniknie u wszystkich.", "Usuń");
+
     /// <summary>Zrzut w CI: karta profilu na środku (dymki nie trafiają na zrzut okna).</summary>
     public void ShowProfileDemo()
     {

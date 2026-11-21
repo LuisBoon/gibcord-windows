@@ -56,7 +56,7 @@ public static class Demo
                 sh.OpenInbox();
                 break;
             case "srvsettings": sh.Go(Eg, Ogolne); sh.ShowServerSettings(Eg, "channels"); break;
-            case "srvroles": sh.Go(Eg, Ogolne); sh.ShowServerSettings(Eg, "roles", selectRole: 1); break;
+            case "srvroles" or "srvroles2": sh.Go(Eg, Ogolne); sh.ShowServerSettings(Eg, "roles", selectRole: 1); break; // srvroles2: po „forest” — przełączniki w kolorze motywu Las
             case "srvmembers": sh.Go(Eg, Ogolne); sh.ShowServerSettings(Eg, "members"); break;
             case "setapp": sh.Go(Eg, Ogolne); sh.ShowSettings("app"); break;
             case "adminsys": sh.Go(Eg, Ogolne); sh.ShowAdmin("system"); break;
