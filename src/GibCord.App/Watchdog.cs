@@ -47,11 +47,17 @@ public static class Watchdog
                 if (late > 5000 && hungSince == 0)
                 {
                     hungSince = now - late;
-                    App.Log($"ZAWIESZENIE: okno nie odpowiada od {late / 1000} s. Ostatnie ślady: {Trail()}");
+                    var trail = Trail();
+                    App.Log($"ZAWIESZENIE: okno nie odpowiada od {late / 1000} s. Ostatnie ślady: {trail}");
+                    // gdyby ktoś zabił zawieszoną aplikację — raport wyśle się przy następnym starcie
+                    ErrorReport.SaveForLater("zawieszenie", "Okno nie odpowiada (≥5 s)", "Ślady: " + trail);
                 }
                 else if (late < 2000 && hungSince != 0)
                 {
-                    App.Log($"Okno znów odpowiada (stało ok. {(now - hungSince) / 1000} s). Ślady: {Trail()}");
+                    var trail = Trail();
+                    App.Log($"Okno znów odpowiada (stało ok. {(now - hungSince) / 1000} s). Ślady: {trail}");
+                    ErrorReport.DropSaved();
+                    ErrorReport.Send("zawieszenie", $"Okno nie odpowiadało ok. {(now - hungSince) / 1000} s", "Ślady: " + trail);
                     hungSince = 0;
                 }
             }

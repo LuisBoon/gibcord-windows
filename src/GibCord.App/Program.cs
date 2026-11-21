@@ -15,7 +15,13 @@ public static class Program
     static int Main(string[] args)
     {
         Args = args;
-        AppDomain.CurrentDomain.UnhandledException += (_, e) => App.Log("Błąd (AppDomain): " + e.ExceptionObject);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            App.Log("Błąd (AppDomain): " + e.ExceptionObject);
+            // aplikacja zaraz się zamknie — raport na dysk, pójdzie przy następnym starcie
+            ErrorReport.SaveForLater("awaria", (e.ExceptionObject as Exception)?.GetType().Name + ": " + (e.ExceptionObject as Exception)?.Message, e.ExceptionObject?.ToString() ?? "");
+        };
+        TaskScheduler.UnobservedTaskException += (_, e) => { App.Log("Błąd zadania w tle: " + e.Exception.InnerException?.Message); ErrorReport.Send("zadanie", e.Exception.InnerException?.GetType().Name + ": " + e.Exception.InnerException?.Message, e.Exception.ToString()); e.SetObserved(); };
         try
         {
             // bez kodów zaproszeń i adresów z gibcord:// w dzienniku (trafia do „Kopiuj dane diagnostyczne”)

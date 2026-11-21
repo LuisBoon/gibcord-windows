@@ -685,6 +685,8 @@ public sealed class SettingsPage : Grid
         _body.Add(Card(keys));
         _body.Add(Card(Label("Pomoc i diagnostyka"),
             U.T("Coś nie działa (np. głos)? Skopiuj dane diagnostyczne i wklej je osobie, która pomaga. Nie zawierają haseł ani treści wiadomości.", 12.5, null, Theme.Mu, wrap: true),
+            Toggle("Wysyłaj automatycznie raporty błędów", p.SendErrorReports, v => { p.SendErrorReports = v; p.Save(); }),
+            U.T("Gdy GibCord się zawiesi albo trafi na błąd, sam wyśle opis i końcówkę dziennika — bez haseł, kluczy, adresów e-mail i treści wiadomości. Dzięki temu błędy można naprawić, zanim ktoś je zgłosi.", 11.5, null, Theme.Mu2, wrap: true),
             U.H(8,
                 U.Ghost("Kopiuj dane diagnostyczne", () => { Sidebar.Copy(Diagnostics()); _sh.Info("Skopiowano — wklej to (Ctrl+V) w wiadomości."); }, 34),
                 U.Ghost("Otwórz folder z dziennikiem", () => _ = Launcher.LaunchFolderPathAsync(App.DataDir), 34))));

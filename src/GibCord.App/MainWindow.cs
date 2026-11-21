@@ -187,6 +187,7 @@ public sealed class MainWindow : Window
             foreach (var o in Accounts.Others(me)) Accounts.Background.Start(o.Id, new Uri(Options.Server));
             _shell?.RefreshAccounts();
             Inbox.Load(me);
+            ErrorReport.SendSaved(); // raport z poprzedniego uruchomienia (awaria albo zabite zawieszone okno)
         };
         // przypomnienia „przypomnij mi o tej wiadomości”
         var remindTimer = Dq.CreateTimer();

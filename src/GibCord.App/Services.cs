@@ -316,7 +316,7 @@ public static class Updater
             onReady(u.TargetFullRelease.Version.ToString());
             return null;
         }
-        catch (Exception ex) { App.Log("Sprawdzanie aktualizacji: " + ex); return "Nie udało się pobrać aktualizacji: " + Why(ex); }
+        catch (Exception ex) { App.Log("Sprawdzanie aktualizacji: " + ex); ErrorReport.Send("aktualizacja", ex.GetType().Name + ": " + ex.Message, ex.ToString()); return "Nie udało się pobrać aktualizacji: " + Why(ex); }
     }
 
     /// <summary>Zrozumiała przyczyna błędu aktualizacji (szuka też w wyjątkach wewnętrznych).</summary>
@@ -421,6 +421,6 @@ public static class Updater
             _mgr.ApplyUpdatesAndRestart(_ready.TargetFullRelease);
             return null;
         }
-        catch (Exception ex) { App.Log("Restart z aktualizacją: " + ex); return "Nie udało się zainstalować aktualizacji: " + Why(ex); }
+        catch (Exception ex) { App.Log("Restart z aktualizacją: " + ex); ErrorReport.Send("aktualizacja", ex.GetType().Name + ": " + ex.Message, ex.ToString()); return "Nie udało się zainstalować aktualizacji: " + Why(ex); }
     }
 }

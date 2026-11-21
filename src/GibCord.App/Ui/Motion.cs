@@ -43,7 +43,11 @@ static class Motion
 
     static int _fails;
     /// <summary>Błąd animacji: zapis do dziennika (najwyżej 5 razy), aplikacja działa dalej bez ruchu w tym miejscu.</summary>
-    static void Fail(Exception ex) { if (_fails++ < 5) App.Log("Ruch: " + ex.GetType().Name + ": " + ex.Message); }
+    static void Fail(Exception ex)
+    {
+        if (_fails++ < 5) App.Log("Ruch: " + ex.GetType().Name + ": " + ex.Message);
+        if (_fails == 1) ErrorReport.Send("animacja", ex.GetType().Name + ": " + ex.Message, ex.ToString());
+    }
 
     /// <summary>Do sprawdzenia w CI: ile animacji wystartowało.</summary>
     public static int Started { get; private set; }

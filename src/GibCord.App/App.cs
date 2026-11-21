@@ -28,6 +28,7 @@ public sealed class App : Application, IXamlMetadataProvider
         UnhandledException += (_, e) =>
         {
             Log("Nieobsłużony błąd: " + e.Exception);
+            ErrorReport.Send("wyjątek", e.Exception.GetType().Name + ": " + e.Exception.Message, e.Exception.ToString());
             e.Handled = true; // jeden błąd w widoku nie może zamknąć całego GibCorda
         };
     }
