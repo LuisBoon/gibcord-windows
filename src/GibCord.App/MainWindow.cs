@@ -680,6 +680,48 @@ public sealed class MainWindow : Window
         catch (Exception ex) { App.Log("Kółko: " + ex.Message); return -1; }
     }
 
+    /// <summary>
+    /// CI: przewijanie kółkiem w dół, klatka po klatce. Zapisuje, czy lista się cofała (podskakiwanie), największy skok w jednej klatce,
+    /// najdłuższą przerwę między klatkami (zacięcie), ile razy lista sama skoczyła na dół i jak daleko od dołu skończyła.
+    /// </summary>
+    async Task<string> WheelDownProbe(ChatView ch, double fromBottom, int ticks)
+    {
+        try
+        {
+            var el = ch.ListArea;
+            var scale = el.XamlRoot?.RasterizationScale ?? 1;
+            var c = el.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(el.ActualWidth / 2, el.ActualHeight / 2));
+            var p = new System.Drawing.Point((int)(c.X * scale), (int)(c.Y * scale));
+            ClientToScreen(Hwnd, ref p);
+            SetForegroundWindow(Hwnd);
+            SetCursorPos(p.X, p.Y);
+            if (fromBottom > 0) { ch.DemoScrollTo(Math.Max(0, ch.ScrollMax - fromBottom)); await Task.Delay(900); }
+            var jumps0 = ch.BottomJumps;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var s = new List<(long T, double Off, double Max)>();
+            EventHandler<object> h = (_, _) => s.Add((sw.ElapsedMilliseconds, ch.ScrollOffset, ch.ScrollMax));
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += h;
+            for (var i = 0; i < ticks; i++) { mouse_event(0x0800, 0, 0, -120, 0); await Task.Delay(55); }
+            await Task.Delay(1300);
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= h;
+            int back = 0, ext = 0; double backMax = 0, fwdMax = 0, gap = 0;
+            var trace = new System.Text.StringBuilder();
+            for (var i = 1; i < s.Count; i++)
+            {
+                var d = s[i].Off - s[i - 1].Off;
+                if (d < -0.5) { back++; backMax = Math.Max(backMax, -d); }
+                fwdMax = Math.Max(fwdMax, d);
+                gap = Math.Max(gap, s[i].T - s[i - 1].T);
+                if (Math.Abs(s[i].Max - s[i - 1].Max) > 0.5) ext++;
+                if (Math.Abs(d) > 0.5 && trace.Length < 900) trace.Append(d > 0 ? "+" : "").Append(Math.Round(d)).Append(' ');
+            }
+            var end = s.Count > 0 ? s[^1].Max - s[^1].Off : -1;
+            return $"klatek {s.Count}, cofnięć {back} (max {backMax:0} px), największy krok {fwdMax:0} px, najdłuższa klatka {gap} ms, zmian wysokości listy {ext}, " +
+                $"skoków na dół {ch.BottomJumps - jumps0}, na końcu od dołu {end:0} px | kroki: {trace}";
+        }
+        catch (Exception ex) { return "błąd: " + ex.Message; }
+    }
+
     async Task Screenshot(string path)
     {
         try
@@ -692,6 +734,12 @@ public sealed class MainWindow : Window
                 var plain = await WheelProbe(wch);
                 App.Prefs.SmoothWheel = true;
                 App.Log($"Kółko (3 ząbki w górę): z wygładzaniem {smooth:0} px, systemowe {plain:0} px, przewijalne {wch.ScrollMax:0} px");
+                // podskakiwanie przy przewijaniu w dół: na samym dole (dalej w dół) i z ~2500 px nad dołem do końca
+                App.Log("Kółko na dole, dalej w dół: " + await WheelDownProbe(wch, 0, 4));
+                App.Log("Kółko w dół do końca (wygładzone): " + await WheelDownProbe(wch, 2500, 24));
+                App.Prefs.SmoothWheel = false;
+                App.Log("Kółko w dół do końca (systemowe): " + await WheelDownProbe(wch, 2500, 24));
+                App.Prefs.SmoothWheel = true;
             }
             if (Options.ForceMotion && _shell is { } msh)
             {

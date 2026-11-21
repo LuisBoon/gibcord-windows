@@ -239,6 +239,9 @@ public sealed partial class ChatView : Grid, IDisposable
     public double ScrollOffset => _sv.VerticalOffset;
     public double ScrollMax => _sv.ScrollableHeight;
     public FrameworkElement ListArea => _sv;
+    /// <summary>Ile razy lista sama przewinęła się na dół (samotest: przy przewijaniu kółkiem nie powinna szarpać).</summary>
+    public int BottomJumps { get; private set; }
+    public void DemoScrollTo(double off) { _stick = false; SmoothWheel.Cancel(_sv); _sv.ChangeView(null, off, null, true); }
 
     /// <summary>Rozmowa prywatna z kamerą albo transmisją: kafelki nad czatem (jak na kanale głosowym, tylko mniejsze).</summary>
     void UpdateStage()
@@ -580,6 +583,7 @@ public sealed partial class ChatView : Grid, IDisposable
     {
         if (_disposed) return;
         Watchdog.Crumb($"na dół #{_bottomTries} ({_sv.ScrollableHeight:0} px)");
+        BottomJumps++;
         _progUntil = Environment.TickCount64 + 400;
         _sv.ChangeView(null, _sv.ScrollableHeight, null, true);
         // wysokość listy szacowana przy wirtualizacji — dociągnij jeszcze kilka razy

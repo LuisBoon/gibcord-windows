@@ -21,7 +21,7 @@ public static class Demo
         var c = new GibCordClient(new Uri("https://gibcord.luisboon.pl"), new MemoryTokenStore("demo"), null, ui) { Offline = true };
         c.Store.Load(State());
         var now = Format.NowMs();
-        c.Store.SetWindow(Ogolne, Messages(now), hasOlder: false);
+        c.Store.SetWindow(Ogolne, Options.WheelTest ? [.. LongHistory(now), .. Messages(now)] : Messages(now), hasOlder: false);
         c.Store.SetWindow(DmOla, DmMessages(now), hasOlder: false);
         c.Store.Mentions[Memy] = 3;
         // wątek „Sobotni turniej” pod zrzutem z bazy (widok --view thread)
@@ -180,6 +180,25 @@ public static class Demo
         list[1].Mentions = [MajaId];
         list[9].Mentions = [OlaId, KubaId];
         return list;
+    }
+
+    /// <summary>CI (--wheel-test): długa historia o różnej wysokości wiadomości (krótkie, długie, kod, zdjęcia) — jak prawdziwy pełny kanał.</summary>
+    static IEnumerable<Message> LongHistory(long now)
+    {
+        long[] who = [OlaId, KubaId, BonkusId, MajaId, BartekId, MeId];
+        string[] texts =
+        [
+            "hej", "ktoś gra dziś?", "ja po 20 będę", "😂😂", "a widzieliście nowy odcinek? spoilerów nie będzie, ale końcówka była mocna i nie spodziewałem się, że tak to się skończy",
+            "ok", "kod:\n```\nmc.ekipa-gibka.pl:25565\n```", "jutro sprawdzian z matmy, ktoś ma zadania z działu o funkcjach kwadratowych?\nbo ja nie ogarniam\nw ogóle", "+1", "zaraz wracam",
+        ];
+        var start = now - 2 * 86400000L;
+        for (var i = 0; i < 160; i++)
+        {
+            var m = Msg(5000 + i, Ogolne, who[(i * 7 + i / 3) % who.Length], texts[(i * 3 + i / 5) % texts.Length], start + i * 400000L);
+            if (i % 23 == 11) m.Attachments = [new Attachment { Id = 100 + i, Url = "https://gibcord.luisboon.pl/icon-512.png", Name = "zrzut.png", Mime = "image/png", Width = 640, Height = 360, Size = 90000, Preview = "LZD8eGtR0}R-o}buayjZ0}Wp=xoJ" }];
+            if (i % 17 == 5) m.Reactions = [new Reaction { Emoji = "🔥", UserIds = [OlaId, KubaId] }];
+            yield return m;
+        }
     }
 
     static List<Message> ThreadMessages(long now)
