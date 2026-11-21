@@ -100,11 +100,62 @@ public sealed class MainWindow : Window
             if (Options.View == "overlay") _overlay = new GameOverlay(Client, Dq, () => true); // obraz nakładki zapisuje się obok zrzutu
             if (Options.View is "accounts" or "loginacc")
                 Accounts.Demo = [(new AccountInfo { Id = 7, Username = "bonkus", Name = "bonkus", Color = "#ffd27a" }, 3), (new AccountInfo { Id = 8, Username = "gibek_test", Name = "Gibek (test)", Color = "#9fe3d5" }, 0)];
-            if (Options.View is "login" or "loginacc") ShowLogin(null); else ShowShell();
+            if (Options.View is "login" or "loginacc") ShowLogin(null);
+            else if (Options.View == "updating") { var (t, b) = ShowUpdating(); t.Text = "Pobieranie GibCorda 6.0.9…"; b.IsIndeterminate = false; b.Value = 42; } // zrzut ekranu aktualizacji przy starcie
+            else ShowShell();
             Activate();
             if (Options.Screenshot is { } path) _ = Screenshot(path);
             return;
         }
+        // aktualizacja przy starcie (jak w Discordzie): Gibek + „Sprawdzanie aktualizacji…”, przy nowej wersji pobranie i uruchomienie nowej
+        if (!Options.OtherServer && Updater.CanUpdate)
+        {
+            try
+            {
+                var (text, bar) = ShowUpdating();
+                if (!Options.Hidden) Activate();
+                _ = GateThenStart(text, bar);
+                return;
+            }
+            catch (Exception ex) { App.Log("Ekran aktualizacji: " + ex.Message); _host.Children.Clear(); } // cokolwiek pójdzie nie tak — zwykły start
+        }
+        StartApp();
+    }
+
+    (TextBlock Text, ProgressBar Bar) ShowUpdating()
+    {
+        var text = U.T("Sprawdzanie aktualizacji…", 14, U.Semi, Theme.Mu);
+        text.HorizontalAlignment = HorizontalAlignment.Center;
+        var bar = new ProgressBar { IsIndeterminate = true, Width = 240, Foreground = Theme.Accent, HorizontalAlignment = HorizontalAlignment.Center };
+        var box = U.V(18, Ui.Splash.Gibek(112).With(g => g.HorizontalAlignment = HorizontalAlignment.Center), text, bar);
+        box.HorizontalAlignment = HorizontalAlignment.Center;
+        box.VerticalAlignment = VerticalAlignment.Center;
+        _host.Children.Clear();
+        _host.Children.Add(box);
+        TitleBar.SetShellMode(false);
+        return (text, bar);
+    }
+
+    async Task GateThenStart(TextBlock text, ProgressBar bar)
+    {
+        var updating = false;
+        try
+        {
+            updating = await Updater.StartupUpdate((msg, pct) => Dq.TryEnqueue(() =>
+            {
+                text.Text = msg;
+                if (pct is int p) { bar.IsIndeterminate = false; bar.Value = p; } else bar.IsIndeterminate = true;
+            }));
+        }
+        catch (Exception ex) { App.Log("Aktualizacja przy starcie: " + ex.Message); }
+        if (updating) return; // aplikacja zaraz uruchomi się od nowa w nowej wersji
+        _host.Children.Clear();
+        StartApp();
+    }
+
+    /// <summary>Właściwy start: klient, usługi, logowanie albo okno główne.</summary>
+    void StartApp()
+    {
         // kilka kont: pamięć podręczna każdego konta osobno (stary katalog „pamiec” należy do ostatniego konta)
         var lastId = App.Prefs.LastUserId;
         try { if (lastId > 0 && Directory.Exists(Accounts.CachePath(0)) && !Directory.Exists(Accounts.CachePath(lastId))) Directory.Move(Accounts.CachePath(0), Accounts.CachePath(lastId)); } catch { }

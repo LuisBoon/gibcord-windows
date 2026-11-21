@@ -269,7 +269,7 @@ public static class Updater
         try
         {
             // Wersja zwykła (6.0.0, 6.0.1…) dostaje tylko zwykłe wydania; beta — także kolejne bety (i zwykłe, gdy są nowsze).
-            _mgr = new UpdateManager(new GithubSource(Repo, null, prerelease: IsPrerelease));
+            _mgr ??= new UpdateManager(new GithubSource(Repo, null, prerelease: IsPrerelease));
             if (!_mgr.IsInstalled) return;
             while (true)
             {
@@ -363,6 +363,52 @@ public static class Updater
             }
         }
         catch { }
+    }
+
+    /// <summary>Czy aplikacja jest zainstalowana instalatorem (tylko wtedy działa aktualizacja przy starcie).</summary>
+    public static bool CanUpdate
+    {
+        get
+        {
+            try { _mgr ??= new UpdateManager(new GithubSource(Repo, null, prerelease: IsPrerelease)); return _mgr.IsInstalled; }
+            catch { return false; }
+        }
+    }
+
+    /// <summary>
+    /// Aktualizacja przy starcie (jak w Discordzie): pobrana wcześniej — od razu instalacja; inaczej krótkie sprawdzenie (najwyżej 5 s),
+    /// a gdy jest nowa wersja — pobranie z postępem i uruchomienie już nowej. False = zwykły start (brak nowej wersji, brak sieci,
+    /// GitHub wolny — wtedy sprawdzenie w tle i tak ruszy po starcie). <paramref name="status"/> wołane z dowolnego wątku.
+    /// </summary>
+    public static async Task<bool> StartupUpdate(Action<string, int?> status)
+    {
+        try
+        {
+            if (!CanUpdate || _mgr is null) return false;
+            if (_mgr.UpdatePendingRestart is { } pending)
+            {
+                status("Instalowanie nowej wersji…", null);
+                App.Log("Aktualizacja przy starcie: instalacja pobranej wcześniej " + pending.Version);
+                CloseOtherInstances();
+                _mgr.ApplyUpdatesAndRestart(pending, Program.Args);
+                return true;
+            }
+            var check = _mgr.CheckForUpdatesAsync();
+            if (await Task.WhenAny(check, Task.Delay(5000)) != check) { App.Log("Aktualizacja przy starcie: GitHub nie odpowiada w 5 s — zwykły start"); return false; }
+            var u = await check;
+            if (u is null) return false;
+            var v = u.TargetFullRelease.Version.ToString();
+            App.Log("Aktualizacja przy starcie: pobieranie " + v);
+            status($"Pobieranie GibCorda {v}…", 0);
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(4));
+            await _mgr.DownloadUpdatesAsync(u, p => status($"Pobieranie GibCorda {v}…", p), cts.Token);
+            _ready = u;
+            status($"Uruchamianie GibCorda {v}…", null);
+            CloseOtherInstances();
+            _mgr.ApplyUpdatesAndRestart(u.TargetFullRelease, Program.Args);
+            return true;
+        }
+        catch (Exception ex) { App.Log("Aktualizacja przy starcie: " + ex.Message); return false; }
     }
 
     /// <summary>Instaluje pobraną aktualizację i uruchamia aplikację od nowa. Zwraca komunikat błędu albo null.</summary>
