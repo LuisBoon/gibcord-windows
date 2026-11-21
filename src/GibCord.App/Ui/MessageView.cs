@@ -56,6 +56,8 @@ public sealed partial class MessageView : Grid
             stack.Children.Add(m.Type == "automod" && m.Automod.ValueKind == System.Text.Json.JsonValueKind.Object ? AutomodCard(m) : m.IsSystem ? SystemLine(m) : S.Blocked.Contains(m.AuthorId) && !_v.Revealed.Contains(m.Id) ? BlockedLine(m, row) : Normal(m, row));
             _root = null;
             row.Built = stack; row.BuiltGen = _v.ContentGen;
+            row.ReactSnap = m.Reactions.Count == 0 ? [] : m.Reactions.GroupBy(r => r.Emoji).ToDictionary(g => g.Key, g => g.First().UserIds.Count);
+            row.PrevReact = null; // animacja raz — przy kolejnym budowaniu już nie
         }
         if (row.Built.Parent is Panel old) old.Children.Remove(row.Built); // na wszelki wypadek: treść jeszcze w poprzednim widoku
         _body.Children.Add(row.Built);
@@ -239,7 +241,7 @@ public sealed partial class MessageView : Grid
         foreach (var a in m.Attachments) body.Children.Add(AttachmentView(a));
         foreach (var yt in Markup.YouTubeIds(m.Content)) body.Children.Add(YouTube(yt));
         foreach (var code in Links.InviteCodes(m.Content)) body.Children.Add(Links.InviteCard(_v.Sh, code));
-        if (m.Reactions.Count > 0) body.Children.Add(Reactions(m));
+        if (m.Reactions.Count > 0) body.Children.Add(Reactions(m, row.PrevReact));
         if (m.Thread.ValueKind == JsonValueKind.Object && !IsStarter && !_v.IsThread) body.Children.Add(ThreadChip(m.Thread));
         if (m.Send == SendState.Queued)
         {
@@ -306,7 +308,7 @@ public sealed partial class MessageView : Grid
         var img = new Image { Source = Images.Get(url), Stretch = Stretch.UniformToFill };
         var b = new Border { CornerRadius = new CornerRadius(10), HorizontalAlignment = HorizontalAlignment.Left, Margin = U.Th(0, 2, 0, 2), Background = U.W(.05), Child = img };
         if (g.W > 0 && g.H > 0) { b.Width = w; b.Height = h; } else { b.MaxWidth = 320; b.MaxHeight = 300; img.Stretch = Stretch.Uniform; }
-        if (url is not null) b.Tapped += (_, e) => { e.Handled = true; Lightbox.Show(_v.Sh, url, "GIF"); };
+        if (url is not null) b.Tapped += (_, e) => { e.Handled = true; Lightbox.Show(_v.Sh, url, "GIF", b); };
         return b;
     }
 
@@ -320,7 +322,7 @@ public sealed partial class MessageView : Grid
             w = Math.Max(40, Math.Round(w * k)); h = Math.Max(40, Math.Round(h * k));
             var img = new Image { Source = Images.Get(url, (int)Math.Min(800, w * 2)), Width = w, Height = h, Stretch = Stretch.UniformToFill };
             var b = new Border { CornerRadius = new CornerRadius(10), Width = w, Height = h, Child = img, HorizontalAlignment = HorizontalAlignment.Left, Margin = U.Th(0, 3, 0, 2), Background = U.W(.05) };
-            b.Tapped += (_, e) => { e.Handled = true; Lightbox.Show(_v.Sh, url, a.Name); };
+            b.Tapped += (_, e) => { e.Handled = true; Lightbox.Show(_v.Sh, url, a.Name, b); };
             b.Tip(a.Name);
             return b;
         }
@@ -360,7 +362,7 @@ public sealed partial class MessageView : Grid
         return U.V(2, b, together);
     }
 
-    FrameworkElement Reactions(Message m)
+    FrameworkElement Reactions(Message m, Dictionary<string, int>? prev)
     {
         var panel = new WrapPanel { Spacing = 6, Margin = U.Th(0, 4, 0, 0) };
         foreach (var r in m.Reactions)
@@ -369,12 +371,24 @@ public sealed partial class MessageView : Grid
             FrameworkElement em = r.Emoji.StartsWith("<") && Markup.ParseInline(r.Emoji).FirstOrDefault() is EmojiSpan es && S.EmojiById(es.Id) is { } ce
                 ? new Image { Source = Images.Get(Api.Abs(ce.Url), 40), Width = 18, Height = 18 }
                 : U.T(r.Emoji, 14);
+            var num = U.T(r.UserIds.Count.ToString(), 12, U.Bold, mine ? Theme.Accent : Theme.Fg).With(t => t.VerticalAlignment = VerticalAlignment.Center);
+            var numHost = new Grid { Children = { num } };
+            numHost.SizeChanged += (_, a) => numHost.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, a.NewSize.Width, a.NewSize.Height) };
             var b = new Border
             {
                 CornerRadius = new CornerRadius(8), Padding = U.Th(8, 2), Height = 28,
                 Background = mine ? U.Alpha("#ffb98f", .16) : U.W(.08), BorderBrush = mine ? U.Alpha("#ffb98f", .5) : U.W(.12), BorderThickness = U.Th(1),
-                Child = U.H(6, em, U.T(r.UserIds.Count.ToString(), 12, U.Bold, mine ? Theme.Accent : Theme.Fg)),
+                Child = U.H(6, em, numHost),
             };
+            // reakcja się zmieniła: nowa wyskakuje cała, przybyła — emoji podskakuje i licznik wjeżdża od dołu, ubyła — licznik od góry
+            if (prev is not null)
+            {
+                var was = prev.GetValueOrDefault(r.Emoji);
+                var now = r.UserIds.Count;
+                if (was == 0) Motion.Pop(b, .55f);
+                else if (now > was) { Motion.Pop(em, .45f); Motion.SlideIn(num, new System.Numerics.Vector3(0, 12, 0)); }
+                else if (now < was) Motion.SlideIn(num, new System.Numerics.Vector3(0, -12, 0));
+            }
             b.Tip(string.Join(", ", r.UserIds.Take(12).Select(id => S.NameOf(id, Srv))) + (r.UserIds.Count > 12 ? "…" : ""));
             if (_v.CanReact) b.Tapped += (_, e) => { e.Handled = true; _v.React(m, r.Emoji); };
             panel.Children.Add(b);

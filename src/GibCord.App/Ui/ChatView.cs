@@ -21,6 +21,8 @@ public sealed class Row(Message m)
     internal int BuiltGen;
     /// <summary>Wiadomość przyszła na żywo i jest widoczna — przy pierwszym pokazaniu wjeżdża od dołu.</summary>
     internal bool Fresh;
+    /// <summary>Reakcje w chwili budowania treści (emoji → liczba) i te sprzed zmiany — różnica = animacja „pop” i przewinięcie licznika.</summary>
+    internal Dictionary<string, int>? ReactSnap, PrevReact;
 }
 
 /// <summary>Tworzy i ponownie używa widoków wiadomości (lista rysuje tylko to, co widać).</summary>
@@ -65,6 +67,7 @@ public sealed partial class ChatView : Grid, IDisposable
     readonly ObservableCollection<Row> _rows = [];
     readonly StackPanel _top = new() { Padding = U.Th(16, 24, 16, 8) };
     readonly TextBlock _typing;
+    readonly StackPanel _typingDots, _typingRow;
     readonly Composer _composer;
     readonly Border _pill;
     readonly CallBar? _call;
@@ -95,6 +98,7 @@ public sealed partial class ChatView : Grid, IDisposable
         content.Padding = U.Th(0, 0, 0, 12);
         _sv = U.Scroll(content);
         _sv.VerticalAnchorRatio = 1;
+        SmoothWheel.Attach(_sv, content);
         Loaded += (_, _) => Motion.SlideIn(_sv, new System.Numerics.Vector3(16, 0, 0));
         _sv.ViewChanged += (_, _) => OnScrolled();
         content.SizeChanged += (_, _) => { if (_stick) { _bottomTries = 0; ScrollToBottom(); } };
@@ -108,11 +112,21 @@ public sealed partial class ChatView : Grid, IDisposable
         _pill.Tapped += async (_, _) => { if (!S.Window(Key).AtTail) await Sh.C.JumpToPresent(Key); _stick = true; ScrollToBottom(); _pill.Visibility = Visibility.Collapsed; };
 
         _typing = U.T("", 11.5, null, Theme.Mu);
-        _typing.Margin = U.Th(18, 0, 0, 0);
+        _typingDots = U.H(3);
+        for (var i = 0; i < 3; i++)
+        {
+            var d = new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 5, Height = 5, Fill = Theme.Mu, VerticalAlignment = VerticalAlignment.Center };
+            _typingDots.Children.Add(d);
+            Motion.Hop(d, i * 150);
+        }
+        _typingDots.Visibility = Visibility.Collapsed;
+        _typingRow = U.H(7, _typingDots, _typing);
+        _typingRow.Margin = U.Th(18, 0, 0, 0);
+        _typingRow.VerticalAlignment = VerticalAlignment.Center;
         _composer = new Composer(this);
         if (tid == 0 && S.DmById(cid) is not null) { _call = new CallBar(sh, cid); _listArea.Add(_call.At(0)); }
         _listArea.Add(_sv.At(1), _pill.At(1), _unreadBar.At(1));
-        this.Add(_header.At(0), _listArea.At(1), _typing.At(2), _composer.At(3));
+        this.Add(_header.At(0), _listArea.At(1), _typingRow.At(2), _composer.At(3));
 
         AllowDrop = true;
         DragOver += (_, e) => { if (_composer.CanAttach && e.DataView.Contains(StandardDataFormats.StorageItems)) { e.AcceptedOperation = DataPackageOperation.Copy; e.DragUIOverride.Caption = "Wyślij na czat"; } };
@@ -166,6 +180,11 @@ public sealed partial class ChatView : Grid, IDisposable
     /// <summary>Pasek rozmowy (DM): kto rozmawia, dołącz / rozłącz.</summary>
     public void RefreshCall() { if (_disposed) return; _call?.Refresh(); UpdateStage(); RefreshHeader(); }
     public void TickTalk() => _call?.Tick();
+
+    // samotest kółka w CI
+    public double ScrollOffset => _sv.VerticalOffset;
+    public double ScrollMax => _sv.ScrollableHeight;
+    public FrameworkElement ListArea => _sv;
 
     /// <summary>Rozmowa prywatna z kamerą albo transmisją: kafelki nad czatem (jak na kanale głosowym, tylko mniejsze).</summary>
     void UpdateStage()
@@ -321,6 +340,7 @@ public sealed partial class ChatView : Grid, IDisposable
         }
         _rows.Clear();
         foreach (var r in fresh) _rows.Add(r);
+        if (_skeleton && fresh.Count > 0) { _skeleton = false; Motion.FadeIn(_rep, 200); } // szkielety → treść: płynnie
         UpdateTop(w);
         if (!_unreadShown && !w.FromCache && w.Items.Count > 0) { _unreadShown = true; ShowUnreadBar(); }
         if (w.AtTail) { _stick = true; _bottomTries = 0; ScrollToBottom(); }
@@ -332,10 +352,17 @@ public sealed partial class ChatView : Grid, IDisposable
         _top.Children.Clear();
         if (w.HasOlder && w.Items.Count > 0)
         {
-            _top.Children.Add(new ProgressRing { IsActive = _loadingOlder, Width = 22, Height = 22, Foreground = Theme.Mu, HorizontalAlignment = HorizontalAlignment.Center });
+            // starsze wiadomości: dwa szkielety nad listą (doczytują się przy przewijaniu w górę)
+            for (var i = 0; i < 2; i++) _top.Children.Add(U.SkeletonMessage(i));
             return;
         }
-        if (w.Items.Count == 0 && w.HasOlder) return; // jeszcze się wczytuje
+        if (w.Items.Count == 0 && w.HasOlder)
+        {
+            // jeszcze się wczytuje: szkielety zamiast pustki; treść zastąpi je przy pierwszej synchronizacji
+            for (var i = 0; i < 7; i++) _top.Children.Add(U.SkeletonMessage(i));
+            _skeleton = true;
+            return;
+        }
         // początek rozmowy
         if (IsThread)
         {
@@ -369,6 +396,7 @@ public sealed partial class ChatView : Grid, IDisposable
 
     /// <summary>Rośnie, gdy zmieniły się dane, z których buduje się treść wiadomości (nicki, awatary, role) — gotowe treści są wtedy budowane od nowa przy następnym pokazaniu.</summary>
     public int ContentGen { get; private set; }
+    bool _skeleton;
 
     public void OnChange(StoreChange c)
     {
@@ -397,7 +425,7 @@ public sealed partial class ChatView : Grid, IDisposable
             case ChangeKind.MessageUpdated when c.Message is { } m:
             {
                 var i = IndexOf(m.Id);
-                if (i >= 0) _rows[i] = new Row(m) { Grouped = _rows[i].Grouped, DaySep = _rows[i].DaySep, NewMarker = _rows[i].NewMarker };
+                if (i >= 0) _rows[i] = new Row(m) { Grouped = _rows[i].Grouped, DaySep = _rows[i].DaySep, NewMarker = _rows[i].NewMarker, PrevReact = _rows[i].ReactSnap };
                 break;
             }
             case ChangeKind.MessageRemoved:
@@ -438,6 +466,7 @@ public sealed partial class ChatView : Grid, IDisposable
             2 => $"{S.NameOf(ids[0], Srv)} i {S.NameOf(ids[1], Srv)} piszą…",
             _ => "Kilka osób pisze…",
         };
+        _typingDots.Visibility = ids.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     void OnScrolled()

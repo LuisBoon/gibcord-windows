@@ -18,7 +18,9 @@ public sealed class MembersPanel : Grid
         Background = Theme.Members;
         BorderBrush = Theme.Line;
         BorderThickness = U.Th(1, 0, 0, 0);
-        Children.Add(U.Scroll(_list));
+        var sc = U.Scroll(_list);
+        SmoothWheel.Attach(sc, _list);
+        Children.Add(sc);
     }
 
     public void Refresh()
@@ -36,6 +38,12 @@ public sealed class MembersPanel : Grid
             return;
         }
         if (s.ServerById(_sh.ServerId) is not { } srv) return;
+        if (srv.Members.Count == 0)
+        {
+            // lista osób jeszcze nie przyszła — szkielety
+            for (var i = 0; i < 8; i++) _list.Children.Add(U.SkeletonMessage(i, 32).With(e => ((Grid)e).Padding = U.Th(6, 6, 10, 6)));
+            return;
+        }
         var online = new List<long>();
         var offline = new List<long>();
         foreach (var m in srv.Members) (s.StatusOf(m.UserId) == "offline" ? offline : online).Add(m.UserId);

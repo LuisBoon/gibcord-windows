@@ -59,7 +59,7 @@ public sealed class ServerRail : Grid
         _list.Children.Clear();
         var homeLogo = new Image { Source = new BitmapImage(new Uri(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "gibcord.png"))), Width = 44, Height = 44 };
         var pending = s.Friends.Values.Count(f => f.Status == "incoming");
-        _list.Add(Item(homeLogo, "Rozmowy prywatne i znajomi", _sh.ServerId == 0, unread: false, mentions: s.DmUnreadTotal() + pending, () => _sh.Go(0, _sh.ServerId == 0 ? _sh.ChannelId : App.Prefs.LastDm), home: true));
+        _list.Add(Item(homeLogo, "Rozmowy prywatne i znajomi", _sh.ServerId == 0, unread: false, mentions: s.DmUnreadTotal() + pending, () => _sh.Go(0, _sh.ServerId == 0 ? _sh.ChannelId : App.Prefs.LastDm), home: true, key: 0));
         _list.Add(new Rectangle { Width = 28, Height = 1, Fill = U.W(.16), HorizontalAlignment = HorizontalAlignment.Center });
         var ordered = Ordered(s);
         for (var idx = 0; idx < ordered.Count; idx++)
@@ -72,7 +72,7 @@ public sealed class ServerRail : Grid
             else icon = U.T(Initials(srv.Name), 13, U.Bold).With(t => { t.HorizontalAlignment = HorizontalAlignment.Center; t.TextTrimming = TextTrimming.None; });
             var sel = _sh.ServerId == srv.Id;
             var muted = s.ServerMuted(srv.Id);
-            var item = Item(icon, srv.Name, sel, unread: s.ServerUnread(srv), mentions: muted ? 0 : s.ServerMentions(srv), () => _sh.Go(srv.Id, 0), bg: srv.Official ? U.B("#3b2a5c") : null);
+            var item = Item(icon, srv.Name, sel, unread: s.ServerUnread(srv), mentions: muted ? 0 : s.ServerMentions(srv), () => _sh.Go(srv.Id, 0), bg: srv.Official ? U.B("#3b2a5c") : null, key: srv.Id);
             item.ContextFlyout = ServerMenu.Build(_sh, srv);
             // przeciąganie ikon zmienia kolejność serwerów
             item.CanDrag = true;
@@ -101,6 +101,7 @@ public sealed class ServerRail : Grid
         }
         var add = Item(U.I("", 18, Theme.Green), "Dodaj serwer", false, false, 0, () => AddServerDialog.Show(_sh), bg: U.W(.07));
         _list.Add(add);
+        _badgesReady = true; // pierwsze rysowanie bez „wyskakiwania” wszystkich plakietek
     }
 
     static string Initials(string name)
@@ -110,11 +111,17 @@ public sealed class ServerRail : Grid
         return s.Length == 0 ? "?" : s;
     }
 
-    static Grid Item(FrameworkElement content, string tip, bool selected, bool unread, int mentions, Action click, Brush? bg = null, bool home = false)
+    /// <summary>Liczby na plakietkach przy poprzednim rysowaniu — gdy rosną, plakietka wyskakuje.</summary>
+    static readonly Dictionary<long, int> _badges = [];
+    static bool _badgesReady;
+    const double Round = 22, Square = 14; // koło (spoczynek) → zaokrąglony kwadrat (najechanie, wybrany)
+
+    static Grid Item(FrameworkElement content, string tip, bool selected, bool unread, int mentions, Action click, Brush? bg = null, bool home = false, long key = long.MinValue)
     {
+        var r0 = home ? 0 : selected && !_justSelected ? Square : Round;
         var box = new Border
         {
-            Width = 44, Height = 44, CornerRadius = new CornerRadius(home ? 0 : 15), Child = content,
+            Width = 44, Height = 44, CornerRadius = new CornerRadius(r0), Child = content,
             Background = home ? null : selected ? Theme.AccentGradient() : bg ?? U.W(.12),
         };
         if (selected && content is TextBlock tb) tb.Foreground = Theme.OnAccent;
@@ -126,16 +133,22 @@ public sealed class ServerRail : Grid
             Width = 5, CornerRadius = new CornerRadius(0, 4, 4, 0), Background = Theme.Fg, HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center, Height = grow ? 18 : rest, Margin = U.Th(-12, 0, 0, 0),
         };
-        if (grow) pill.Loaded += (_, _) => Motion.Height(pill, 30);
+        if (grow) pill.Loaded += (_, _) => { Motion.Height(pill, 30); if (!home) Motion.Tween(box, Round, Square, v => box.CornerRadius = new CornerRadius(v)); };
+        void Shape(double to) { if (!home) Motion.Tween(box, box.CornerRadius.TopLeft, to, v => box.CornerRadius = new CornerRadius(v)); }
         Motion.Hoverable(box);
         var g = new Grid { Width = 44, Height = 44, HorizontalAlignment = HorizontalAlignment.Center };
         g.Add(box, pill);
         if (mentions > 0)
-            g.Add(U.Badge(mentions).With(b => { b.HorizontalAlignment = HorizontalAlignment.Right; b.VerticalAlignment = VerticalAlignment.Bottom; b.Margin = U.Th(0, 0, -4, -4); b.BorderBrush = U.B("#1d1630"); b.BorderThickness = U.Th(2); b.Height = 22; b.CornerRadius = new CornerRadius(11); }));
+        {
+            var badge = U.Badge(mentions).With(b => { b.HorizontalAlignment = HorizontalAlignment.Right; b.VerticalAlignment = VerticalAlignment.Bottom; b.Margin = U.Th(0, 0, -4, -4); b.BorderBrush = U.B("#1d1630"); b.BorderThickness = U.Th(2); b.Height = 22; b.CornerRadius = new CornerRadius(11); });
+            g.Add(badge);
+            if (key != long.MinValue && _badgesReady && mentions > _badges.GetValueOrDefault(key)) Motion.Pop(badge, .3f);
+        }
+        if (key != long.MinValue) _badges[key] = mentions;
         ToolTipService.SetToolTip(g, tip);
         ToolTipService.SetPlacement(g, Microsoft.UI.Xaml.Controls.Primitives.PlacementMode.Right);
-        g.PointerEntered += (_, _) => { if (!selected) { box.CornerRadius = new CornerRadius(home ? 0 : 12); if (!home) box.Background = U.W(.2); Motion.Height(pill, 18); } };
-        g.PointerExited += (_, _) => { if (!selected) { box.CornerRadius = new CornerRadius(home ? 0 : 15); if (!home) box.Background = bg ?? U.W(.12); Motion.Height(pill, rest); } };
+        g.PointerEntered += (_, _) => { if (!selected) { Shape(Square); if (!home) box.Background = U.W(.2); Motion.Height(pill, 18); } };
+        g.PointerExited += (_, _) => { if (!selected) { Shape(Round); if (!home) box.Background = bg ?? U.W(.12); Motion.Height(pill, rest); } };
         g.Tapped += (_, e) => { e.Handled = true; click(); };
         return g;
     }
@@ -169,6 +182,7 @@ public sealed class Sidebar : Grid
         _listHost.Children.Add(_hl);
         _listHost.Children.Add(_list);
         _scroll = U.Scroll(_listHost);
+        SmoothWheel.Attach(_scroll, _listHost);
         this.Add(_header.At(0), _scroll.At(1), _voice.At(2), _me.At(3));
     }
 

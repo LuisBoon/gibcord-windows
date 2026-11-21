@@ -508,7 +508,20 @@ public sealed class VoiceEngine : IAsyncDisposable
 
     internal void Heard(long uid, double db)
     {
-        if (db > SpeakDb) _remoteLoudAt[uid] = Environment.TickCount64;
+        var now = Environment.TickCount64;
+        if (db > SpeakDb) _remoteLoudAt[uid] = now;
+        _remoteDb[uid] = (db, now);
+    }
+
+    readonly System.Collections.Concurrent.ConcurrentDictionary<long, (double Db, long At)> _remoteDb = new();
+
+    /// <summary>Głośność mówienia 0–1 (do pulsującej obwódki): −50 dB = 0, −15 dB = 1. Dla mnie: mikrofon, gdy nadaje.</summary>
+    public double Level(long uid)
+    {
+        if (State == VoiceState.Idle) return 0;
+        static double Norm(double db) => Math.Clamp((db + 50) / 35, 0, 1);
+        if (uid == MyId) return Transmitting ? Norm(_micDb) : 0;
+        return _remoteDb.TryGetValue(uid, out var v) && Environment.TickCount64 - v.At < 250 ? Norm(v.Db) : 0;
     }
 
     /// <summary>Czy osoba właśnie mówi (zielona obwódka). Dla mnie: czy mikrofon właśnie nadaje.</summary>

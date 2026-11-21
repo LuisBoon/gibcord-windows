@@ -87,7 +87,14 @@ public sealed class Shell : Grid
 
         _talk = DispatcherQueue.CreateTimer();
         _talk.Interval = TimeSpan.FromMilliseconds(150);
-        _talk.Tick += (_, _) => { _side.TickTalk(); _chat?.TickTalk(); };
+        Avatar.LevelOf = uid => C.SpeakLevel(uid);
+        _talk.Tick += (_, _) =>
+        {
+            _side.TickTalk(); _chat?.TickTalk();
+            // w rozmowie obwódki pulsują w rytm głosu — częściej (ok. 16 razy na sekundę)
+            var want = TimeSpan.FromMilliseconds(C.VoiceChannelId != 0 && Motion.On ? 60 : 150);
+            if (_talk.Interval != want) _talk.Interval = want;
+        };
         _talk.Start();
 
         Accel(VirtualKey.K, VirtualKeyModifiers.Control, OpenSwitcher);
@@ -105,6 +112,8 @@ public sealed class Shell : Grid
 
         if (S.Loaded) Loaded += (_, _) => NavigateInitial();
         else ShowLoading();
+        // start: okno z ostatnim kanałem (z pamięci) płynnie „zjeżdża” na miejsce
+        Loaded += (_, _) => { if (!_entered) { _entered = true; Motion.SlideIn(this, new System.Numerics.Vector3(0, 14, 0)); } };
     }
 
     void Accel(VirtualKey key, VirtualKeyModifiers mod, Action a)
@@ -215,9 +224,8 @@ public sealed class Shell : Grid
     void ShowLoading()
     {
         _main.Children.Clear();
-        _main.Children.Add(U.V(14,
-            new ProgressRing { IsActive = true, Width = 36, Height = 36, Foreground = Theme.Accent },
-            U.T("Wczytywanie GibCorda…", 14, null, Theme.Mu)).With(p => { p.HorizontalAlignment = HorizontalAlignment.Center; p.VerticalAlignment = VerticalAlignment.Center; }));
+        _main.Children.Add(U.V(16, Splash.Gibek(112),
+            U.T("Wczytywanie GibCorda…", 14, null, Theme.Mu).With(t => t.HorizontalAlignment = HorizontalAlignment.Center)).With(p => { p.HorizontalAlignment = HorizontalAlignment.Center; p.VerticalAlignment = VerticalAlignment.Center; }));
     }
 
     // ───────────────────────── zmiany stanu ─────────────────────────
@@ -630,9 +638,19 @@ public sealed class Shell : Grid
     }
 
     /// <summary>Okienko na środku z przyciemnionym tłem (zamyka Esc albo klik obok).</summary>
-    public void ShowOverlay(FrameworkElement content, Action? focus = null)
+    Func<Task>? _overlayClosing;
+    bool _entered;
+    Grid? _overlayDim;
+
+    /// <param name="closing">Animacja przed zamknięciem (np. zdjęcie wraca na miejsce w czacie).</param>
+    /// <param name="pop">Treść lekko wjeżdża (zwykłe okienka); podgląd zdjęcia ma własny przelot.</param>
+    public void ShowOverlay(FrameworkElement content, Action? focus = null, Func<Task>? closing = null, bool pop = true)
     {
         var dim = new Grid { Background = U.B("#80080414") };
+        _overlayClosing = closing;
+        _overlayDim = dim;
+        Motion.FadeIn(dim, 140);
+        if (pop) Motion.SlideIn(content, new System.Numerics.Vector3(0, 12, 0));
         dim.Add(content.With(c => { c.HorizontalAlignment = HorizontalAlignment.Center; c.VerticalAlignment = VerticalAlignment.Top; c.Margin = U.Th(0, 70, 0, 0); }));
         dim.Tapped += (_, e) => { if (ReferenceEquals(e.OriginalSource, dim)) CloseOverlay(); };
         dim.KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape) { CloseOverlay(); e.Handled = true; } };
@@ -642,6 +660,26 @@ public sealed class Shell : Grid
 
     public void CloseOverlay()
     {
+        if (_overlayClosing is { } f)
+        {
+            _overlayClosing = null;
+            _ = CloseAfter(f, _overlayDim);
+            return;
+        }
+        RemoveOverlay();
+    }
+
+    async Task CloseAfter(Func<Task> f, Grid? dim)
+    {
+        if (dim is not null) Motion.FadeOut(dim, 220);
+        try { await f(); } catch { }
+        RemoveOverlay();
+    }
+
+    void RemoveOverlay()
+    {
+        _overlayClosing = null;
+        _overlayDim = null;
         for (var i = _overlay.Children.Count - 1; i >= 0; i--)
             if (_overlay.Children[i] != _toasts) _overlay.Children.RemoveAt(i);
         _chat?.FocusComposer();

@@ -124,6 +124,10 @@ public sealed class Prefs
     public bool CompactMessages { get; set; }
     /// <summary>Mniej ruchu: bez animacji (sprężyn, wjazdów, przenikania).</summary>
     public bool ReduceMotion { get; set; }
+    /// <summary>Szkło Windows: okno prześwituje pulpit (Mica na Windows 11, akryl na Windows 10). Tylko na tym komputerze.</summary>
+    public bool WindowsGlass { get; set; }
+    /// <summary>Kółko myszy z wygładzaniem (płynne przewijanie z wyhamowaniem).</summary>
+    public bool SmoothWheel { get; set; } = true;
     /// <summary>Kiedy wyczyścić opis statusu (0 = nie czyścić).</summary>
     public long StatusClearAt { get; set; }
     /// <summary>Który opis czyścimy — jeśli w międzyczasie ustawiono inny (np. na telefonie), zostawiamy go.</summary>

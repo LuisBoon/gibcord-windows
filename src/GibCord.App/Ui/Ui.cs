@@ -78,6 +78,22 @@ public static class Theme
     };
 
     /// <summary>Tło okna: trzy miękkie plamy (morski, śliwkowy, pomarańczowy) na granacie — rysowane raz, bez rozmycia na żywo.</summary>
+    /// <summary>Czy system pozwala na szkło: Mica (Windows 11) albo akryl (Windows 10).</summary>
+    public static string? GlassKind
+    {
+        get
+        {
+            try
+            {
+                if (Microsoft.UI.Composition.SystemBackdrops.MicaController.IsSupported()) return "mica";
+                if (Microsoft.UI.Composition.SystemBackdrops.DesktopAcrylicController.IsSupported()) return "acrylic";
+            }
+            catch { }
+            return null;
+        }
+    }
+    public static bool GlassOn => App.Prefs.WindowsGlass && GlassKind is not null;
+
     public static Grid Backdrop()
     {
         static Rectangle Blob(string color, double cx, double cy, double rx, double ry) => new()
@@ -85,14 +101,17 @@ public static class Theme
             Fill = new RadialGradientBrush
             {
                 Center = new(cx, cy), GradientOrigin = new(cx, cy), RadiusX = rx, RadiusY = ry,
-                GradientStops = { new GradientStop { Color = U.C(color), Offset = 0 }, new GradientStop { Color = U.C("#00" + color[1..]), Offset = 1 } },
+                GradientStops = { new GradientStop { Color = U.C(color), Offset = 0 }, new GradientStop { Color = U.C("#00" + color[^6..]), Offset = 1 } },
             },
         };
-        var g = new Grid { Background = U.B(_p.Base), IsHitTestVisible = false };
+        // szkło Windows: kolory motywu jako półprzezroczysty odcień nad rozmytym pulpitem
+        var glass = GlassOn;
+        string A(string c, string a) => glass ? "#" + a + c[1..] : c;
+        var g = new Grid { Background = U.B(A(_p.Base, "8C")), IsHitTestVisible = false };
         if (Name == "midnight") return g; // OLED: czysta czerń
-        g.Children.Add(Blob(_p.B1, .08, .08, .62, .75));
-        g.Children.Add(Blob(_p.B2, .92, .14, .58, .70));
-        g.Children.Add(Blob(_p.B3, .70, 1.05, .60, .60));
+        g.Children.Add(Blob(A(_p.B1, "B3"), .08, .08, .62, .75));
+        g.Children.Add(Blob(A(_p.B2, "B3"), .92, .14, .58, .70));
+        g.Children.Add(Blob(A(_p.B3, "B3"), .70, 1.05, .60, .60));
         return g;
     }
 
@@ -231,6 +250,21 @@ public static class U
             b.IsTabStop = false;
         }
         return b;
+    }
+
+    /// <summary>Szkielet wiadomości (pulsuje, dopóki nie przyjdzie treść): kółko awatara, krótka nazwa i linijka tekstu.</summary>
+    public static FrameworkElement SkeletonMessage(int i, double avatar = 36)
+    {
+        double[] widths = [.62, .38, .74, .5, .66, .3];
+        var bar = (double w, double h) => new Border { Height = h, Width = w, CornerRadius = new CornerRadius(h / 2), Background = W(.11), HorizontalAlignment = HorizontalAlignment.Left };
+        var text = new Grid();
+        text.SizeChanged += (_, e) => { if (text.Children.Count == 0 && e.NewSize.Width > 0) text.Children.Add(bar(Math.Max(60, e.NewSize.Width * widths[i % widths.Length]), 10)); };
+        var col = V(8, bar(70 + (i * 37) % 60, 10), text);
+        col.VerticalAlignment = VerticalAlignment.Center;
+        var g = new Grid { Padding = Th(16, 8, 24, 8), ColumnSpacing = 14 }.Cols(avatar.ToString(System.Globalization.CultureInfo.InvariantCulture), "*").Add(
+            new Microsoft.UI.Xaml.Shapes.Ellipse { Width = avatar, Height = avatar, Fill = W(.11) }.At(0, 0), col.At(0, 1));
+        Ui.Motion.Pulse(g, i * 120);
+        return g;
     }
 
     public static Border Badge(int n, Brush? bg = null) => new()

@@ -12,7 +12,8 @@ public static class Lightbox
 {
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
-    public static void Show(Shell sh, Uri url, string name)
+    /// <param name="from">Miniatura w czacie — zdjęcie wylatuje z niej na pełny ekran i do niej wraca przy zamykaniu.</param>
+    public static void Show(Shell sh, Uri url, string name, FrameworkElement? from = null)
     {
         var img = new Image { Source = Images.Get(url), Stretch = Stretch.Uniform, MaxWidth = 1600, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var zoom = new ScrollViewer
@@ -69,7 +70,46 @@ public static class Lightbox
             zoom.At(0),
             U.V(4, U.H(10, U.T(name, 13, U.Semi, Theme.Mu), save, copy, open, close).With(p => p.HorizontalAlignment = HorizontalAlignment.Center),
                 U.T("Kółko myszy z Ctrl albo podwójne kliknięcie — przybliżenie", 11, null, Theme.Mu2).With(t => t.HorizontalAlignment = HorizontalAlignment.Center)).With(p => p.Margin = U.Th(0, 12, 0, 0)).At(1));
-        sh.ShowOverlay(g, () => close.Focus(FocusState.Programmatic));
+        // przelot z miniatury: ScrollViewer z obrazem startuje w miejscu i rozmiarze miniatury, potem sprężyście na swoje miejsce
+        Func<Task>? back = null;
+        if (from is not null && from.XamlRoot is not null && Motion.On)
+        {
+            zoom.Opacity = 0;
+            var flown = false;
+            System.Numerics.Vector3 center = default, t = default;
+            float s = 1;
+            void Fly()
+            {
+                if (flown) return;
+                flown = true;
+                try
+                {
+                    var fr = from.TransformToVisual(null).TransformBounds(new Windows.Foundation.Rect(0, 0, from.ActualWidth, from.ActualHeight));
+                    var ir = img.TransformToVisual(null).TransformBounds(new Windows.Foundation.Rect(0, 0, img.ActualWidth, img.ActualHeight));
+                    var il = img.TransformToVisual(zoom).TransformPoint(new Windows.Foundation.Point(0, 0));
+                    zoom.Opacity = 1;
+                    if (from.XamlRoot is null || fr.Width < 2 || ir.Width < 2) { Motion.FadeIn(zoom); return; }
+                    s = (float)(fr.Width / ir.Width);
+                    t = new System.Numerics.Vector3((float)(fr.X - ir.X), (float)(fr.Y - ir.Y), 0);
+                    center = new System.Numerics.Vector3((float)il.X, (float)il.Y, 0);
+                    Motion.Fly(zoom, center, t, s, System.Numerics.Vector3.Zero, 1);
+                    back = async () =>
+                    {
+                        if (from.XamlRoot is null) { Motion.FadeOut(zoom, 160); await Task.Delay(170); return; }
+                        Motion.Fly(zoom, center, System.Numerics.Vector3.Zero, 1, t, s, .9f);
+                        await Task.Delay(230);
+                    };
+                }
+                catch { zoom.Opacity = 1; }
+            }
+            img.SizeChanged += (_, e) => { if (e.NewSize.Width > 0) sh.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, Fly); };
+            var fallback = sh.DispatcherQueue.CreateTimer();
+            fallback.Interval = TimeSpan.FromMilliseconds(700);
+            fallback.IsRepeating = false;
+            fallback.Tick += (_, _) => { if (!flown) { flown = true; zoom.Opacity = 1; Motion.FadeIn(zoom); } };
+            fallback.Start();
+        }
+        sh.ShowOverlay(g, () => close.Focus(FocusState.Programmatic), () => back?.Invoke() ?? Task.CompletedTask, pop: from is null);
     }
 }
 

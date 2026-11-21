@@ -38,6 +38,8 @@ public sealed partial class GibCordClient
     public VoiceState VoiceStatus => Offline ? (VoiceChannelId != 0 ? VoiceState.Connected : VoiceState.Idle)
         : VoiceChannelId == 0 ? VoiceState.Idle : Voice.State == VoiceState.Idle ? VoiceState.Connecting : Voice.State;
 
+    /// <summary>Głośność mówienia 0–1 (pulsująca obwódka). W trybie pokazowym — falująca.</summary>
+    public double SpeakLevel(long uid) => Offline ? (IsSpeaking(uid) ? .55 + .45 * Math.Sin(Environment.TickCount64 / 90.0) : 0) : Voice.Level(uid);
     public bool IsSpeaking(long uid) => Offline ? VoiceChannelId != 0 && uid == DemoSpeaker : Voice.IsSpeaking(uid);
     /// <summary>Tryb pokazowy: kto „mówi” (zielona obwódka na zrzucie).</summary>
     public long DemoSpeaker { get; set; }

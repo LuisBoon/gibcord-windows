@@ -75,6 +75,8 @@ public static class Options
     public static string? Screenshot => Arg("--screenshot");
     /// <summary>--motion: animacje także przy zrzucie (CI sprawdza, czy ruch działa).</summary>
     public static bool ForceMotion => Program.Args.Contains("--motion");
+    /// <summary>--wheel-test: CI kręci kółkiem nad czatem i zapisuje w dzienniku, o ile się przewinęło.</summary>
+    public static bool WheelTest => Program.Args.Contains("--wheel-test");
     /// <summary>--view login|chat|friends|dm|profile|switcher</summary>
     public static string View => Arg("--view") ?? "chat";
     /// <summary>--server https://...: inny serwer (np. kopia testowa).</summary>

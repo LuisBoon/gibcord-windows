@@ -59,6 +59,7 @@ public sealed class MainWindow : Window
         _backdrop = Theme.Backdrop().At(0, 0, rowSpan: 2);
         _root.Add(_backdrop, TitleBar.At(0), _host.At(1));
         Content = _root;
+        ApplyBackdrop();
         SetTitleBar(TitleBar.DragArea);
         TitleBar.SizeChanged += (_, _) => UpdateTitleBarRegions();
 
@@ -259,6 +260,31 @@ public sealed class MainWindow : Window
     }
 
     Grid _backdrop;
+
+    /// <summary>Szkło Windows (pkt 1 szlifu): Mica na Windows 11, akryl na Windows 10, inaczej zwykłe tło motywu.</summary>
+    void ApplyBackdrop()
+    {
+        try
+        {
+            SystemBackdrop = !Theme.GlassOn ? null : Theme.GlassKind == "mica"
+                ? new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt }
+                : new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop();
+        }
+        catch (Exception ex) { App.Log("Szkło Windows: " + ex.Message); SystemBackdrop = null; }
+    }
+
+    /// <summary>Włącza/wyłącza szkło Windows: tło okna i odcień motywu od razu, bez przebudowy widoków.</summary>
+    public void SetGlass(bool on)
+    {
+        App.Prefs.WindowsGlass = on;
+        App.Prefs.Save();
+        ApplyBackdrop();
+        var nb = Theme.Backdrop().At(0, 0, rowSpan: 2);
+        var i = _root.Children.IndexOf(_backdrop);
+        if (i >= 0) _root.Children[i] = nb; else _root.Children.Insert(0, nb);
+        _backdrop = nb;
+        Motion.FadeIn(nb, 300);
+    }
 
     /// <summary>Zmiana motywu: nowe kolory, nowe tło i przebudowa widoków (stan i rozmowa zostają).</summary>
     public void ApplyTheme(string name)
@@ -556,11 +582,48 @@ public sealed class MainWindow : Window
     }
 
     /// <summary>Zrzut okna do pliku PNG (CI: sprawdzenie wyglądu bez Windowsa pod ręką).</summary>
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern void mouse_event(uint flags, int dx, int dy, int data, nint extra);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool ClientToScreen(nint hwnd, ref System.Drawing.Point p);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool SetForegroundWindow(nint hwnd);
+
+    /// <summary>CI: kursor na środek listy wiadomości, 3 ząbki kółka w górę, ile pikseli przewinęło.</summary>
+    async Task<double> WheelProbe(ChatView ch)
+    {
+        try
+        {
+            var el = ch.ListArea;
+            var scale = el.XamlRoot?.RasterizationScale ?? 1;
+            var c = el.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(el.ActualWidth / 2, el.ActualHeight / 2));
+            var p = new System.Drawing.Point((int)(c.X * scale), (int)(c.Y * scale));
+            ClientToScreen(Hwnd, ref p);
+            SetForegroundWindow(Hwnd);
+            SetCursorPos(p.X, p.Y);
+            await Task.Delay(300);
+            var before = ch.ScrollOffset;
+            for (var i = 0; i < 3; i++) { mouse_event(0x0800, 0, 0, 120, 0); await Task.Delay(60); }
+            await Task.Delay(1000);
+            var moved = before - ch.ScrollOffset;
+            for (var i = 0; i < 3; i++) { mouse_event(0x0800, 0, 0, -120, 0); await Task.Delay(60); } // z powrotem na dół
+            await Task.Delay(1000);
+            return moved;
+        }
+        catch (Exception ex) { App.Log("Kółko: " + ex.Message); return -1; }
+    }
+
     async Task Screenshot(string path)
     {
         try
         {
             await Task.Delay(Options.View is "switcher" or "profile" or "emoji" or "overlay" or "adminmail" or "imgedit" ? 3500 : 2500);
+            if (Options.WheelTest && _shell?.CurrentChat is { } wch)
+            {
+                var smooth = await WheelProbe(wch);
+                App.Prefs.SmoothWheel = false;
+                var plain = await WheelProbe(wch);
+                App.Prefs.SmoothWheel = true;
+                App.Log($"Kółko (3 ząbki w górę): z wygładzaniem {smooth:0} px, systemowe {plain:0} px, przewijalne {wch.ScrollMax:0} px");
+            }
             if (Options.ForceMotion && _shell is { } msh)
             {
                 // CI: przejście na inny kanał (zaznaczenie przesuwa się, lista wjeżdża) i panel osób; potem zapis, ile animacji ruszyło

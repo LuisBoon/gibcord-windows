@@ -19,6 +19,10 @@ public sealed class Avatar : Grid
     readonly Ellipse _dot = new();
     readonly Border _dotWrap;
     readonly double _size;
+    readonly Ellipse _ring = new() { Stroke = Theme.Green, StrokeThickness = 2.5, Margin = new Thickness(-3.5), Opacity = 0, IsHitTestVisible = false };
+    long _uid;
+    /// <summary>Głośność mówienia osoby 0–1 (ustawia powłoka: z silnika głosu).</summary>
+    public static Func<long, double>? LevelOf;
 
     public Avatar(double size, bool withStatus = false, string ring = "#241c3b")
     {
@@ -28,8 +32,12 @@ public sealed class Avatar : Grid
         _letter = U.T("", Math.Round(size * .42), FontWeights.Bold, Theme.OnAccent);
         _letter.HorizontalAlignment = HorizontalAlignment.Center;
         _letter.TextTrimming = TextTrimming.None;
+        Children.Add(_ring);
         Children.Add(_bg);
         Children.Add(_letter);
+        _ring.OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(110) };
+        _ring.ScaleTransition = new Vector3Transition { Duration = TimeSpan.FromMilliseconds(110) };
+        _ring.CenterPoint = new System.Numerics.Vector3((float)(size / 2 + 3.5), (float)(size / 2 + 3.5), 0);
         Children.Add(_img);
         var d = Math.Max(10, Math.Round(size * .32));
         _dot.Width = _dot.Height = d;
@@ -45,6 +53,7 @@ public sealed class Avatar : Grid
     public Avatar Set(Store s, GibCordApi api, long uid, Server? srv = null, bool status = false)
     {
         var u = s.U(uid);
+        _uid = uid;
         SetRaw(s.NameOf(uid, srv), Store.ColorOfUser(u), api.Abs(s.AvatarOf(uid, srv)), status ? s.StatusOf(uid) : null);
         return this;
     }
@@ -69,7 +78,18 @@ public sealed class Avatar : Grid
         return this;
     }
 
-    public bool Talking { set { _bg.Stroke = value ? Theme.Green : null; _bg.StrokeThickness = value ? 2 : 0; } }
+    /// <summary>Mówi: zielona obwódka, która (gdy jest ruch) jaśnieje i rośnie w rytm głosu.</summary>
+    public bool Talking
+    {
+        set
+        {
+            if (!value) { _ring.Opacity = 0; _ring.Scale = System.Numerics.Vector3.One; return; }
+            var lv = Motion.On && LevelOf is { } f && _uid != 0 ? f(_uid) : 1;
+            _ring.Opacity = Motion.On ? .5 + .5 * lv : 1;
+            var sc = (float)(1 + .12 * (Motion.On ? lv : 0));
+            _ring.Scale = new System.Numerics.Vector3(sc, sc, 1);
+        }
+    }
 }
 
 /// <summary>Treść wiadomości: formatowanie z <see cref="Markup"/> zamienione na tekst WinUI.</summary>
