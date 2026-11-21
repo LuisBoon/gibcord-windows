@@ -80,6 +80,7 @@ public sealed partial class ChatView : Grid, IDisposable
     bool _loadingOlder, _loadingNewer, _unreadShown;
     bool _disposed;
     int _bottomTries;
+    bool _bottomQueued;
     double _lastOffset;
     long _progUntil;
 
@@ -92,8 +93,8 @@ public sealed partial class ChatView : Grid, IDisposable
         _lastReadAtOpen = tid != 0 ? S.ThreadById(tid)?.LastRead ?? 0 : S.Reads.GetValueOrDefault(cid);
         this.Rows("48", "*", "20", "auto");
 
-        // VerticalCacheLength: lista w wolnej chwili przygotowuje ~5 ekranów nad i pod widokiem, więc przewijanie nie czeka na budowanie wiadomości.
-        _rep = new ItemsRepeater { ItemsSource = _rows, ItemTemplate = new MessageFactory(this), Layout = new StackLayout { Spacing = 0 }, VerticalCacheLength = 10 };
+        // VerticalCacheLength: lista w wolnej chwili przygotowuje ~2 ekrany nad i pod widokiem (przy 10 trzymała ~11 ekranów — ciężkie przeliczanie układu w dużych kanałach)
+        _rep = new ItemsRepeater { ItemsSource = _rows, ItemTemplate = new MessageFactory(this), Layout = new StackLayout { Spacing = 0 }, VerticalCacheLength = 4 };
         var content = U.V(0, _top, _rep);
         content.Padding = U.Th(0, 0, 0, 12);
         _sv = U.Scroll(content);
@@ -101,8 +102,9 @@ public sealed partial class ChatView : Grid, IDisposable
         SmoothWheel.Attach(_sv, content);
         Loaded += (_, _) => Motion.SlideIn(_sv, new System.Numerics.Vector3(16, 0, 0));
         _sv.ViewChanged += (_, _) => OnScrolled();
-        content.SizeChanged += (_, _) => { if (_stick) { _bottomTries = 0; ScrollToBottom(); } };
-        _sv.SizeChanged += (_, _) => { if (_stick) { _bottomTries = 0; ScrollToBottom(); } };
+        // dociąganie na dół tylko, gdy wysokość naprawdę się zmieniła (wcześniej każda drobna zmiana zerowała licznik prób i kolejne próby mogły się łańcuchować)
+        content.SizeChanged += (_, e) => { if (_stick && Math.Abs(e.NewSize.Height - e.PreviousSize.Height) > 1) { _bottomTries = 0; ScrollToBottom(); } };
+        _sv.SizeChanged += (_, e) => { if (_stick && Math.Abs(e.NewSize.Height - e.PreviousSize.Height) > 1) { _bottomTries = 0; ScrollToBottom(); } };
 
         _pill = new Border
         {
@@ -117,7 +119,6 @@ public sealed partial class ChatView : Grid, IDisposable
         {
             var d = new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 5, Height = 5, Fill = Theme.Mu, VerticalAlignment = VerticalAlignment.Center };
             _typingDots.Children.Add(d);
-            Motion.Hop(d, i * 150);
         }
         _typingDots.Visibility = Visibility.Collapsed;
         _typingRow = U.H(7, _typingDots, _typing);
@@ -180,6 +181,29 @@ public sealed partial class ChatView : Grid, IDisposable
         };
         _unreadBar.Child = bar;
         _unreadBar.Visibility = Visibility.Visible;
+    }
+
+    int _builtCount;
+    /// <summary>
+    /// Gotowe treści wierszy trzymamy dla płynnego przewijania, ale nie bez końca: po ~400 zbudowanych zwalniamy te,
+    /// których nie ma teraz na ekranie (długie przeglądanie historii nie może zapychać pamięci i spowalniać okna).
+    /// </summary>
+    internal void NoteBuilt()
+    {
+        if (++_builtCount < 400) return;
+        _builtCount = 0;
+        foreach (var r in _rows)
+            if (r.Built is { Parent: null }) { r.Built = null; r.ReactSnap = null; }
+            else if (r.Built is not null) _builtCount++;
+    }
+
+    /// <summary>Przebudowa jednej wiadomości (np. odsłonięta wiadomość od zablokowanej osoby).</summary>
+    public void RebuildRow(long id)
+    {
+        var i = IndexOf(id);
+        if (i < 0) return;
+        var old = _rows[i];
+        _rows[i] = new Row(old.M) { Grouped = old.Grouped, DaySep = old.DaySep, NewMarker = old.NewMarker };
     }
 
     /// <summary>Przerysowanie wszystkich wiadomości (np. po zablokowaniu / odblokowaniu osoby).</summary>
@@ -427,7 +451,7 @@ public sealed partial class ChatView : Grid, IDisposable
     public void OnChange(StoreChange c)
     {
         if (_disposed) return;
-        if (c.Kind is ChangeKind.All or ChangeKind.User or ChangeKind.Members or ChangeKind.Server or ChangeKind.Me) ContentGen++;
+        if (c.Kind is ChangeKind.All or ChangeKind.User or ChangeKind.Members or ChangeKind.Server or ChangeKind.Me or ChangeKind.Thread) ContentGen++; // Thread: liczniki i kropki na kartach wątków
         switch (c.Kind)
         {
             case ChangeKind.MessagesReset:
@@ -492,7 +516,12 @@ public sealed partial class ChatView : Grid, IDisposable
             2 => $"{S.NameOf(ids[0], Srv)} i {S.NameOf(ids[1], Srv)} piszą…",
             _ => "Kilka osób pisze…",
         };
-        _typingDots.Visibility = ids.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        var show = ids.Count > 0;
+        if (show == (_typingDots.Visibility == Visibility.Visible)) return;
+        _typingDots.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        // podskakujące kropki tylko wtedy, gdy ktoś pisze — wcześniej 6 animacji kręciło się bez końca także w ukryciu
+        for (var i = 0; i < _typingDots.Children.Count; i++)
+            if (show) Motion.Hop(_typingDots.Children[i], i * 150); else Motion.Reset(_typingDots.Children[i]);
     }
 
     void OnScrolled()
@@ -530,15 +559,20 @@ public sealed partial class ChatView : Grid, IDisposable
         _progUntil = Environment.TickCount64 + 400;
         _sv.ChangeView(null, _sv.ScrollableHeight, null, true);
         // wysokość listy szacowana przy wirtualizacji — dociągnij jeszcze kilka razy
-        if (_bottomTries++ < 8)
+        SmoothWheel.Cancel(_sv); // resztka wygładzonego kółka nie może ciągnąć listy z powrotem w górę
+        // jedna zaległa próba naraz; bez wymuszania pełnego przeliczenia układu (UpdateLayout) — następna klatka i tak je zrobi
+        if (_bottomTries++ < 8 && !_bottomQueued)
+        {
+            _bottomQueued = true;
             DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
             {
+                _bottomQueued = false;
                 if (!_stick || _disposed) return;
                 _progUntil = Environment.TickCount64 + 400;
-                _sv.UpdateLayout();
                 _sv.ChangeView(null, _sv.ScrollableHeight, null, true);
                 if (_sv.ScrollableHeight - _sv.VerticalOffset > 2) ScrollToBottom();
             });
+        }
     }
 
     void UpdatePill()
@@ -560,6 +594,7 @@ public sealed partial class ChatView : Grid, IDisposable
         var i = IndexOf(messageId);
         if (i < 0) return;
         _stick = false;
+        SmoothWheel.Cancel(_sv);
         var el = _rep.GetOrCreateElement(i);
         el.UpdateLayout();
         el.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = .4, AnimationDesired = false });

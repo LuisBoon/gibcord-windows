@@ -56,6 +56,7 @@ public sealed partial class MessageView : Grid
             stack.Children.Add(m.Type == "automod" && m.Automod.ValueKind == System.Text.Json.JsonValueKind.Object ? AutomodCard(m) : m.IsSystem ? SystemLine(m) : S.Blocked.Contains(m.AuthorId) && !_v.Revealed.Contains(m.Id) ? BlockedLine(m, row) : Normal(m, row));
             _root = null;
             row.Built = stack; row.BuiltGen = _v.ContentGen;
+            _v.NoteBuilt();
             row.ReactSnap = m.Reactions.Count == 0 ? [] : m.Reactions.GroupBy(r => r.Emoji).ToDictionary(g => g.Key, g => g.First().UserIds.Count);
             row.PrevReact = null; // animacja raz — przy kolejnym budowaniu już nie
         }
@@ -132,7 +133,7 @@ public sealed partial class MessageView : Grid
     FrameworkElement BlockedLine(Message m, Row row)
     {
         var show = new HyperlinkButton { Content = U.T("Pokaż", 12.5, U.Bold, Theme.Accent), Padding = U.Th(4, 0) };
-        show.Click += (_, _) => { _v.Revealed.Add(m.Id); Bind(row); };
+        show.Click += (_, _) => { _v.Revealed.Add(m.Id); _v.RebuildRow(m.Id); }; // nowy wiersz = treść budowana od nowa (gotowa treść w pamięci by ją ukryła)
         return new Grid { Padding = U.Th(16, 4, 16, 4) }.Cols("56", "*").Add(
             U.I("\uE8F8", 13, Theme.Mu2).With(i => i.HorizontalAlignment = HorizontalAlignment.Center).At(0, 0),
             U.H(4, U.T("Wiadomość od zablokowanej osoby", 12.5, null, Theme.Mu2), show).At(0, 1));

@@ -302,6 +302,8 @@ public static class Updater
         for (var e = ex; e is not null; e = e.InnerException)
             switch (e)
             {
+                case System.Net.Http.HttpIOException: // zerwane połączenie w trakcie pobierania (to też IOException — nie „zajęte pliki”)
+                    return "połączenie z GitHubem zerwało się w trakcie pobierania. Spróbuj jeszcze raz.";
                 case HttpRequestException h when h.StatusCode is System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.TooManyRequests:
                     return "GitHub chwilowo ogranicza sprawdzanie aktualizacji. Spróbuj za godzinę albo pobierz instalator ze strony gibcord.luisboon.pl.";
                 case HttpRequestException:
@@ -310,7 +312,7 @@ public static class Updater
                     return "GitHub nie odpowiada. Spróbuj za chwilę.";
                 case UnauthorizedAccessException:
                     return "brak dostępu do folderu aplikacji. Zainstaluj GibCorda instalatorem ze strony gibcord.luisboon.pl.";
-                case IOException when e.Message.Contains("disk", StringComparison.OrdinalIgnoreCase) || e.Message.Contains("space", StringComparison.OrdinalIgnoreCase):
+                case IOException when (e.HResult & 0xFFFF) is 0x70 or 0x27: // ERROR_DISK_FULL / ERROR_HANDLE_DISK_FULL — niezależnie od języka Windowsa
                     return "za mało miejsca na dysku.";
                 case IOException:
                     return "pliki aplikacji są zajęte. Zamknij wszystkie okna GibCorda (także ikonę przy zegarze) i spróbuj ponownie.";
@@ -325,7 +327,7 @@ public static class Updater
         {
             var me = Environment.ProcessId;
             var dir = AppContext.BaseDirectory.TrimEnd('\\', '/');
-            var parent = Path.GetDirectoryName(dir) ?? dir; // …\GibCord6 (obejmuje current\ i stare wersje)
+            var parent = (Path.GetDirectoryName(dir) ?? dir).TrimEnd('\\') + "\\"; // …\GibCord6\ (obejmuje current\ i stare wersje; ukośnik — bez folderów-sąsiadów „GibCord6xyz”)
             foreach (var p in System.Diagnostics.Process.GetProcessesByName("GibCord"))
             {
                 if (p.Id == me) continue;

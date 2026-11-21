@@ -689,7 +689,10 @@ public sealed class Shell : Grid
     {
         if (dim is not null) Motion.FadeOut(dim, 220);
         try { await f(); } catch { }
-        RemoveOverlay();
+        // zdejmujemy tylko to okienko: w trakcie przelotu mogło się otworzyć inne (dzwonek rozmowy, Ctrl+K) — nie może zniknąć
+        if (dim is null) { RemoveOverlay(); return; }
+        _overlay.Children.Remove(dim);
+        if (ReferenceEquals(_overlayDim, dim)) { _overlayDim = null; _overlayClosing = null; _chat?.FocusComposer(); }
     }
 
     void RemoveOverlay()

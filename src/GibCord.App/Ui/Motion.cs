@@ -113,6 +113,10 @@ static class Motion
             list.Clear();
             e.Translation = Vector3.Zero;
             e.Scale = Vector3.One;
+            // zatrzymane przenikanie zostawiało wartość „w pół drogi” — wymuszamy ponowne przyłożenie przezroczystości z XAML
+            var o = e.Opacity;
+            e.Opacity = o >= 1 ? .99 : 1;
+            e.Opacity = o;
         }
         catch (Exception ex) { Fail(ex); }
     }
@@ -186,7 +190,8 @@ static class Motion
             Storyboard.SetTargetProperty(a, "Height");
             var sb = new Storyboard();
             sb.Children.Add(a);
-            sb.Completed += (_, _) => { if (Heights.TryGetValue(e, out var cur) && cur == sb) Heights.Remove(e); };
+            // po końcu: zdjąć animację (wartość lokalna już jest docelowa) — inaczej trzymana wartość końcowa wygrywała z późniejszymi zmianami
+            sb.Completed += (_, _) => { sb.Stop(); if (Heights.TryGetValue(e, out var cur) && cur == sb) Heights.Remove(e); };
             Heights.AddOrUpdate(e, sb);
             sb.Begin();
         }
@@ -408,6 +413,13 @@ static class SmoothWheel
             if (Math.Abs(st.Pending) < .01) Running.RemoveAt(i);
         }
         if (Running.Count == 0) { Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnFrame; _hooked = false; }
+    }
+
+    /// <summary>Przerywa resztkę wygładzonego przewijania (przewijanie z programu: na dół, skok do wiadomości).</summary>
+    public static void Cancel(ScrollViewer sv)
+    {
+        for (var i = Running.Count - 1; i >= 0; i--)
+            if (ReferenceEquals(Running[i].Sv, sv)) { Running[i].Pending = 0; Running.RemoveAt(i); }
     }
 
     /// <summary>Do samotestu w CI: czy coś jeszcze jedzie.</summary>
