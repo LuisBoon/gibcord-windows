@@ -281,14 +281,37 @@ public static class Updater
         catch (Exception ex) { App.Log("Aktualizacje: " + ex.Message); }
     }
 
-    public static async Task<string?> Check(Action<string> onReady)
+    static Task<string?>? _checking;
+
+    /// <summary>
+    /// Sprawdzenie i pobranie aktualizacji. Jedno naraz: sprawdzanie w tle (start, co 3 h) i przycisk w ustawieniach czekają
+    /// na to samo pobieranie — wcześniej szły równolegle, zapisywały ten sam plik i kończyły się „pliki aplikacji są zajęte”.
+    /// </summary>
+    public static Task<string?> Check(Action<string> onReady)
+    {
+        if (_ready is not null) { onReady(_ready.TargetFullRelease.Version.ToString()); return Task.FromResult<string?>(null); } // już pobrana — tylko „Uruchom ponownie”
+        lock (typeof(Updater))
+        {
+            if (_checking is { IsCompleted: false } running) return running;
+            return _checking = CheckOnce(onReady);
+        }
+    }
+
+    static async Task<string?> CheckOnce(Action<string> onReady)
     {
         if (_mgr is null || !_mgr.IsInstalled) return "Aktualizacje działają po instalacji z instalatora";
         try
         {
             var u = await _mgr.CheckForUpdatesAsync();
             if (u is null) return null;
-            await _mgr.DownloadUpdatesAsync(u);
+            try { await _mgr.DownloadUpdatesAsync(u); }
+            catch (IOException ex) when (ex is not System.Net.Http.HttpIOException)
+            {
+                // plik chwilowo zablokowany (np. antywirus sprawdza świeżo pobraną paczkę) — jeszcze raz po chwili
+                App.Log("Aktualizacje: plik zajęty, druga próba za 3 s — " + ex.Message);
+                await Task.Delay(3000);
+                await _mgr.DownloadUpdatesAsync(u);
+            }
             _ready = u;
             onReady(u.TargetFullRelease.Version.ToString());
             return null;
