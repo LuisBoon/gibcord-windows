@@ -172,7 +172,7 @@ public sealed partial class Composer : StackPanel
         if (S.TimedOutUntil(_v.Srv) is long until) why = $"Masz wyciszenie do {Format.When(until)} — nie możesz teraz pisać.";
         else if (!can) why = "Nie masz uprawnień do pisania na tym kanale.";
         else if (ch is { Readonly: true } && !S.Can(_v.Cid, Perm.ManageMessages)) why = "Ten kanał jest tylko do czytania.";
-        else if (_v.DmObj is { IsGroup: false } d && S.DmOther(d) is { } o && S.Blocked.Contains(o.Id)) why = $"Blokujesz {o.Name}. Odblokuj tę osobę na stronie, żeby pisać.";
+        else if (_v.DmObj is { IsGroup: false } d && S.DmOther(d) is { } o && S.Blocked.Contains(o.Id)) why = $"Blokujesz {o.Name}. Kliknij nazwę u góry rozmowy i wybierz „Odblokuj”, żeby pisać.";
         else if (_v.Thread is { Locked: true } && !S.Can(_v.Cid, Perm.ManageMessages)) why = "Ten wątek jest zamknięty. Piszą w nim tylko moderatorzy.";
         _blocked.Child = U.HG(10, U.I("", 15, Theme.Mu), U.T(why ?? "", 13.5, null, Theme.Mu, wrap: true)).With(h => h.VerticalAlignment = VerticalAlignment.Center);
         _blocked.Visibility = why is null ? Visibility.Collapsed : Visibility.Visible;
