@@ -78,6 +78,8 @@ public sealed class SettingsPage : Grid
         Item("voice", "", "Głos i wideo");
         Item("notify", "", "Powiadomienia");
         Item("app", "", "Aplikacja");
+        Head("DLA TWÓRCÓW");
+        Item("bots", "\uE99A", "Moje boty");
         _nav.Add(U.HLine(.08).With(l => l.Margin = U.Th(10, 10)));
         if (S.Me.IsAdmin) _nav.Add(U.Row(U.H(10, U.I("\uE7EF", 15, Theme.Accent), U.T("Panel admina GibCorda", 13.5, U.Semi, Theme.Accent)), () => _sh.ShowAdmin(), false, 8, U.Th(10, 0), U.Th(0, 1)).With(r => r.Height = 38));
         _nav.Add(U.Row(U.H(10, U.I("", 15, Theme.Mu), U.T($"Co nowego · {Updater.Version}", 13.5, U.Semi, Theme.Mu)), () => { _sh.CloseSettings(); _sh.OpenChannelByKind("changelog"); }, false, 8, U.Th(10, 0), U.Th(0, 1)).With(r => r.Height = 38));
@@ -96,6 +98,7 @@ public sealed class SettingsPage : Grid
             case "voice": Voice(); break;
             case "notify": Notify(); break;
             case "app": AppSection(); break;
+            case "bots": Bots(); break;
             default: Profile(); break;
         }
     }
@@ -115,6 +118,57 @@ public sealed class SettingsPage : Grid
         Background = U.W(.045), CornerRadius = new CornerRadius(14), Padding = U.Th(18, 16), BorderBrush = U.W(.07), BorderThickness = U.Th(1),
         Child = U.V(10, children),
     };
+
+    // ── Moje boty (szkic, wybór użytkownika: wersja A „panel twórcy”) — jeszcze nie działa, przyciski nieaktywne ──
+
+    void Bots()
+    {
+        _body.MaxWidth = 760;
+        var head = new Grid { ColumnSpacing = 12 }.Cols("*", "auto").Add(
+            U.V(6,
+                U.HG(10, U.T("Moje boty", 24, U.Bold), U.Box(U.T("WKRÓTCE", 10.5, U.Bold, Theme.OnAccent), Theme.Accent, 6, U.Th(7, 2))),
+                U.T("Bot to konto, którym steruje Twój program: odpisuje, moderuje, gra muzykę. Ta strona to szkic — boty ruszą w jednej z kolejnych wersji.", 13.5, null, Theme.Mu, wrap: true)).At(0, 0),
+            U.Primary("+ Nowy bot", () => { }, 40).With(b => { b.IsEnabled = false; b.HorizontalAlignment = HorizontalAlignment.Right; b.VerticalAlignment = VerticalAlignment.Top; b.Tip("Już wkrótce"); }).At(0, 1));
+        _body.Add(head);
+
+        // przykładowy bot (tak będzie wyglądać karta) i miejsce na kolejnego
+        Button Dim(string text) => U.Ghost(text, () => { }, 32).With(b => { b.IsEnabled = false; b.Tip("Już wkrótce"); });
+        var avatar = new Border { Width = 44, Height = 44, CornerRadius = new CornerRadius(22), Background = Theme.Teal, Child = U.I("\uE99A", 20, U.B("#1b1531")).With(i => i.HorizontalAlignment = HorizontalAlignment.Center) };
+        var key = U.Box(new Grid { ColumnSpacing = 8 }.Cols("auto", "*", "auto").Add(
+                U.T("KLUCZ", 10.5, U.Bold, Theme.Mu2).At(0, 0),
+                U.T("gcb_••••••••••••••••••••", 12, null, Theme.Mu).With(t => t.FontFamily = Theme.Mono).At(0, 1),
+                Dim("Pokaż").At(0, 2)),
+            U.B("#590A0618"), 10, U.Th(10, 6));
+        var card = new Border
+        {
+            Background = U.W(.05), CornerRadius = new CornerRadius(14), Padding = U.Th(16), BorderBrush = U.W(.08), BorderThickness = U.Th(1),
+            Child = U.V(12,
+                U.HG(12, avatar, U.V(2,
+                    U.HG(6, U.T("Twój bot", 15, U.Bold), U.Box(U.T("BOT", 9.5, U.Bold, U.B("#1b1531")), U.B("#7cc7ff"), 5, U.Th(5, 1))),
+                    U.T("przykład · tak będzie wyglądać karta bota", 12, null, Theme.Mu2))),
+                key,
+                new WrapPanel { Spacing = 8 }.Add(Dim("Zaproś na serwer"), Dim("Uprawnienia"), Dim("Usuń"))),
+        };
+        var add = new Border
+        {
+            CornerRadius = new CornerRadius(14), Padding = U.Th(16), BorderBrush = U.W(.22), BorderThickness = U.Th(1),
+            Child = U.V(6, U.I("\uE710", 22, Theme.Accent).With(i => i.HorizontalAlignment = HorizontalAlignment.Center),
+                U.T("Utwórz kolejnego bota", 14, U.Bold).With(t => t.HorizontalAlignment = HorizontalAlignment.Center),
+                U.T("nazwa, awatar, klucz — w minutę", 12, null, Theme.Mu2).With(t => t.HorizontalAlignment = HorizontalAlignment.Center)).With(v => v.VerticalAlignment = VerticalAlignment.Center),
+        };
+        _body.Add(new Grid { ColumnSpacing = 14 }.Cols("*", "*").Add(card.At(0, 0), add.At(0, 1)));
+
+        // jak to będzie działać
+        FrameworkElement Step(string t, string d) => U.V(4, U.T(t, 13.5, U.Bold, Theme.Accent), U.T(d, 12.5, null, Theme.Mu, wrap: true));
+        _body.Add(Card(Label("Jak to będzie działać"),
+            new Grid { ColumnSpacing = 16 }.Cols("*", "*", "*").Add(
+                Step("1. Utwórz bota", "Dostajesz klucz — jak hasło dla Twojego programu. Widzisz go tylko Ty.").At(0, 0),
+                Step("2. Podłącz program", "To samo API co aplikacja: wiadomości, reakcje, role, kanały głosowe.").At(0, 1),
+                Step("3. Zaproś na serwer", "Wybierasz serwer i uprawnienia, jakie bot ma dostać.").At(0, 2))));
+        _body.Add(Card(Label("Masz pomysł na bota?"),
+            U.T("Napisz na kanale #pomysły na serwerze „GibCord — społeczność”, czego potrzebujesz — pierwsze boty zrobimy pod Wasze pomysły.", 12.5, null, Theme.Mu, wrap: true),
+            U.Ghost("Przejdź do #pomysły", () => { _sh.CloseSettings(); _sh.OpenChannelByKind("ideas"); }, 34).With(b => b.HorizontalAlignment = HorizontalAlignment.Left)));
+    }
 
     // ── wykrywanie gier: co teraz, „To nie gra”, własna lista ──
 
