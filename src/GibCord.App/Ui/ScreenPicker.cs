@@ -27,7 +27,8 @@ static class ScreenPicker
 
         var tiles = new WrapPanel { Spacing = 12, Fill = true };
         var status = U.T("Szukam ekranów i okien…", 13, null, Theme.Mu);
-        var listArea = new Grid { Height = 318 };
+        // lista podglądów dopasowana do okna: przyciski na dole zawsze widoczne (okienko zaczyna się 70 px od góry)
+        var listArea = new Grid { Height = Math.Clamp(sh.ActualHeight - 400, 150, 360) };
         listArea.Children.Add(U.Scroll(U.V(8, status, tiles)));
         var tabs = U.H(6);
         var go = U.Primary("Na żywo", () => { }, 40).With(b => { b.IsEnabled = false; b.HorizontalAlignment = HorizontalAlignment.Right; b.Width = 150; });
