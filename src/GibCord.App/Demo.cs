@@ -71,6 +71,7 @@ public static class Demo
                 break;
             case "adminsys": sh.Go(Eg, Ogolne); sh.ShowAdmin("system"); break;
             case "adminstats": sh.Go(Eg, Ogolne); sh.ShowAdmin("stats"); break;
+            case "adminact": sh.Go(Eg, Ogolne); sh.ShowAdmin("activity"); break;
             case "adminmail": sh.Go(Eg, Ogolne); sh.ShowAdmin("mail"); break;
             case "forest":
                 if (Theme.Name != "forest") sh.W.ApplyTheme("forest"); // przebudowa okna — nowe okno wróci tutaj i przejdzie na kanał

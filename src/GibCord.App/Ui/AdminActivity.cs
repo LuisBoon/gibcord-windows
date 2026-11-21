@@ -21,7 +21,7 @@ public sealed class AdminActivity : StackPanel
     int _ver;
 
     static readonly System.Globalization.CultureInfo Pl = new("pl-PL");
-    static readonly Brush OnBrush = U.B("#ffaa78"), BgBrush = U.B("#66ffaa78"), ReleaseBrush = U.B("#7cc7ff"), UpdateBrush = U.B("#6fe3a5");
+    static readonly Brush OnBrush = U.B("#ffaa78"), BgBrush = U.B("#66ffaa78"), ReleaseBrush = U.B("#7cc7ff"), UpdateBrush = U.B("#6fe3a5"), NowBrush = U.W(.6);
 
     Store S => _sh.S;
 
@@ -29,18 +29,15 @@ public sealed class AdminActivity : StackPanel
     {
         _sh = sh;
         Spacing = 12;
-        var legend = U.H(16,
-            U.H(6, new Rectangle { Width = 14, Height = 8, RadiusX = 3, RadiusY = 3, Fill = OnBrush }, U.T("na ekranie", 12, null, Theme.Mu)),
-            U.H(6, new Rectangle { Width = 14, Height = 8, RadiusX = 3, RadiusY = 3, Fill = BgBrush }, U.T("w tle (np. zasobnik, inna karta)", 12, null, Theme.Mu)),
-            U.H(6, new Rectangle { Width = 2, Height = 14, Fill = ReleaseBrush }, U.T("wydanie aplikacji", 12, null, Theme.Mu)),
-            U.H(6, new Ellipse { Width = 10, Height = 10, Fill = UpdateBrush, Stroke = U.B("#1b1531"), StrokeThickness = 1.5 }, U.T("ktoś pobrał aktualizację", 12, null, Theme.Mu)));
-        var axis = new Grid { Margin = U.Th(236, 0, 0, 0) }.Cols("*", "*", "*", "*", "auto");
-        var labels = new[] { "0:00", "6:00", "12:00", "18:00", "24:00" };
-        for (var i = 0; i < labels.Length; i++) axis.Add(U.T(labels[i], 10.5, null, Theme.Mu2).At(0, i));
+        var legend = new WrapPanel { Spacing = 16 }.Add(
+            U.H(6, new Rectangle { Width = 14, Height = 10, RadiusX = 3, RadiusY = 3, Fill = OnBrush }, U.T("na ekranie", 12, null, Theme.Mu)),
+            U.H(6, new Rectangle { Width = 14, Height = 6, RadiusX = 3, RadiusY = 3, Fill = BgBrush }, U.T("w tle (zasobnik, inna karta)", 12, null, Theme.Mu)),
+            U.H(6, U.Box(U.T("6.0.x", 9.5, U.Bold, U.B("#0b1a2a")), ReleaseBrush, 4, U.Th(4, 0)), U.T("wydanie aplikacji", 12, null, Theme.Mu)),
+            U.H(6, new Ellipse { Width = 10, Height = 10, Fill = UpdateBrush, Stroke = U.B("#1b1531"), StrokeThickness = 1.5 }, U.T("pobrał(a) aktualizację", 12, null, Theme.Mu)),
+            U.H(6, new Rectangle { Width = 2, Height = 12, Fill = NowBrush }, U.T("teraz", 12, null, Theme.Mu)));
         Children.Add(_days);
         Children.Add(_sum);
         Children.Add(legend);
-        Children.Add(axis);
         Children.Add(_rows);
         _rows.Children.Add(U.T("Wczytywanie…", 13, null, Theme.Mu));
         Loaded += (_, _) => _ = Load();
@@ -63,7 +60,7 @@ public sealed class AdminActivity : StackPanel
         var ver = ++_ver;
         try
         {
-            var d = await _sh.C.Api.GetJson("admin/activity" + (_day is null ? "" : "?date=" + _day));
+            var d = Options.Demo ? DemoDay() : await _sh.C.Api.GetJson("admin/activity" + (_day is null ? "" : "?date=" + _day));
             if (ver != _ver) return;
             _day = d.Str("date");
             // dni do wyboru
@@ -85,73 +82,136 @@ public sealed class AdminActivity : StackPanel
             var now = Num(d, "now") ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var releases = d.Prop("releases").ValueKind == JsonValueKind.Array ? d.Prop("releases").EnumerateArray().ToList() : [];
             _sum.Text = $"Aktywnych tego dnia: {users.Count} z {Num(d, "total") ?? 0:0} kont." +
-                (releases.Count > 0 ? " Wydania: " + string.Join(", ", releases.Select(rl => $"{rl.Str("version")} ({Time(Num(rl, "at") ?? 0)})")) + "." : "") +
+                (releases.Count > 0 ? $" {releases.Count} {Format.Plural(releases.Count, "wydanie", "wydania", "wydań")} aplikacji (flagi nad wykresem)." : "") +
                 (since is { } s && s > dayStart ? $" Historia zbiera się od {Time(s)} tego dnia." : since is null ? " Historia zapisuje się od wersji 5.10.2." : "");
             _rows.Children.Clear();
             if (users.Count == 0) { _rows.Children.Add(U.T("Tego dnia nikt nie był w GibCordzie (albo historia jeszcze się nie zbierała).", 13, null, Theme.Mu, wrap: true)); return; }
             const double DAY = 86_400_000;
+            const double TrackH = 30;
+            var nowIn = now < dayStart + DAY;
+            // ── górny pas: flagi wydań (raz dla całego wykresu, piętrowo gdy blisko siebie) i godziny co 3 h ──
+            var lane = new Canvas { Height = releases.Count > 0 ? 44 : 0 };
+            var axisC = new Canvas { Height = 18 };
+            void RenderHead()
+            {
+                lane.Children.Clear(); axisC.Children.Clear();
+                var w = axisC.ActualWidth;
+                if (w <= 0) return;
+                double Pos(double t) => Math.Clamp((t - dayStart) / DAY, 0, 1) * w;
+                for (var h = 0; h <= 24; h += 3)
+                {
+                    var lab = U.T($"{h}:00", 10.5, null, Theme.Mu2);
+                    lab.Measure(new Windows.Foundation.Size(100, 20));
+                    Canvas.SetLeft(lab, Math.Clamp(w * h / 24 - lab.DesiredSize.Width / 2, 0, w - lab.DesiredSize.Width));
+                    axisC.Children.Add(lab);
+                }
+                double[] levelEnd = [-1e9, -1e9];
+                foreach (var rl in releases)
+                {
+                    var at = Num(rl, "at") ?? 0;
+                    var x = Pos(at);
+                    var pill = U.Box(U.T(rl.Str("version") ?? "", 10, U.Bold, U.B("#0b1a2a")), ReleaseBrush, 5, U.Th(5, 1));
+                    pill.Measure(new Windows.Foundation.Size(200, 40));
+                    var pw = pill.DesiredSize.Width;
+                    var left = Math.Clamp(x - pw / 2, 0, Math.Max(0, w - pw));
+                    var level = left > levelEnd[0] + 4 ? 0 : left > levelEnd[1] + 4 ? 1 : (levelEnd[0] <= levelEnd[1] ? 0 : 1);
+                    levelEnd[level] = left + pw;
+                    var top = level == 0 ? 22 : 2;
+                    Canvas.SetLeft(pill, left); Canvas.SetTop(pill, top);
+                    ToolTipService.SetToolTip(pill, $"Wydanie GibCorda {rl.Str("version")} — {Time(at)}");
+                    var stem = new Rectangle { Width = 1.5, Height = 44 - top - 16, Fill = ReleaseBrush, Opacity = .6 };
+                    Canvas.SetLeft(stem, x - .75); Canvas.SetTop(stem, top + 16);
+                    lane.Children.Add(stem);
+                    lane.Children.Add(pill);
+                }
+                if (nowIn)
+                {
+                    var t = U.T("teraz", 10, U.Bold, NowBrush);
+                    t.Measure(new Windows.Foundation.Size(100, 20));
+                    Canvas.SetLeft(t, Math.Clamp(Pos(now) - t.DesiredSize.Width / 2, 0, w - t.DesiredSize.Width));
+                    Canvas.SetTop(t, 0);
+                    axisC.Children.Add(t);
+                    foreach (var c in axisC.Children.OfType<TextBlock>().Where(c => c != t && Math.Abs(Canvas.GetLeft(c) - Canvas.GetLeft(t)) < 30)) c.Opacity = 0; // „teraz” zamiast godziny obok
+                }
+            }
+            axisC.SizeChanged += (_, _) => RenderHead();
+            _rows.Children.Add(new Grid { ColumnSpacing = 10 }.Cols("228", "*", "76").Add(U.V(2, lane, axisC).At(0, 1)));
+
             foreach (var x in users)
             {
                 var uj = x.Prop("user");
                 AddUser(uj);
                 var uid = uj.Long("id") ?? 0;
                 var onMin = Num(x, "onMin") ?? 0;
-                var who = U.H(8, new Avatar(28).Set(S, _sh.C.Api, uid, null),
-                    U.V(0, U.T(S.NameOf(uid), 13, U.Bold), U.T((x.Str("client") is { } cl ? cl + " · " : "") + (onMin > 0 ? Dur(onMin) + " na ekranie" : "tylko w tle"), 10.5, null, Theme.Mu2)));
+                var who = U.HG(8, new Avatar(30).Set(S, _sh.C.Api, uid, null),
+                    U.V(0, U.T(S.NameOf(uid), 13, U.Bold), U.T(x.Str("client") ?? "—", 10.5, null, Theme.Mu2)));
                 var whoBtn = U.Row(who, () => _ = Card(uid), false, 8, U.Th(6, 3), U.Th(0)).With(r => r.Width = 228);
-                ToolTipService.SetToolTip(whoBtn, "Karta osoby");
+                ToolTipService.SetToolTip(whoBtn, "Karta osoby" + (x.Str("client") is { } cl ? " · " + cl : ""));
+                var time = U.T(onMin > 0 ? Dur(onMin) : "w tle", 12, U.Bold, onMin > 0 ? Theme.Fg : Theme.Mu2).With(t => { t.HorizontalAlignment = HorizontalAlignment.Right; });
                 // pasek doby
-                var track = new Grid { Height = 22, Background = U.W(.05), CornerRadius = new CornerRadius(6), VerticalAlignment = VerticalAlignment.Center };
+                var track = new Grid { Height = TrackH, Background = U.W(.04), CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Center };
                 var canvas = new Canvas();
                 track.Children.Add(canvas);
                 var segs = x.Prop("segments").ValueKind == JsonValueKind.Array ? x.Prop("segments").EnumerateArray().ToList() : [];
+                var updates = x.Prop("updates").ValueKind == JsonValueKind.Array ? x.Prop("updates").EnumerateArray().ToList() : [];
                 void Render()
                 {
                     canvas.Children.Clear();
                     var w = track.ActualWidth;
                     if (w <= 0) return;
                     double Pos(double t) => Math.Clamp((t - dayStart) / DAY, 0, 1) * w;
-                    foreach (var g in segs)
+                    // delikatna siatka co 3 h i blade ślady wydań (szczegóły — flagi nad wykresem)
+                    for (var h = 3; h < 24; h += 3)
+                    {
+                        var gl = new Rectangle { Width = 1, Height = TrackH, Fill = U.W(.06) };
+                        Canvas.SetLeft(gl, w * h / 24);
+                        canvas.Children.Add(gl);
+                    }
+                    foreach (var rl in releases)
+                    {
+                        var rlx = new Rectangle { Width = 1, Height = TrackH, Fill = ReleaseBrush, Opacity = .22 };
+                        Canvas.SetLeft(rlx, Pos(Num(rl, "at") ?? 0));
+                        canvas.Children.Add(rlx);
+                    }
+                    foreach (var g in segs.OrderBy(g => g.Str("kind") == "on" ? 1 : 0)) // tło pod spodem, ekran na wierzchu
                     {
                         var a = Pos(Num(g, "start") ?? 0);
                         var b = Pos(Num(g, "end") ?? 0);
                         var on = g.Str("kind") == "on";
-                        var r = new Rectangle { Width = Math.Max(2, b - a), Height = on ? 16 : 10, RadiusX = 3, RadiusY = 3, Fill = on ? OnBrush : BgBrush };
+                        var r = new Rectangle { Width = Math.Max(3, b - a), Height = on ? 18 : 8, RadiusX = on ? 5 : 4, RadiusY = on ? 5 : 4, Fill = on ? OnBrush : BgBrush };
                         Canvas.SetLeft(r, a);
-                        Canvas.SetTop(r, on ? 3 : 6);
+                        Canvas.SetTop(r, on ? 6 : 11);
                         var devs = g.Prop("devices").ValueKind == JsonValueKind.Array ? string.Join(", ", g.Prop("devices").EnumerateArray().Select(v => v.GetString())) : "";
                         ToolTipService.SetToolTip(r, $"{S.NameOf(uid)}: {Time(Math.Max(Num(g, "start") ?? 0, dayStart))} – {(g.Prop("live").ValueKind == JsonValueKind.True ? "teraz" : Time(Math.Min(Num(g, "end") ?? 0, dayStart + DAY - 1)))} · {(on ? "na ekranie" : "w tle")}{(devs.Length > 0 ? " · " + devs : "")}");
                         canvas.Children.Add(r);
                     }
-                    // wydania aplikacji (pionowa kreska) i chwila, gdy ta osoba pobrała nową wersję (kropka)
-                    foreach (var rl in releases)
+                    if (nowIn)
                     {
-                        var at = Num(rl, "at") ?? 0;
-                        var line = new Rectangle { Width = 2, Height = 22, Fill = ReleaseBrush, Opacity = .85 };
-                        Canvas.SetLeft(line, Pos(at) - 1);
-                        ToolTipService.SetToolTip(line, $"Wydanie GibCorda {rl.Str("version")} — {Time(at)}");
-                        canvas.Children.Add(line);
+                        var l = new Rectangle { Width = 2, Height = TrackH, Fill = NowBrush };
+                        Canvas.SetLeft(l, Pos(now) - 1);
+                        canvas.Children.Add(l);
                     }
-                    foreach (var up in x.Prop("updates").ValueKind == JsonValueKind.Array ? x.Prop("updates").EnumerateArray() : Enumerable.Empty<JsonElement>())
+                    foreach (var up in updates)
                     {
                         var at = Num(up, "at") ?? 0;
-                        var dot = new Ellipse { Width = 12, Height = 12, Fill = UpdateBrush, Stroke = U.B("#1b1531"), StrokeThickness = 2 };
-                        Canvas.SetLeft(dot, Pos(at) - 6);
-                        Canvas.SetTop(dot, 5);
+                        var ux = Pos(at);
+                        var dot = new Ellipse { Width = 14, Height = 14, Fill = UpdateBrush, Stroke = U.B("#1b1531"), StrokeThickness = 2.5 };
+                        Canvas.SetLeft(dot, ux - 7);
+                        Canvas.SetTop(dot, 8);
                         var rel = releases.FirstOrDefault(rr => rr.Str("version") == up.Str("version"));
                         var after = Num(rel, "at") is double ra && at >= ra ? $" (po {Dur((at - ra) / 60_000)} od wydania)" : "";
                         ToolTipService.SetToolTip(dot, $"{S.NameOf(uid)} pobrał(a) {up.Str("version")} o {Time(at)}{after} · {up.Str("label")}");
                         canvas.Children.Add(dot);
-                    }
-                    if (now < dayStart + DAY)
-                    {
-                        var l = new Rectangle { Width = 2, Height = 22, Fill = Theme.Green };
-                        Canvas.SetLeft(l, Pos(now));
-                        canvas.Children.Add(l);
+                        var vl = U.Box(U.T(up.Str("version") ?? "", 9.5, U.Bold, U.B("#0e2a1c")), UpdateBrush, 4, U.Th(4, 0));
+                        vl.Measure(new Windows.Foundation.Size(100, 30));
+                        Canvas.SetLeft(vl, ux + 9 + vl.DesiredSize.Width > w ? ux - 9 - vl.DesiredSize.Width : ux + 9);
+                        Canvas.SetTop(vl, 7);
+                        vl.IsHitTestVisible = false;
+                        canvas.Children.Add(vl);
                     }
                 }
                 track.SizeChanged += (_, _) => Render();
-                _rows.Children.Add(new Grid { ColumnSpacing = 8 }.Cols("228", "*").Add(whoBtn.At(0, 0), track.At(0, 1)));
+                _rows.Children.Add(new Grid { ColumnSpacing = 10 }.Cols("228", "*", "76").Add(whoBtn.At(0, 0), track.At(0, 1), time.At(0, 2)));
             }
         }
         catch (Exception ex)
@@ -160,6 +220,28 @@ public sealed class AdminActivity : StackPanel
             _rows.Children.Clear();
             _rows.Children.Add(U.T(GibCordClient.Friendly(ex), 13, null, Theme.Red, wrap: true));
         }
+    }
+
+    /// <summary>Zrzut w CI: dzień z kilkoma osobami, wydaniami i aktualizacjami.</summary>
+    static JsonElement DemoDay()
+    {
+        var day = new DateTimeOffset(DateTime.Today).ToUnixTimeMilliseconds();
+        long H(double h) => day + (long)(h * 3_600_000);
+        object Seg(double a, double b, string kind) => new { start = H(a), end = H(b), kind, live = false, devices = new[] { "Windows · GibCord 6.0.10" } };
+        object U(long id, string name, string client, double on, object[] segs, object[] ups) => new { user = new { id, username = name.ToLowerInvariant(), displayName = name, color = "#ffb98f" }, onMin = on, last = H(17), segments = segs, updates = ups, client };
+        var data = new
+        {
+            date = DateTime.Today.ToString("yyyy-MM-dd"), days = new[] { DateTime.Today.ToString("yyyy-MM-dd") }, dayStart = day, now = H(17.2), total = 10,
+            releases = new[] { "6.0.1", "6.0.2", "6.0.3", "6.0.4", "6.0.5", "6.0.6", "6.0.7", "6.0.8", "6.0.9", "6.0.10" }.Select((v, i) => new { version = v, at = H(new[] { .8, 1.15, 2.57, 2.8, 12.28, 13.27, 13.62, 14.32, 14.88, 15.77 }[i]) }).ToArray(),
+            users = new[]
+            {
+                U(1, "luisboon", "Windows · GibCord 6.0.10", 249, [Seg(0, .8, "on"), Seg(9.6, 9.7, "on"), Seg(10.3, 10.9, "on"), Seg(10.9, 11.8, "bg"), Seg(12.1, 13.6, "on"), Seg(14.2, 16.4, "on"), Seg(16.4, 17.2, "on")], [new { version = "6.0.10", label = "Windows · GibCord 6.0.10", at = H(16.9) }]),
+                U(2, "Ola", "Windows · aplikacja 1.0.2", 4, [Seg(12.6, 16.1, "bg"), Seg(13.0, 13.1, "on")], []),
+                U(3, "Kuba", "iPhone · Safari", 0, [Seg(.1, .25, "bg"), Seg(9.3, 9.35, "bg")], []),
+                U(4, "bonkus", "Windows · GibCord 6.0.9", 35, [Seg(.0, .3, "bg"), Seg(2.3, 5, "bg"), Seg(15.9, 16.5, "on")], [new { version = "6.0.9", label = "Windows · GibCord 6.0.9", at = H(15.95) }]),
+            },
+        };
+        return System.Text.Json.JsonSerializer.SerializeToElement(data, GibCord.Core.Json.Options);
     }
 
     /// <summary>Karta osoby: 14 dni na ekranie, ostatnie wejścia, zalogowane urządzenia.</summary>
