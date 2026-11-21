@@ -357,6 +357,7 @@ public sealed partial class ChatView : Grid, IDisposable
     void Sync()
     {
         var w = S.Window(Key);
+        Watchdog.Crumb($"lista {Key}: {w.Items.Count} wiad.");
         var items = w.Items;
         var fresh = BuildRows(items);
         if (_rows.Count > 0 && items.Count > _rows.Count)
@@ -556,6 +557,7 @@ public sealed partial class ChatView : Grid, IDisposable
     void ScrollToBottom()
     {
         if (_disposed) return;
+        Watchdog.Crumb($"na dół #{_bottomTries} ({_sv.ScrollableHeight:0} px)");
         _progUntil = Environment.TickCount64 + 400;
         _sv.ChangeView(null, _sv.ScrollableHeight, null, true);
         // wysokość listy szacowana przy wirtualizacji — dociągnij jeszcze kilka razy

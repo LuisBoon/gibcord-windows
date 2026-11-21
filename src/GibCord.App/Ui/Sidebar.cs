@@ -121,20 +121,24 @@ public sealed class ServerRail : Grid
         var r0 = home ? 0 : selected && !_justSelected ? Square : Round;
         var box = new Border
         {
-            Width = 44, Height = 44, CornerRadius = new CornerRadius(r0), Child = content,
+            Width = 44, Height = 44, Child = content, // zaokrąglenie: przycięcie kompozycji (Motion.RoundTo)
             Background = home ? null : selected ? Theme.AccentGradient() : bg ?? U.W(.12),
         };
         if (selected && content is TextBlock tb) tb.Foreground = Theme.OnAccent;
         if (selected && content is FontIcon fi) fi.Foreground = Theme.OnAccent;
         var rest = selected ? 30 : unread ? 8 : 0;
         var grow = selected && _justSelected; // właśnie wybrany serwer: pasek wyrasta z odbiciem
+        // pasek ma stałą wysokość 30, a widoczną część ustala skala pionowa w kompozycji (animacja poza wątkiem okna)
         var pill = new Border
         {
-            Width = 5, CornerRadius = new CornerRadius(0, 4, 4, 0), Background = Theme.Fg, HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center, Height = grow ? 18 : rest, Margin = U.Th(-12, 0, 0, 0),
+            Width = 5, CornerRadius = new CornerRadius(0, 3, 3, 0), Background = Theme.Fg, HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center, Height = 30, Margin = U.Th(-12, 0, 0, 0),
         };
-        if (grow) pill.Loaded += (_, _) => { Motion.Height(pill, 30); if (!home) Motion.Tween(box, Round, Square, v => box.CornerRadius = new CornerRadius(v)); };
-        void Shape(double to) { if (!home) Motion.Tween(box, box.CornerRadius.TopLeft, to, v => box.CornerRadius = new CornerRadius(v)); }
+        Motion.BarTo(pill, grow ? 18 : rest, 30);
+        if (!home) Motion.RoundTo(box, home ? 0 : grow ? Round : r0, animate: false);
+        if (home) box.CornerRadius = new CornerRadius(0);
+        if (grow) pill.Loaded += (_, _) => { Motion.BarTo(pill, 30, 30); if (!home) Motion.RoundTo(box, Square); };
+        void Shape(double to) { if (!home) Motion.RoundTo(box, to); }
         Motion.Hoverable(box);
         var g = new Grid { Width = 44, Height = 44, HorizontalAlignment = HorizontalAlignment.Center };
         g.Add(box, pill);
@@ -147,8 +151,8 @@ public sealed class ServerRail : Grid
         if (key != long.MinValue) _badges[key] = mentions;
         ToolTipService.SetToolTip(g, tip);
         ToolTipService.SetPlacement(g, Microsoft.UI.Xaml.Controls.Primitives.PlacementMode.Right);
-        g.PointerEntered += (_, _) => { if (!selected) { Shape(Square); if (!home) box.Background = U.W(.2); Motion.Height(pill, 18); } };
-        g.PointerExited += (_, _) => { if (!selected) { Shape(Round); if (!home) box.Background = bg ?? U.W(.12); Motion.Height(pill, rest); } };
+        g.PointerEntered += (_, _) => { Watchdog.Crumb("najechanie: " + tip); if (!selected) { Shape(Square); if (!home) box.Background = U.W(.2); Motion.BarTo(pill, 18, 30); } };
+        g.PointerExited += (_, _) => { Watchdog.Crumb("zjechanie: " + tip); if (!selected) { Shape(Round); if (!home) box.Background = bg ?? U.W(.12); Motion.BarTo(pill, rest, 30); } };
         g.Tapped += (_, e) => { e.Handled = true; click(); };
         return g;
     }

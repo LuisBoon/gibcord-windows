@@ -161,6 +161,59 @@ static class Motion
         return e;
     }
 
+    // ── ikony serwerów (6.0.6): koło ↔ kwadrat i pasek z boku liczone przez kompozycję, nie klatka po klatce w wątku okna ──
+
+    static readonly ConditionalWeakTable<FrameworkElement, CompositionRoundedRectangleGeometry> RoundClips = new();
+
+    /// <summary>
+    /// Zaokrąglenie elementu o stałym rozmiarze przez przycięcie kompozycji: zmiana koło → kwadrat to sprężyna w kompozycji
+    /// (wcześniej CornerRadius ustawiany co klatkę z CompositionTarget.Rendering — przy najeżdżaniu na serwery obciążał okno).
+    /// </summary>
+    public static void RoundTo(FrameworkElement e, double radius, bool animate = true)
+    {
+        try
+        {
+            var vis = ElementCompositionPreview.GetElementVisual(e);
+            var c = vis.Compositor;
+            var r = new Vector2((float)radius);
+            if (!RoundClips.TryGetValue(e, out var geo))
+            {
+                geo = c.CreateRoundedRectangleGeometry();
+                geo.Size = new Vector2((float)e.Width, (float)e.Height);
+                geo.CornerRadius = r;
+                vis.Clip = c.CreateGeometricClip(geo);
+                RoundClips.AddOrUpdate(e, geo);
+                return;
+            }
+            if (!animate || !On) { geo.StopAnimation("CornerRadius"); geo.CornerRadius = r; return; }
+            var a = c.CreateSpringVector2Animation();
+            a.FinalValue = r;
+            a.DampingRatio = .6f;
+            a.Period = TimeSpan.FromMilliseconds(45);
+            geo.StartAnimation("CornerRadius", a);
+            Started++;
+        }
+        catch (Exception ex) { Fail(ex); }
+    }
+
+    /// <summary>Pasek przy ikonie serwera: wysokość <paramref name="to"/> z <paramref name="max"/> jako skala pionowa w kompozycji (bez przeliczania układu co klatkę).</summary>
+    public static void BarTo(FrameworkElement e, double to, double max)
+    {
+        var s = (float)Math.Clamp(to / max, 0, 1);
+        e.CenterPoint = new Vector3((float)e.Width / 2, (float)max / 2, 0);
+        if (!On) { Reset(e); e.Scale = new Vector3(1, s, 1); return; }
+        try
+        {
+            var a = Comp(e).CreateSpringVector3Animation();
+            a.Target = "Scale";
+            a.FinalValue = new Vector3(1, s, 1);
+            a.DampingRatio = .55f;
+            a.Period = TimeSpan.FromMilliseconds(45);
+            Start(e, a);
+        }
+        catch (Exception ex) { Fail(ex); e.Scale = new Vector3(1, s, 1); }
+    }
+
     /// <summary>Lekkie powiększenie po najechaniu (ikony serwerów).</summary>
     public static void Hoverable(FrameworkElement e, float hover = 1.06f)
     {
@@ -170,33 +223,8 @@ static class Motion
         e.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => ScaleTo(e, hover)), true);
     }
 
-    /// <summary>Wysokość z odbiciem (pasek przy ikonie serwera) — animacja XAML, bo skalowanie spłaszczałoby zaokrąglenia.</summary>
-    static readonly ConditionalWeakTable<FrameworkElement, Storyboard> Heights = new();
-
-    public static void Height(FrameworkElement e, double to)
-    {
-        var from = e.ActualHeight > 0 || !double.IsNaN(e.Height) ? (e.ActualHeight > 0 ? e.ActualHeight : e.Height) : to;
-        if (Heights.TryGetValue(e, out var old)) { old.Stop(); Heights.Remove(e); }
-        e.Height = to;
-        if (!On || Math.Abs(from - to) < .5) return;
-        try
-        {
-            var a = new DoubleAnimation
-            {
-                From = from, To = to, Duration = TimeSpan.FromMilliseconds(320), EnableDependentAnimation = true,
-                EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = .45 },
-            };
-            Storyboard.SetTarget(a, e);
-            Storyboard.SetTargetProperty(a, "Height");
-            var sb = new Storyboard();
-            sb.Children.Add(a);
-            // po końcu: zdjąć animację (wartość lokalna już jest docelowa) — inaczej trzymana wartość końcowa wygrywała z późniejszymi zmianami
-            sb.Completed += (_, _) => { sb.Stop(); if (Heights.TryGetValue(e, out var cur) && cur == sb) Heights.Remove(e); };
-            Heights.AddOrUpdate(e, sb);
-            sb.Begin();
-        }
-        catch (Exception ex) { Fail(ex); }
-    }
+    // (6.0.6) usunięte: Height() — animacja wysokości z odbiciem (BackEase) przestrzeliwała poniżej zera przy zjeżdżaniu
+    // z ikony serwera; ujemna wysokość = błąd w każdej klatce i zawieszone okno. Pasek: BarTo (skala w kompozycji).
 
     // ───────────────────────── szlif 6.0.3 ─────────────────────────
 

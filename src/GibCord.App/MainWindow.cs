@@ -41,6 +41,7 @@ public sealed class MainWindow : Window
     public MainWindow()
     {
         Dq = DispatcherQueue.GetForCurrentThread();
+        Watchdog.Start(Dq);
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         Title = "GibCord";
         ExtendsContentIntoTitleBar = true;

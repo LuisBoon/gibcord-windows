@@ -312,6 +312,7 @@ public sealed class Shell : Grid
 
     void Flush()
     {
+        Watchdog.Crumb($"odśwież{(_dirtyRail ? " serwery" : "")}{(_dirtySide ? " kolumna" : "")}{(_dirtyMembers ? " osoby" : "")}{(_dirtyMain ? " nagłówek" : "")}{(_dirtyVoice ? " głos" : "")}");
         if (_dirtyRail) _rail.Refresh();
         if (_dirtySide) _side.Refresh();
         if (_dirtyMembers) _members.Refresh();
@@ -348,6 +349,7 @@ public sealed class Shell : Grid
     /// <summary>Przejście: serwer (0 = prywatne) i kanał (0 = pierwszy tekstowy / Znajomi).</summary>
     public void Go(long serverId, long channelId, bool record = true)
     {
+        Watchdog.Crumb($"przejście: serwer {serverId}, kanał {channelId}");
         _navigated = true;
         if (serverId > 0)
         {
