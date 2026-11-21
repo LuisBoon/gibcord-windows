@@ -699,7 +699,12 @@ public sealed class MainWindow : Window
             var jumps0 = ch.BottomJumps;
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var s = new List<(long T, double Off, double Max, Dictionary<long, double> Vis)>();
-            EventHandler<object> h = (_, _) => s.Add((sw.ElapsedMilliseconds, ch.ScrollOffset, ch.ScrollMax, ch.DemoVisible()));
+            var times = new List<(double Rt, double Sw)>();
+            EventHandler<object> h = (_, e) =>
+            {
+                s.Add((sw.ElapsedMilliseconds, ch.ScrollOffset, ch.ScrollMax, ch.DemoVisible()));
+                times.Add((e is Microsoft.UI.Xaml.Media.RenderingEventArgs r ? r.RenderingTime.TotalMilliseconds : -1, sw.Elapsed.TotalMilliseconds));
+            };
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += h;
             for (var i = 0; i < ticks; i++) { mouse_event(0x0800, 0, 0, -120, 0); await Task.Delay(55); }
             await Task.Delay(1300);
@@ -724,6 +729,8 @@ public sealed class MainWindow : Window
             }
             var end = s.Count > 0 ? s[^1].Max - s[^1].Off : -1;
             // nierówność: średnia różnica między kolejnymi krokami w stosunku do średniego kroku (0 = idealnie równo)
+            var dts = string.Join(" ", times.Skip(1).Take(40).Select((t, i) => $"{t.Rt - times[i].Rt:0.#}/{t.Sw - times[i].Sw:0.#}"));
+            App.Log("Kółko — odstępy klatek ms (czas klatki/zegar): " + dts);
             var jerk = steps.Count > 2 ? steps.Zip(steps.Skip(1), (a, b) => Math.Abs(b - a)).Average() / Math.Max(1, steps.Average(Math.Abs)) : 0;
             return $"klatek {s.Count}, NA EKRANIE: nierówność {jerk:0.00}, cofnięć {back} (max {backMax:0} px), skoków >120 px {big}, największy krok {fwdMax:0} px, klatek bez wspólnych wiadomości {lost}; " +
                 $"przesunięcie listy w tył max {offBackMax:0} px, najdłuższa klatka {gap} ms, zmian wysokości listy {ext}, skoków na dół {ch.BottomJumps - jumps0}, na końcu od dołu {end:0} px | kroki na ekranie: {trace}";
