@@ -344,6 +344,7 @@ public static class U
     {
         void Apply() => b.Opacity = b.IsEnabled ? 1 : opacity;
         b.IsEnabledChanged += (_, _) => Apply();
+        b.Loaded += (_, _) => Apply(); // IsEnabled ustawione przed pokazaniem nie zawsze wywołuje IsEnabledChanged
         Apply();
     }
 

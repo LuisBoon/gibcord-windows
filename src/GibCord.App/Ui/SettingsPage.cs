@@ -145,7 +145,7 @@ public sealed class SettingsPage : Grid
             Child = U.V(12,
                 U.HG(12, avatar, U.V(2,
                     U.HG(6, U.T("Twój bot", 15, U.Bold), U.Box(U.T("BOT", 9.5, U.Bold, U.B("#1b1531")), U.B("#7cc7ff"), 5, U.Th(5, 1))),
-                    U.T("przykład · tak będzie wyglądać karta bota", 12, null, Theme.Mu2))),
+                    U.T("przykładowa karta", 12, null, Theme.Mu2))),
                 key,
                 new WrapPanel { Spacing = 8 }.Add(Dim("Zaproś na serwer"), Dim("Uprawnienia"), Dim("Usuń"))),
         };
