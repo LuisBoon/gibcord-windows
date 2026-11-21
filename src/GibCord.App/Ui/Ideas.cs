@@ -90,7 +90,7 @@ public sealed class IdeasView : Grid, IDisposable
             Content = U.V(0, U.T("▲", 13, U.Bold, voted ? Theme.Accent : Theme.Mu).With(t => t.HorizontalAlignment = HorizontalAlignment.Center), U.T((i.Long("votes") ?? 0).ToString(), 15, U.Bold, voted ? Theme.Accent : Theme.Fg).With(t => t.HorizontalAlignment = HorizontalAlignment.Center)),
         };
         vote.Click += async (_, _) => { try { await Api.PostJson($"ideas/{id}/vote", new { on = !voted }); await Load(); } catch (Exception ex) { _sh.Info(GibCordClient.Friendly(ex), true); } };
-        var body = U.V(4, U.H(8, StatusChip(i.Str("status") ?? "new"), U.T(i.Str("title") ?? "", 15, U.Bold, wrap: true)),
+        var body = U.V(4, U.HG(8, StatusChip(i.Str("status") ?? "new"), U.T(i.Str("title") ?? "", 15, U.Bold, wrap: true)),
             string.IsNullOrWhiteSpace(i.Str("body")) ? null : U.T((i.Str("body") ?? "") is var b2 && b2.Length > 220 ? b2[..220] + "…" : b2, 13, null, Theme.Mu, wrap: true),
             U.T($"{S.NameOf(i.Long("authorId") ?? 0)} · {Format.When(i.Long("createdAt") ?? 0)} · 💬 {i.Long("comments") ?? 0}", 11.5, null, Theme.Mu2));
         var g = new Grid { ColumnSpacing = 14 }.Cols("auto", "*").Add(vote.At(0, 0), body.At(0, 1));

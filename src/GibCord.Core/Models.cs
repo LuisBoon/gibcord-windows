@@ -445,7 +445,9 @@ public sealed class Message
     // tylko po stronie aplikacji: wiadomość wysyłana / nieudana
     [JsonIgnore] public SendState Send { get; set; }
 
-    [JsonIgnore] public bool IsSystem => Type != "default";
+    /// <summary>Linijka systemowa (dołączenie, przypięcie…). Mini-gra (typ „game” z danymi gry) to zwykła wiadomość z kartą, w którą da się grać.</summary>
+    [JsonIgnore] public bool IsSystem => Type != "default" && !IsGame;
+    [JsonIgnore] public bool IsGame => Type == "game" && Game.ValueKind == JsonValueKind.Object;
     /// <summary>Gdzie leży na liście: kanał / rozmowa albo wątek (klucz ujemny).</summary>
     [JsonIgnore] public long Key => ThreadId is long t ? -t : ChannelId;
     [JsonIgnore] public long? RefIdLong => RefId.ValueKind == JsonValueKind.Number && RefId.TryGetInt64(out var l) ? l : RefId.ValueKind == JsonValueKind.String && long.TryParse(RefId.GetString(), out var p) ? p : null;

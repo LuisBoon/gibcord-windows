@@ -63,7 +63,17 @@ public sealed class Shell : Grid
         var center = new Grid().Rows("auto", "auto", "auto", "*").Add(_connBar.At(0), _updateBar.At(1), _annBar.At(2), _main.At(3));
         _threadHost.KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape && !e.Handled) { e.Handled = true; CloseSidePanel(); } };
         // panel wątku: szeroki w dużym oknie, węższy w małym (kanał obok ma zostać czytelny)
-        SizeChanged += (_, e) => _threadHost.Width = Math.Clamp(e.NewSize.Width - 68 - 240 - 440, 320, 480);
+        SizeChanged += (_, e) =>
+        {
+            _threadHost.Width = Math.Clamp(e.NewSize.Width - 68 - 240 - 420, 300, 480);
+            // wąskie okno: lista osób chowa się sama (przycisk w nagłówku pokazuje ją na chwilę), szerokie — wraca wg ustawienia
+            var narrow = e.NewSize.Width < 1000;
+            if (narrow == _narrow) return;
+            _narrow = narrow;
+            _narrowMembers = null;
+            _members.Refresh();
+            _chat?.RefreshHeader();
+        };
         this.Add(_rail.At(0, 0), _side.At(0, 1), center.At(0, 2), _threadHost.At(0, 3), _members.At(0, 4));
         _overlay.Add(_toasts);
         _overlay.At(0, 0, colSpan: 5);
@@ -618,13 +628,19 @@ public sealed class Shell : Grid
         if (next is not null) Go(srv.Id, next.Id);
     }
 
-    public bool MembersVisible => App.Prefs.MembersPanel;
+    bool _narrow;
+    bool? _narrowMembers;
+    public bool MembersVisible => _narrow ? _narrowMembers == true : App.Prefs.MembersPanel;
     public void ToggleMembers()
     {
-        App.Prefs.MembersPanel = !App.Prefs.MembersPanel;
-        App.Prefs.Save();
+        if (_narrow) _narrowMembers = !MembersVisible; // w wąskim oknie tylko na teraz — ustawienie dla szerokiego zostaje
+        else
+        {
+            App.Prefs.MembersPanel = !App.Prefs.MembersPanel;
+            App.Prefs.Save();
+        }
         _members.Refresh();
-        if (App.Prefs.MembersPanel) Motion.SlideIn(_members, new System.Numerics.Vector3(40, 0, 0));
+        if (MembersVisible) Motion.SlideIn(_members, new System.Numerics.Vector3(40, 0, 0));
         _chat?.RefreshHeader();
     }
 
@@ -692,7 +708,7 @@ public sealed class Shell : Grid
         {
             Background = error ? U.B("#F0b8364f") : Theme.Toast, CornerRadius = new CornerRadius(12), Padding = U.Th(16, 10),
             BorderBrush = U.W(.14), BorderThickness = U.Th(1), MaxWidth = 520,
-            Child = U.H(10, U.I(error ? "" : "", 15), U.T(msg, 13.5, U.Semi, wrap: true)),
+            Child = U.HG(10, U.I(error ? "" : "", 15), U.T(msg, 13.5, U.Semi, wrap: true)),
         };
         _toasts.Children.Add(b);
         while (_toasts.Children.Count > 3) _toasts.Children.RemoveAt(0);
@@ -790,7 +806,7 @@ public sealed class Shell : Grid
             var panel = new StackPanel { Spacing = 14, Width = 460 };
             foreach (var x in rel.EnumerateArray())
             {
-                panel.Add(U.H(8, U.Box(U.T(x.Str("version") ?? "", 11, U.Bold, Theme.OnAccent), Theme.Accent, 6, U.Th(6, 2)), U.T(x.Str("title") ?? "", 16, U.Bold, wrap: true)));
+                panel.Add(U.HG(8, U.Box(U.T(x.Str("version") ?? "", 11, U.Bold, Theme.OnAccent), Theme.Accent, 6, U.Th(6, 2)), U.T(x.Str("title") ?? "", 16, U.Bold, wrap: true)));
                 if (x.Prop("items").ValueKind == System.Text.Json.JsonValueKind.Array)
                     foreach (var it in x.Prop("items").EnumerateArray())
                         panel.Add(new Grid().Cols("36", "*").Add(U.T(it.Str("icon") ?? "•", 18).At(0, 0),

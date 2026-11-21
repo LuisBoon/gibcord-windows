@@ -52,7 +52,7 @@ public sealed class MainWindow : Window
         tb.ButtonHoverBackgroundColor = U.C("#1Affffff");
         tb.ButtonHoverForegroundColor = Theme.FgC;
         tb.ButtonPressedBackgroundColor = U.C("#33ffffff");
-        if (AppWindow.Presenter is OverlappedPresenter op) { op.PreferredMinimumWidth = 940; op.PreferredMinimumHeight = 560; }
+        ApplyMinSize();
 
         TitleBar = new TitleBarView(this);
         _root = new Grid().Rows("32", "*");
@@ -62,6 +62,7 @@ public sealed class MainWindow : Window
         ApplyBackdrop();
         SetTitleBar(TitleBar.DragArea);
         TitleBar.SizeChanged += (_, _) => UpdateTitleBarRegions();
+        _root.Loaded += (_, _) => { if (_root.XamlRoot is { } xr) xr.Changed += (_, _) => { ApplyMinSize(); UpdateTitleBarRegions(); }; };
 
         RestoreBounds();
         Activated += (_, e) =>
@@ -253,7 +254,7 @@ public sealed class MainWindow : Window
         try
         {
             AppWindow.SetPresenter(on ? Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen : Microsoft.UI.Windowing.AppWindowPresenterKind.Overlapped);
-            if (!on && AppWindow.Presenter is OverlappedPresenter op) { op.PreferredMinimumWidth = 940; op.PreferredMinimumHeight = 560; }
+            if (!on) ApplyMinSize();
         }
         catch (Exception ex) { App.Log("Pełny ekran: " + ex.Message); }
         TitleBar.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
@@ -562,6 +563,25 @@ public sealed class MainWindow : Window
             App.Prefs.Save();
         }
         catch { }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetDpiForWindow(nint hwnd);
+    double _minScale;
+
+    /// <summary>
+    /// Najmniejszy rozmiar okna: 860 × 560 punktów ekranu po skalowaniu Windows. Wcześniej było 940 pikseli fizycznych —
+    /// przy skalowaniu 125–150% okno dawało się zwęzić do ~630 punktów i pole pisania czy nagłówek wyjeżdżały za krawędź.
+    /// </summary>
+    void ApplyMinSize()
+    {
+        try
+        {
+            var scale = Math.Max(1, GetDpiForWindow(Hwnd) / 96.0);
+            if (Math.Abs(scale - _minScale) < .01) return;
+            _minScale = scale;
+            if (AppWindow.Presenter is OverlappedPresenter op) { op.PreferredMinimumWidth = (int)Math.Ceiling(860 * scale); op.PreferredMinimumHeight = (int)Math.Ceiling(560 * scale); }
+        }
+        catch (Exception ex) { App.Log("Rozmiar okna: " + ex.Message); }
     }
 
     /// <summary>Przyciski i wyszukiwarka na pasku tytułu muszą przyjmować kliknięcia (reszta paska przesuwa okno).</summary>

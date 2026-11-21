@@ -36,6 +36,7 @@ public sealed partial class Composer : StackPanel
     string? _restoredText;
     Button _mic = null!;
     Button _later = null!;
+    bool _narrow;
     readonly Later.Bar _schedBar;
     VoiceRecorder? _rec;
     readonly Border _recBar = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(14), Background = U.Alpha("#ff4d6a", .14), BorderBrush = U.Alpha("#ff4d6a", .5), BorderThickness = U.Th(1), Padding = U.Th(14, 8), MinHeight = BarHeight };
@@ -76,7 +77,19 @@ public sealed partial class Composer : StackPanel
         _box.Paste += OnPaste;
 
         _attach = U.IconButton("\uE710", "Plik, ankieta, mini-gry", () => { }, 16, 34);
-        _attach.Click += (_, _) => Fun.PlusMenu(_v, () => _ = PickFiles(), CanAttach).ShowAt(_attach);
+        _attach.Click += (_, _) =>
+        {
+            var menu = Fun.PlusMenu(_v, () => _ = PickFiles(), CanAttach);
+            // wąskie pole: „Wyślij później” i wiadomość głosowa są wtedy tutaj (ich ikonki po prawej się chowają)
+            if (_narrow)
+            {
+                var extra = new List<MenuFlyoutItemBase>();
+                if (_later.Visibility == Visibility.Visible) extra.Add(M.Item("Wyślij później", "\uE823", OpenLater));
+                if (_mic.Visibility == Visibility.Visible) extra.Add(M.Item("Wiadomość głosowa", "\uE720", () => _ = StartRecording()));
+                if (extra.Count > 0) { menu.Items.Insert(0, new MenuFlyoutSeparator()); for (var i = extra.Count - 1; i >= 0; i--) menu.Items.Insert(0, extra[i]); }
+            }
+            menu.ShowAt(_attach);
+        };
         var emoji = U.IconButton("\uE76E", "Emoji i naklejki", () => { }, 17, 34);
         emoji.Click += (_, _) => Picker.Show(emoji, _v, Picker.Tab.Emoji, Insert, SendGif, SendSticker);
         var gif = new Button
@@ -93,7 +106,8 @@ public sealed partial class Composer : StackPanel
         _later.VerticalAlignment = VerticalAlignment.Bottom;
         _later.Click += (_, _) => OpenLater();
         _schedBar = new Later.Bar(_v);
-        var right = U.H(0, _later, _mic, gif, emoji);
+        var extraIcons = U.H(0, _later, _mic);
+        var right = U.H(0, extraIcons, gif, emoji);
         // Jedna linia: pole 46 px + 2 px u góry i u dołu + ramka = 52 px, ikony (34 px) na środku — tak samo jak panel „ja” w pasku bocznym.
         // Przy dłuższym tekście pole rośnie, a ikony zostają przy dolnej krawędzi (6 px od niej).
         right.VerticalAlignment = VerticalAlignment.Bottom;
@@ -101,6 +115,12 @@ public sealed partial class Composer : StackPanel
         var row = new Grid().Cols("auto", "*", "auto").Add(_attach.At(0, 0).With(b => { b.VerticalAlignment = VerticalAlignment.Bottom; b.Margin = U.Th(0, 0, 0, 6); }), _box.At(0, 1),
             right.At(0, 2));
         row.Margin = U.Th(6, 2, 6, 2);
+        // wąskie okno: zegar i mikrofon chowają się (są w menu „+”), żeby GIF i emoji nie wypadały za krawędź
+        row.SizeChanged += (_, e) =>
+        {
+            _narrow = e.NewSize.Width < 380;
+            extraIcons.Visibility = _narrow ? Visibility.Collapsed : Visibility.Visible;
+        };
         var inner = U.V(0, _files, row);
         _frame = new Border { Child = inner, CornerRadius = new CornerRadius(14), Background = Theme.Input, BorderBrush = Theme.InputLine, BorderThickness = U.Th(1) };
         _box.GotFocus += (_, _) => _frame.BorderBrush = Theme.AccentA(.45);
@@ -154,7 +174,7 @@ public sealed partial class Composer : StackPanel
         else if (ch is { Readonly: true } && !S.Can(_v.Cid, Perm.ManageMessages)) why = "Ten kanał jest tylko do czytania.";
         else if (_v.DmObj is { IsGroup: false } d && S.DmOther(d) is { } o && S.Blocked.Contains(o.Id)) why = $"Blokujesz {o.Name}. Odblokuj tę osobę na stronie, żeby pisać.";
         else if (_v.Thread is { Locked: true } && !S.Can(_v.Cid, Perm.ManageMessages)) why = "Ten wątek jest zamknięty. Piszą w nim tylko moderatorzy.";
-        _blocked.Child = U.H(10, U.I("", 15, Theme.Mu), U.T(why ?? "", 13.5, null, Theme.Mu, wrap: true)).With(h => h.VerticalAlignment = VerticalAlignment.Center);
+        _blocked.Child = U.HG(10, U.I("", 15, Theme.Mu), U.T(why ?? "", 13.5, null, Theme.Mu, wrap: true)).With(h => h.VerticalAlignment = VerticalAlignment.Center);
         _blocked.Visibility = why is null ? Visibility.Collapsed : Visibility.Visible;
         ((FrameworkElement)Children[0]).Visibility = why is null ? Visibility.Visible : Visibility.Collapsed;
         _attach.Visibility = CanAttach || !_v.IsThread ? Visibility.Visible : Visibility.Collapsed;

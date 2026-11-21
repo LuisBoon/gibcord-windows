@@ -238,7 +238,7 @@ public sealed partial class MessageView : Grid
         if (m.Sticker is { } st)
             body.Children.Add(new Image { Source = Images.Get(Api.Abs(st.Url), 320), Width = 160, Height = 160, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left }.With(i => i.Tip(st.Name)));
         if (m.Poll.ValueKind == JsonValueKind.Object) body.Children.Add(Poll(m));
-        if (m.Game.ValueKind == JsonValueKind.Object && m.Type == "default") body.Children.Add(Fun.GameView(_v, m));
+        if (m.Game.ValueKind == JsonValueKind.Object && !m.IsSystem) body.Children.Add(Fun.GameView(_v, m));
         foreach (var a in m.Attachments) body.Children.Add(AttachmentView(a));
         foreach (var yt in Markup.YouTubeIds(m.Content)) body.Children.Add(YouTube(yt));
         foreach (var code in Links.InviteCodes(m.Content)) body.Children.Add(Links.InviteCard(_v.Sh, code));
@@ -272,8 +272,8 @@ public sealed partial class MessageView : Grid
             "dice" => $"🎲 Rzut kośćmi: {string.Join(" + ", g.Prop("rolls").ValueKind == JsonValueKind.Array ? g.Prop("rolls").EnumerateArray().Select(x => x.ToString()) : [])} = {g.Long("total")}",
             "coin" => $"🪙 Rzut monetą: {g.Str("result")}",
             "pick" => $"🎯 Wylosowano: {g.Str("result")}",
-            "ttt" => "❌⭕ Kółko i krzyżyk — zagraj na stronie GibCorda",
-            "rps" => "✊✋✌️ Kamień, papier, nożyce — zagraj na stronie GibCorda",
+            "ttt" => "❌⭕ Kółko i krzyżyk",
+            "rps" => "✊✋✌️ Kamień, papier, nożyce",
             _ => "🎮 Mini-gra",
         };
     }
@@ -576,7 +576,7 @@ public sealed partial class MessageView : Grid
         }
         p.Add(U.IconButton("\uE97A", "Odpowiedz", () => _v.Reply(m), 15, 32));
         if (_v.CanStartThread(m)) p.Add(U.IconButton(GT.Thread, m.Thread.ValueKind == JsonValueKind.Object ? "Otwórz wątek" : "Utwórz wątek", () => OpenOrStartThread(m), 15, 32));
-        if (m.AuthorId == S.Me.Id) p.Add(U.IconButton("", "Edytuj", () => _v.Edit(m), 15, 32));
+        if (m.AuthorId == S.Me.Id && !m.IsGame) p.Add(U.IconButton("", "Edytuj", () => _v.Edit(m), 15, 32));
         var more = U.IconButton("", "Więcej", () => { }, 15, 32);
         more.Flyout = Menu();
         p.Add(more);
@@ -601,7 +601,7 @@ public sealed partial class MessageView : Grid
             f.Items.Add(sub);
         }
         if (_v.CanStartThread(m)) f.Items.Add(M.Item(m.Thread.ValueKind == JsonValueKind.Object ? "Otwórz wątek" : "Utwórz wątek", GT.Thread, () => OpenOrStartThread(m)));
-        if (m.AuthorId == S.Me.Id) f.Items.Add(M.Item("Edytuj", "\uE70F", () => _v.Edit(m)));
+        if (m.AuthorId == S.Me.Id && !m.IsGame) f.Items.Add(M.Item("Edytuj", "\uE70F", () => _v.Edit(m)));
         if (_v.CanPin) f.Items.Add(M.Item(m.PinnedAt is null ? "Przypnij" : "Odepnij", "", () => _v.TogglePin(m)));
         f.Items.Add(M.Item("Kopiuj tekst", "", () => Sidebar.Copy(m.Content)));
         f.Items.Add(M.Item("Wspomnij autora", "\uE910", () => _v.InsertMention(m.AuthorId)));

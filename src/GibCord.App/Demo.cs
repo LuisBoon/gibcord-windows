@@ -189,7 +189,7 @@ public static class Demo
         Msg(3003, DmOla, OlaId, "to jest szybsze niż discord serio", now - 38 * 60000),
         Msg(3004, DmOla, OlaId, "i ładniejsze", now - 38 * 60000 + 5000),
         Msg(3005, DmOla, MeId, "dzięki ❤️ jutro dorzucę głos", now - 20 * 60000),
-        Msg(3006, DmOla, OlaId, "", now - 3 * 60000).With(m => m.Game = J(new { kind = "ttt", players = new[] { OlaId, MeId }, board = "X.O.X....", turn = MeId })),
-        Msg(3007, DmOla, MeId, "", now - 60000).With(m => m.Game = J(new { kind = "dice", count = 2, sides = 6, rolls = new[] { 4, 6 }, total = 10 })),
+        Msg(3006, DmOla, OlaId, "", now - 3 * 60000).With(m => m.Type = "game").With(m => m.Game = J(new { kind = "ttt", players = new[] { OlaId, MeId }, board = "X.O.X....", turn = MeId })),
+        Msg(3007, DmOla, MeId, "", now - 60000).With(m => m.Type = "game").With(m => m.Game = J(new { kind = "dice", count = 2, sides = 6, rolls = new[] { 4, 6 }, total = 10 })),
     ];
 }

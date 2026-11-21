@@ -296,6 +296,10 @@ public sealed class Store
             if (m.Sticker is not null) t = "Naklejka: " + m.Sticker.Name;
             else if (m.Attachments.Count > 0) t = m.Attachments.All(a => a.IsImage) ? "🖼️ Obrazek" : "📎 " + m.Attachments[0].Name;
             else if (m.Poll.ValueKind == JsonValueKind.Object) t = "📊 " + (m.Poll.Str("question") ?? "Ankieta");
+            else if (m.IsGame) t = m.Game.Str("kind") switch
+            {
+                "ttt" => "❌⭕ Kółko i krzyżyk", "rps" => "✊ Kamień, papier, nożyce", "dice" => "🎲 Rzut kośćmi", "coin" => "🪙 Rzut monetą", "pick" => "🎯 Losowanie", _ => "🎮 Mini-gra",
+            };
         }
         return t.Length > max ? t[..(max - 1)] + "…" : t;
     }

@@ -19,7 +19,8 @@ public sealed class TitleBarView : Grid
     {
         _w = w;
         Background = Theme.TitleBar;
-        this.Cols("auto", "auto", "*", "auto", "*", "140");
+        // szukajka w środku rośnie i maleje razem z oknem (najwyżej 380), po prawej Skrzynka i miejsce na przyciski okna Windows
+        this.Cols("auto", "auto", "*", "auto", "140");
         var logo = new Image { Source = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "gibcord.png"))), Width = 18, Height = 18 };
         _name = U.T("GibCord", 12.5, U.Bold);
         var beta = Options.OtherServer
@@ -38,16 +39,23 @@ public sealed class TitleBarView : Grid
             U.I("", 12, Theme.Mu).At(0, 0),
             U.T("Szukaj albo przejdź do…", 12, null, Theme.Mu).With(t => t.Margin = U.Th(8, 0, 0, 0)).At(0, 1),
             hint.At(0, 2));
-        _search = new Border { Child = inner, Width = 380, Height = 24, CornerRadius = new CornerRadius(8), Background = Theme.Input, Padding = U.Th(10, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
+        _search = new Border { Child = inner, MaxWidth = 380, Height = 24, CornerRadius = new CornerRadius(8), Background = Theme.Input, Padding = U.Th(10, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, Margin = U.Th(16, 0, 12, 0) };
+        _search.SizeChanged += (_, e) =>
+        {
+            hint.Visibility = e.NewSize.Width < 250 ? Visibility.Collapsed : Visibility.Visible; // wąsko: bez „Ctrl K”
+            _w.UpdateTitleBarRegions(); // obszar klikania szukajki nadąża za jej szerokością
+        };
         _search.PointerEntered += (_, _) => _search.Background = U.W(.12);
         _search.PointerExited += (_, _) => _search.Background = Theme.Input;
         _search.Tapped += (_, _) => _w.CurrentShell?.OpenSwitcher();
         _search.Tip("Szybkie przejście do kanału, rozmowy albo osoby (Ctrl+K)");
-        this.Add(_search.At(0, 3));
+        this.Add(_search.At(0, 2));
 
         _inbox = U.IconButton("\uE715", "Skrzynka: wzmianki, zapisane, przypomnienia (Ctrl+I)", () => _w.CurrentShell?.OpenInbox(), 13, 28);
         var inboxBox = new Grid { HorizontalAlignment = HorizontalAlignment.Right, Margin = U.Th(0, 0, 8, 0) }.Add(_inbox, _inboxDot);
-        this.Add(inboxBox.At(0, 4));
+        this.Add(inboxBox.At(0, 3));
+        // bardzo wąsko: bez napisu „GibCord” obok Gibka
+        SizeChanged += (_, e) => _name.Visibility = e.NewSize.Width >= 760 ? Visibility.Visible : Visibility.Collapsed;
         Inbox.Changed += () => _w.DispatcherQueue.TryEnqueue(() => _inboxDot.Visibility = Inbox.Unseen > 0 ? Visibility.Visible : Visibility.Collapsed);
     }
 
