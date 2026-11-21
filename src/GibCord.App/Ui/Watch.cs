@@ -108,8 +108,22 @@ public sealed partial class WatchPanel : Grid, IDisposable
             core.Settings.AreDefaultContextMenusEnabled = false;
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
-            core.NewWindowRequested += (s2, e) => { e.Handled = true; var u = new Uri(e.Uri); _ = Windows.System.Launcher.LaunchUriAsync(u); };
-            core.WebMessageReceived += (_, e) => OnMessage(e.TryGetWebMessageAsString());
+            // nowe okna (np. „Obejrzyj na YouTube”): tylko https, w przeglądarce — żadnych innych protokołów (search-ms:, ms-… itd.)
+            core.NewWindowRequested += (s2, e) =>
+            {
+                e.Handled = true;
+                if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var u) && u.Scheme == "https") _ = Windows.System.Launcher.LaunchUriAsync(u);
+            };
+            // strona główna odtwarzacza zostaje na player.gibcord.local (ramki YouTube nawigują same w sobie)
+            core.NavigationStarting += (_, e) =>
+            {
+                if (!e.Uri.StartsWith("https://player.gibcord.local/", StringComparison.OrdinalIgnoreCase) && e.Uri != "about:blank") e.Cancel = true;
+            };
+            core.WebMessageReceived += (_, e) =>
+            {
+                if (!e.Source.StartsWith("https://player.gibcord.local/", StringComparison.OrdinalIgnoreCase)) return; // tylko nasz odtwarzacz, nie ramki
+                OnMessage(e.TryGetWebMessageAsString());
+            };
             core.Navigate("https://player.gibcord.local/player.html");
         }
         catch (Exception ex)

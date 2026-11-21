@@ -583,6 +583,7 @@ public sealed partial class AdminMail : Grid
             var path = a.Url.StartsWith("/api/") ? a.Url[5..] : a.Url;
             var bytes = await Api.GetBytes(path);
             await Windows.Storage.FileIO.WriteBytesAsync(f, bytes);
+            U.MarkFromInternet(f.Path); // załącznik z maila: Widok chroniony w Office, SmartScreen dla programów
             _sh.Info("Zapisano: " + f.Name);
         }
         catch (Exception ex) { _sh.Info("Nie udało się zapisać: " + GibCordClient.Friendly(ex), true); }

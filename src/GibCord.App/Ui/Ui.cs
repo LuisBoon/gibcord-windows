@@ -420,6 +420,16 @@ public static class U
 
     public static void Hand(this UIElement e) => e.With(_ => { });
 
+    /// <summary>
+    /// Znacznik „pobrane z internetu” (Mark-of-the-Web) przy zapisanym pliku: Office otworzy go w Widoku chronionym,
+    /// a Windows SmartScreen sprawdzi program przed uruchomieniem — jak przy pobieraniu w przeglądarce.
+    /// </summary>
+    public static void MarkFromInternet(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
+        try { File.WriteAllText(path + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\n"); } catch { }
+    }
+
     /// <summary>Tekst do pokazania w dymku błędu / informacji na dole okna.</summary>
     public static FontWeight Semi => FontWeights.SemiBold;
     public static FontWeight Bold => FontWeights.Bold;

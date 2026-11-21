@@ -59,19 +59,20 @@ static partial class Links
                 if (N(2) > 0) sh.JumpToMessage(N(1), N(2)); else sh.Go(0, N(1));
                 return;
             case "i" when p.Length >= 2:
-                await Join(sh, p[1]);
+                await Join(sh, p[1], ask: true); // link albo gibcord:// — bez pytania strona mogłaby po cichu dopisać Cię do swojego serwera
                 return;
         }
-        _ = Launcher.LaunchUriAsync(u);
+        if (u.Scheme is "https" or "http") _ = Launcher.LaunchUriAsync(u); // nieznana ścieżka gibcord:// — nic nie otwieramy
     }
 
-    static async Task Join(Shell sh, string code)
+    static async Task Join(Shell sh, string code, bool ask = false)
     {
         try
         {
             var info = await Get(sh, code);
             if (info is null) { sh.Info("To zaproszenie nie działa — wygasło albo serwera już nie ma.", true); return; }
             if (sh.S.ServerById(info.Id) is not null) { sh.Go(info.Id, 0); return; }
+            if (ask && !await M.Confirm(sh, $"Dołączyć do serwera „{info.Name}”?", "Osoby z tego serwera zobaczą Twój profil, status i to, w co grasz.", "Dołącz")) return;
             var srv = await sh.C.Api.JoinInvite(code);
             await sh.C.RefreshState();
             sh.Go(srv.Id, 0);

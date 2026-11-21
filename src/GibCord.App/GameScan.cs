@@ -22,6 +22,7 @@ public static class GameScan
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(nint hwnd, out uint pid);
     [DllImport("user32.dll")] static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] static extern bool GetWindowRect(nint hwnd, out RECT r);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern nint GetWindowLongPtr(nint hwnd, int index);
     [DllImport("user32.dll")] static extern nint MonitorFromWindow(nint hwnd, uint flags);
     [DllImport("user32.dll")] static extern bool GetMonitorInfo(nint mon, ref MONITORINFO mi);
     [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(nint hwnd, int attr, out int value, int size);
@@ -69,6 +70,9 @@ public static class GameScan
             var cls = new StringBuilder(64);
             GetClassName(h, cls, cls.Capacity);
             if (cls.ToString() is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Windows.UI.Core.CoreWindow") return null; // pulpit, pasek zadań
+            // zwykłe zmaksymalizowane okno (z paskiem tytułu) przy ukrytym pasku zadań też zakrywa ekran — to nie gra
+            const long WS_CAPTION = 0x00C00000;
+            if (((long)GetWindowLongPtr(h, -16) & WS_CAPTION) == WS_CAPTION) return null;
             var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
             if (!GetMonitorInfo(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST), ref mi)) return null;
             var m = mi.rcMonitor;

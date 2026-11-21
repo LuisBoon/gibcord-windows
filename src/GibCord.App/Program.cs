@@ -18,7 +18,8 @@ public static class Program
         AppDomain.CurrentDomain.UnhandledException += (_, e) => App.Log("Błąd (AppDomain): " + e.ExceptionObject);
         try
         {
-            App.Log($"Start {string.Join(' ', args)}");
+            // bez kodów zaproszeń i adresów z gibcord:// w dzienniku (trafia do „Kopiuj dane diagnostyczne”)
+            App.Log($"Start {string.Join(' ', args.Select(a => a.StartsWith("gibcord:", StringComparison.OrdinalIgnoreCase) ? "gibcord:…" : a))}");
             // Velopack: obsługa instalacji / aktualizacji (musi być na samym początku)
             VelopackApp.Build().SetArgs(args).Run();
 
@@ -80,7 +81,9 @@ public static class Options
     /// <summary>--view login|chat|friends|dm|profile|switcher</summary>
     public static string View => Arg("--view") ?? "chat";
     /// <summary>--server https://...: inny serwer (np. kopia testowa).</summary>
-    public static string Server => Arg("--server") ?? Environment.GetEnvironmentVariable("GIBCORD_SERVER") ?? DefaultServer;
+    public static string Server => Safe(Arg("--server")) ?? Safe(Environment.GetEnvironmentVariable("GIBCORD_SERVER")) ?? DefaultServer;
+    /// <summary>Inny serwer tylko przez https (http wyłącznie na tym komputerze — testy); inaczej zostaje prawdziwy GibCord.</summary>
+    static string? Safe(string? s) => s is not null && Uri.TryCreate(s, UriKind.Absolute, out var u) && (u.Scheme == "https" || (u.Scheme == "http" && u.IsLoopback)) ? s : null;
     public const string DefaultServer = "https://gibcord.luisboon.pl";
     /// <summary>Inny serwer niż prawdziwy GibCord (kopia do próby) — osobne dane, osobne okno, znacznik w pasku.</summary>
     public static bool OtherServer => !Demo && Server.TrimEnd('/') != DefaultServer;

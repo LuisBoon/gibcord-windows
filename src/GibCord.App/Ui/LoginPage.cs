@@ -53,6 +53,9 @@ public sealed class LoginPage : Grid
     {
         _ticket = null;
         Header("Witaj w GibCordzie 6.0", Updater.IsPrerelease ? "Nowa aplikacja na Windows (wersja beta). Zaloguj się tym samym kontem co na stronie." : "Nowa aplikacja na Windows. Zaloguj się tym samym kontem co na stronie.");
+        // uruchomienie z innym serwerem (--server) — wyraźne ostrzeżenie: spreparowany skrót mógłby podsunąć fałszywy serwer do zbierania haseł
+        if (Options.OtherServer)
+            _form.Children.Add(U.Box(U.T($"Uwaga: logujesz się do innego serwera niż GibCord — {new Uri(Options.Server).Authority}. Jeśli nie wiesz, skąd ten skrót, nie podawaj tu hasła.", 12.5, U.Semi, U.B("#ffffff"), wrap: true), U.B("#d6455e"), 10, U.Th(12, 8)));
         var user = Field("Twoja nazwa użytkownika");
         var pass = new PasswordBox { PlaceholderText = "Hasło", Height = 42, FontSize = 14, CornerRadius = new CornerRadius(10), Padding = U.Th(12, 10) };
         Button? go = null;

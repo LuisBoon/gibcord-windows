@@ -69,8 +69,8 @@ public class GameDetectTests
         Assert.Equal("pełny ekran", hit?.Source);
         // przeglądarka na pełnym ekranie (film) — nie gra
         Assert.Null(GameDetect.Pick([P("chrome.exe", @"C:\Program Files\Google\Chrome\Application\chrome.exe", "YouTube", fs: true)], List, null, NoMine, NoNot, null, "chrome.exe"));
-        // silnik zamiast nazwy produktu — tytuł okna
-        Assert.Equal("Moja Gra", GameDetect.NameOf(P("game.exe", null, "Moja Gra", true, "Unreal Engine")));
+        // silnik zamiast nazwy produktu — nazwa pliku (nigdy tytuł okna: mógłby zdradzić nazwę dokumentu)
+        Assert.Equal("mojagra", GameDetect.NameOf(P("mojagra.exe", null, "Tajny dokument.docx", true, "Unreal Engine")));
     }
 
     [Fact]

@@ -200,7 +200,8 @@ static class Motion
     {
         var s = (float)Math.Clamp(to / max, 0, 1);
         e.CenterPoint = new Vector3((float)e.Width / 2, (float)max / 2, 0);
-        if (!On) { Reset(e); e.Scale = new Vector3(1, s, 1); return; }
+        // przed pojawieniem się na ekranie bez animacji (StartAnimation na elemencie spoza drzewa = „Access is denied”)
+        if (!On || !e.IsLoaded) { Reset(e); e.Scale = new Vector3(1, s, 1); return; }
         try
         {
             var a = Comp(e).CreateSpringVector3Animation();

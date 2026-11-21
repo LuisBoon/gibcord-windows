@@ -194,12 +194,13 @@ public static class GameDetect
         !NotGamesFullscreen.Contains(p.Exe) && !Helper.IsMatch(p.Exe)
         && (p.Path is null || !Regex.IsMatch(p.Path, @"^[a-z]:\\windows\\|\\windowsapps\\microsoft\.", RegexOptions.IgnoreCase));
 
-    /// <summary>Nazwa gry z pełnego ekranu: nazwa produktu z pliku, inaczej tytuł okna, inaczej nazwa pliku.</summary>
+    /// <summary>
+    /// Nazwa gry z pełnego ekranu: nazwa produktu z pliku, inaczej nazwa pliku. Nigdy tytuł okna — mógłby zdradzić
+    /// nazwę dokumentu albo notatki, gdyby program na pełnym ekranie nie był grą.
+    /// </summary>
     public static string NameOf(ProcInfo p)
     {
         if (!string.IsNullOrWhiteSpace(p.Product) && !VagueProduct.IsMatch(p.Product.Trim())) return Clip(p.Product.Trim());
-        var title = p.Titles.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
-        if (title is not null) return Clip(title.Trim());
         return Pretty(System.IO.Path.GetFileNameWithoutExtension(p.Exe));
     }
 

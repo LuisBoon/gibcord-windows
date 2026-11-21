@@ -104,7 +104,7 @@ public sealed class ScreenShare : IDisposable
             StartedAt = Environment.TickCount64;
             item.Closed += (_, _) => App.Window?.UiRun(() => { if (ReferenceEquals(_item, item)) Stop(); }); // tylko to okno, nie wcześniejsze
             _session.StartCapture();
-            App.Log($"Transmisja: {item.DisplayName} {item.Size.Width}×{item.Size.Height}");
+            App.Log($"Transmisja: {item.Size.Width}×{item.Size.Height}"); // bez tytułu okna (może zawierać nazwę dokumentu)
             return null;
         }
         catch (Exception ex)

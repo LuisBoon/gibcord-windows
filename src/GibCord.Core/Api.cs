@@ -42,7 +42,8 @@ public sealed class GibCordApi : IDisposable
     {
         if (string.IsNullOrEmpty(url)) return null;
         if (Uri.TryCreate(url, UriKind.Absolute, out var a) && (a.Scheme == "https" || a.Scheme == "http")) return a;
-        return Uri.TryCreate(BaseUri, url, out var r) ? r : null;
+        // tylko http/https: „file://serwer/udział”, ms-… itp. nie mogą trafić do otwierania ani do wczytywania obrazków (wyciek skrótu hasła Windows przez UNC)
+        return Uri.TryCreate(BaseUri, url, out var r) && (r.Scheme == "https" || r.Scheme == "http") ? r : null;
     }
 
     async Task<JsonElement> SendRaw(HttpMethod method, string path, HttpContent? content, CancellationToken ct, TimeSpan? timeout = null)
