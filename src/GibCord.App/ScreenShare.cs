@@ -80,6 +80,14 @@ public sealed class ScreenShare : IDisposable
         WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
         var item = await picker.PickSingleItemAsync();
         if (item is null) return null; // anulowano
+        return await Start(item, fps, quality, withAudio);
+    }
+
+    public static bool Supported { get { try { return GraphicsCaptureSession.IsSupported(); } catch { return false; } } }
+
+    /// <summary>Start transmisji wybranego ekranu albo okna (własne okienko wyboru GibCorda). Zwraca komunikat błędu albo null.</summary>
+    public async Task<string?> Start(GraphicsCaptureItem item, int fps = 30, string quality = "1080p", bool withAudio = false)
+    {
         Stop(silent: true);
         try
         {

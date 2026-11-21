@@ -707,6 +707,7 @@ public sealed class MainWindow : Window
             if (Options.View == "emoji") _shell?.ShowPickerDemo();
             if (Options.View == "menu") _shell?.DemoMenu();
             if (Options.View == "confirm") _shell?.DemoConfirm();
+            if (Options.View == "screenpick" && _shell is { } sp) Ui.ScreenPicker.Show(sp);
             if (Options.View == "overlay" && _overlay is { } ov)
             {
                 ov.DemoGame = true;
@@ -714,7 +715,7 @@ public sealed class MainWindow : Window
                 ov.Notify("Ola · #ogólne · Ekipa Gibka", "wbijacie dziś na Minecrafta? 🎮");
                 ov.Notify("Kuba", "zaraz będę, robię herbatę");
             }
-            if (Options.View is "switcher" or "profile" or "emoji" or "overlay" or "menu" or "confirm") await Task.Delay(1200);
+            if (Options.View is "switcher" or "profile" or "emoji" or "overlay" or "menu" or "confirm" or "screenpick") await Task.Delay(2500);
             var rtb = new RenderTargetBitmap();
             // okienko (ContentDialog) leży w warstwie wyskakujących — zrzut z niej, gdy jest otwarte
             UIElement target = _root;

@@ -189,32 +189,9 @@ static class VoiceUi
         if (ss.Active || sh.C.Voice.ScreenSharing) { ss.Stop(); sh.RefreshVoice(); return; }
         var cid = sh.C.VoiceChannelId;
         if (sh.S.ServerOfChannel(cid) is not null && !sh.S.Can(cid, Perm.Stream)) { sh.Info("Nie masz uprawnień do transmisji na tym kanale.", true); return; }
-        // wybór jakości (limit kanału), płynności i dźwięku — zapamiętany na następny raz
-        var p = App.Prefs;
-        var max = sh.S.ChannelById(cid)?.MaxStream ?? "1440p";
-        var levels = new[] { "720p", "1080p", "1440p" };
-        var allowed = levels.Take(Array.IndexOf(levels, max) is var mi and >= 0 ? mi + 1 : 3).ToArray();
-        var quality = new RadioButtons { Header = U.T("Jakość", 13, U.Semi, Theme.Mu), MaxColumns = 3 };
-        foreach (var q in allowed) quality.Items.Add(q);
-        quality.SelectedIndex = Math.Max(0, Array.IndexOf(allowed, allowed.Contains(p.StreamQuality) ? p.StreamQuality : allowed[^1] == "1440p" ? "1080p" : allowed[^1]));
-        var fps = new RadioButtons { Header = U.T("Płynność", 13, U.Semi, Theme.Mu), MaxColumns = 2 };
-        fps.Items.Add("30 klatek/s"); fps.Items.Add("60 klatek/s (gry)");
-        fps.SelectedIndex = p.StreamFps >= 60 ? 1 : 0;
-        var audio = new CheckBox { Content = "Dźwięk z komputera (gra, film — bez dźwięków rozmowy)", IsChecked = p.StreamAudio };
-        var d = new ContentDialog
-        {
-            Title = "Udostępnij ekran",
-            Content = U.V(12, quality, fps, audio, U.T(max != "1440p" ? $"Na tym kanale najwyżej {max}." : "Wyższa jakość potrzebuje szybszego internetu.", 11.5, null, Theme.Mu2, wrap: true)).With(x => x.Width = 380),
-            PrimaryButtonText = "Wybierz ekran albo okno…", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = sh.XamlRoot, RequestedTheme = ElementTheme.Dark,
-        };
-        if (await d.ShowAsync() != ContentDialogResult.Primary) return;
-        p.StreamQuality = allowed[Math.Max(0, quality.SelectedIndex)];
-        p.StreamFps = fps.SelectedIndex == 1 ? 60 : 30;
-        p.StreamAudio = audio.IsChecked == true;
-        p.Save();
-        var err = await ss.Start(sh.W.Hwnd, p.StreamFps, p.StreamQuality, p.StreamAudio);
-        if (err is not null) sh.Info(err, true);
-        sh.RefreshVoice();
+        if (!ScreenShare.Supported) { sh.Info("Ten Windows nie pozwala nagrywać ekranu (potrzebny Windows 10 1903 albo nowszy).", true); return; }
+        // własne okienko wyboru: ekrany i okna z podglądami, jakość, płynność, dźwięk (systemowe zostaje jako zapasowe)
+        ScreenPicker.Show(sh);
     }
 
     /// <summary>Kamera w rozmowie: włącz / wyłącz.</summary>
