@@ -12,8 +12,27 @@ public static class Json
     {
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Converters = { new SafeElementConverter() },
+        Converters = { new SafeElementConverter(), new LooseBoolConverter() },
     };
+
+    /// <summary>
+    /// Pola tak/nie odporne na inny kształt z serwera: liczba (0 = nie), napis („now”, „bg” = tak; „”, „0”, „false” = nie), null = nie.
+    /// Panel admina dostaje np. online: "now" | "bg" | null — wcześniej cała lista kont kończyła się błędem „could not be converted to System.Boolean”.
+    /// </summary>
+    sealed class LooseBoolConverter : JsonConverter<bool>
+    {
+        public override bool HandleNull => true;
+        public override bool Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) => r.TokenType switch
+        {
+            JsonTokenType.True => true,
+            JsonTokenType.False or JsonTokenType.Null => false,
+            JsonTokenType.Number => r.TryGetDouble(out var d) && d != 0,
+            JsonTokenType.String => r.GetString() is { Length: > 0 } s && s != "0" && !s.Equals("false", StringComparison.OrdinalIgnoreCase),
+            _ => SkipFalse(ref r),
+        };
+        static bool SkipFalse(ref Utf8JsonReader r) { r.Skip(); return false; }
+        public override void Write(Utf8JsonWriter w, bool v, JsonSerializerOptions o) => w.WriteBooleanValue(v);
+    }
 
     /// <summary>Puste pole JsonElement (np. brak ankiety) zapisujemy jako null zamiast wyjątku.</summary>
     sealed class SafeElementConverter : JsonConverter<JsonElement>

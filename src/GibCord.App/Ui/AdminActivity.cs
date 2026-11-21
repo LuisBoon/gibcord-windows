@@ -14,7 +14,7 @@ namespace GibCord.App.Ui;
 public sealed class AdminActivity : StackPanel
 {
     readonly Shell _sh;
-    readonly StackPanel _days = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
+    readonly WrapPanel _days = new() { Spacing = 4 }; // dni zawijają się do nowej linii (w poziomym pasku ostatnie były ucięte)
     readonly TextBlock _sum = U.T("", 12.5, null, Theme.Mu, wrap: true);
     readonly StackPanel _rows = new() { Spacing = 6 };
     string? _day;
@@ -35,7 +35,7 @@ public sealed class AdminActivity : StackPanel
         var axis = new Grid { Margin = U.Th(236, 0, 0, 0) }.Cols("*", "*", "*", "*", "auto");
         var labels = new[] { "0:00", "6:00", "12:00", "18:00", "24:00" };
         for (var i = 0; i < labels.Length; i++) axis.Add(U.T(labels[i], 10.5, null, Theme.Mu2).At(0, i));
-        Children.Add(U.Scroll2(_days));
+        Children.Add(_days);
         Children.Add(_sum);
         Children.Add(legend);
         Children.Add(axis);

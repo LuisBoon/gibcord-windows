@@ -114,7 +114,9 @@ public sealed class AdminPage : Grid
     {
         try
         {
-            var s = await Api.GetJson("admin/stats");
+            var s = Options.Demo
+                ? System.Text.Json.JsonSerializer.SerializeToElement(new { users = 10, usersToday = 0, online = 2, servers = 5, messages = 481, messagesToday = 8, voiceNow = 0, streamsNow = 0, uploadsBytes = 36_800_000, dbBytes = 2_900_000, uptimeSec = 1800, version = "6.0.0" })
+                : await Api.GetJson("admin/stats");
             p.Children.Clear();
             var tiles = new WrapPanel { Spacing = 10 };
             void Tile(string label, string value, string? note = null) =>

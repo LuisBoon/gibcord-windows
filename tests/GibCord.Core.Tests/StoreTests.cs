@@ -352,3 +352,17 @@ public class StoreTests
         Assert.Equal(0, s.Me.Id);
     }
 }
+
+public class LooseBoolTests
+{
+    [Xunit.Fact]
+    public void OnlineZPaneluAdmina()
+    {
+        // panel admina: online = "now" | "bg" | null; inne miejsca: liczba albo true/false
+        Xunit.Assert.True(GibCord.Core.Json.Deserialize<GibCord.Core.User>("{\"id\":1,\"online\":\"now\"}")!.Online);
+        Xunit.Assert.True(GibCord.Core.Json.Deserialize<GibCord.Core.User>("{\"id\":1,\"online\":\"bg\"}")!.Online);
+        Xunit.Assert.False(GibCord.Core.Json.Deserialize<GibCord.Core.User>("{\"id\":1,\"online\":null}")!.Online);
+        Xunit.Assert.True(GibCord.Core.Json.Deserialize<GibCord.Core.User>("{\"id\":1,\"online\":2}")!.Online);
+        Xunit.Assert.False(GibCord.Core.Json.Deserialize<GibCord.Core.User>("{\"id\":1,\"online\":false}")!.Online);
+    }
+}

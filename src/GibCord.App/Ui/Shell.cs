@@ -131,6 +131,8 @@ public sealed class Shell : Grid
         var k = new KeyboardAccelerator { Key = key, Modifiers = mod };
         k.Invoked += (_, e) => { e.Handled = true; a(); };
         KeyboardAccelerators.Add(k);
+        // skróty są na całym oknie — bez tego Windows pokazywał przy najechaniu gdziekolwiek dymek „Ctrl+K”
+        KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
     }
 
     void OnError(string msg) => Info(msg, error: true);

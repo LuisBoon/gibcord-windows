@@ -114,7 +114,7 @@ public sealed class AdminSystem : StackPanel
         _tiles.Children.Add(Tile("↓ " + Rate(Num(n, "rx")), "sieć", "↑ " + Rate(Num(n, "tx"))));
         _tiles.Children.Add(Tile((Num(n, "online") ?? 0).ToString("0"), "osób online", $"{Num(n, "ws") ?? 0:0} połączeń · {Num(n, "voice") ?? 0:0} w rozmowach" + (Num(n, "streams") is > 0 and var st ? $" · {st:0} nadaje" : "")));
         _tiles.Children.Add(Tile(Num(n, "rss") is { } rss ? Math.Round(rss / 1048576) + " MB" : "—", "proces GibCord", $"procesor {Pct(Num(n, "procCpu"))} · działa {Dur(Num(n, "procUptimeSec"))}"));
-        _tiles.Children.Add(Tile(Dur(Num(n, "machineUptimeSec")), "maszyna działa", $"Node {n.Str("node")} · TURN: " + (coturn == "active" ? "działa" : coturn == "inactive" ? "zatrzymany" : "brak"), coturn == "inactive"));
+        _tiles.Children.Add(Tile(Dur(Num(n, "machineUptimeSec")), "maszyna działa", $"{(n.Str("node") ?? "") switch { var rt when rt.StartsWith('v') => "Node " + rt, var rt => rt }} · TURN: " + (coturn == "active" ? "działa" : coturn == "inactive" ? "zatrzymany" : "brak"), coturn == "inactive"));
 
         var pts = _data.Prop("points").ValueKind == JsonValueKind.Array ? _data.Prop("points").EnumerateArray().ToList() : [];
         var defs = new ChartDef[]
