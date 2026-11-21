@@ -499,6 +499,8 @@ public static class Images
 public sealed class WrapPanel : Panel
 {
     public double Spacing { get; set; } = 6;
+    /// <summary>Zajmij całą dostępną szerokość (kafelki na stronie) — bez tego panel dopasowany do lewej mógł dostać szerokość sprzed wczytania danych i ułożyć wszystko w jedną kolumnę.</summary>
+    public bool Fill { get; set; }
 
     protected override Windows.Foundation.Size MeasureOverride(Windows.Foundation.Size available)
     {
@@ -512,7 +514,7 @@ public sealed class WrapPanel : Panel
             line = Math.Max(line, d.Height);
             maxW = Math.Max(maxW, x - Spacing);
         }
-        return new Windows.Foundation.Size(double.IsInfinity(available.Width) ? maxW : Math.Min(maxW, available.Width), y + line);
+        return new Windows.Foundation.Size(double.IsInfinity(available.Width) ? maxW : Fill ? available.Width : Math.Min(maxW, available.Width), y + line);
     }
 
     protected override Windows.Foundation.Size ArrangeOverride(Windows.Foundation.Size final)

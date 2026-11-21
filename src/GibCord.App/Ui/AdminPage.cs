@@ -114,11 +114,12 @@ public sealed class AdminPage : Grid
     {
         try
         {
+            if (Options.Demo) await Task.Delay(400); // jak z serwerem: dane przychodzą po pierwszym ułożeniu strony
             var s = Options.Demo
                 ? System.Text.Json.JsonSerializer.SerializeToElement(new { users = 10, usersToday = 0, online = 2, servers = 5, messages = 481, messagesToday = 8, voiceNow = 0, streamsNow = 0, uploadsBytes = 36_800_000, dbBytes = 2_900_000, uptimeSec = 1800, version = "6.0.0" })
                 : await Api.GetJson("admin/stats");
             p.Children.Clear();
-            var tiles = new WrapPanel { Spacing = 10 };
+            var tiles = new WrapPanel { Spacing = 10, Fill = true };
             void Tile(string label, string value, string? note = null) =>
                 tiles.Children.Add(U.Box(U.V(2, U.T(label, 11.5, U.Semi, Theme.Mu), U.T(value, 24, U.Bold), note is null ? null : U.T(note, 11, null, Theme.Mu2)), U.W(.05), 14, U.Th(16, 12), U.W(.08), 1).With(b => b.MinWidth = 190));
             Tile("Konta", $"{s.Long("users")}", $"+{s.Long("usersToday")} dziś");
