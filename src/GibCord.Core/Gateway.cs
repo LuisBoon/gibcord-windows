@@ -40,6 +40,13 @@ public sealed class Gateway : IAsyncDisposable
     /// <summary>Numer ostatniego odebranego zdarzenia (v2).</summary>
     public long Seq => Interlocked.Read(ref _v2Seq);
     public TimeSpan? Rtt { get; private set; }
+    /// <summary>Ostatnie pomiary pingu (ms) — wykres w panelu rozmowy. Najwyżej 120.</summary>
+    public double[] RttHistory { get { lock (_rtts) return [.. _rtts]; } }
+    readonly Queue<double> _rtts = new();
+    /// <summary>Co ile pingować serwer: zwykle 20 s, w rozmowie 3 s (żywy ping z wykresem).</summary>
+    public int PingEveryMs => Fast?.Invoke() == true ? 3_000 : 20_000;
+    /// <summary>Czy pingować często (aplikacja: gdy jest w rozmowie).</summary>
+    public Func<bool>? Fast { get; set; }
     public int CloseCode { get; private set; }
 
     public Gateway(Uri baseUri, string token, bool desktop = true)
@@ -159,7 +166,11 @@ public sealed class Gateway : IAsyncDisposable
                 if (t == "pong")
                 {
                     var sent = Interlocked.Exchange(ref _pingSentAt, 0);
-                    if (sent > 0) Rtt = TimeSpan.FromMilliseconds(Environment.TickCount64 - sent);
+                    if (sent > 0)
+                    {
+                        Rtt = TimeSpan.FromMilliseconds(Environment.TickCount64 - sent);
+                        lock (_rtts) { _rtts.Enqueue(Rtt.Value.TotalMilliseconds); while (_rtts.Count > 120) _rtts.Dequeue(); }
+                    }
                 }
                 try { Event?.Invoke(new GatewayEvent(t, root)); } catch { /* błąd odbiorcy nie zrywa połączenia */ }
             }
@@ -171,7 +182,8 @@ public sealed class Gateway : IAsyncDisposable
     {
         while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
         {
-            await Task.Delay(TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);
+            // w rozmowie co 3 s (ping na żywo), inaczej co 20 s; przy zmianie trybu najwyżej 3 s czekania
+            for (var waited = 0; waited < PingEveryMs; waited += 1000) await Task.Delay(1000, ct).ConfigureAwait(false);
             // nic nie przyszło przez 70 s (serwer pinguje co 25 s) — połączenie jest martwe
             if (Environment.TickCount64 - Interlocked.Read(ref _lastRx) > 70_000) { ws.Abort(); return; }
             Interlocked.Exchange(ref _pingSentAt, Environment.TickCount64);

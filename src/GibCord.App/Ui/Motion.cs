@@ -48,7 +48,13 @@ static class Motion
     /// <summary>Do sprawdzenia w CI: ile animacji wystartowało.</summary>
     public static int Started { get; private set; }
 
-    static Compositor Comp(UIElement e) => ElementCompositionPreview.GetElementVisual(e).Compositor;
+    /// <summary>
+    /// Kompozytor wątku okna — BEZ ElementCompositionPreview.GetElementVisual: Windows zabrania mieszania go z właściwościami
+    /// Scale/CenterPoint/Translation na tym samym elemencie („Access denied … GetElementVisual … Scale property in use”).
+    /// Animacje i tak startujemy przez UIElement.StartAnimation, więc warstwa elementu nie jest potrzebna.
+    /// </summary>
+    static Compositor Comp(UIElement e) => _comp ??= Microsoft.UI.Xaml.Media.CompositionTarget.GetCompositorForCurrentThread();
+    static Compositor? _comp;
 
     static void Start(UIElement e, CompositionAnimation a)
     {

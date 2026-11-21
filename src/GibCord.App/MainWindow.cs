@@ -112,45 +112,38 @@ public sealed class MainWindow : Window
         {
             try
             {
-                var (text, bar) = ShowUpdating();
-                if (!Options.Hidden) Activate();
-                _ = GateThenStart(text, bar);
+                // małe okienko na środku ekranu (przy autostarcie bez okienka — sprawdzenie po cichu); główne okno pojawi się po nim
+                var splash = Options.Hidden ? null : new UpdateSplash();
+                splash?.Activate();
+                _ = GateThenStart(splash);
                 return;
             }
-            catch (Exception ex) { App.Log("Ekran aktualizacji: " + ex.Message); _host.Children.Clear(); } // cokolwiek pójdzie nie tak — zwykły start
+            catch (Exception ex) { App.Log("Okienko aktualizacji: " + ex.Message); } // cokolwiek pójdzie nie tak — zwykły start
         }
         StartApp();
     }
 
+    /// <summary>Zrzut CI: treść okienka aktualizacji w głównym oknie.</summary>
     (TextBlock Text, ProgressBar Bar) ShowUpdating()
     {
-        var text = U.T("Sprawdzanie aktualizacji…", 14, U.Semi, Theme.Mu);
-        text.HorizontalAlignment = HorizontalAlignment.Center;
-        var bar = new ProgressBar { IsIndeterminate = true, Width = 240, Foreground = Theme.Accent, HorizontalAlignment = HorizontalAlignment.Center };
-        var box = U.V(18, Ui.Splash.Gibek(112).With(g => g.HorizontalAlignment = HorizontalAlignment.Center), text, bar);
-        box.HorizontalAlignment = HorizontalAlignment.Center;
-        box.VerticalAlignment = VerticalAlignment.Center;
+        var (root, text, bar) = UpdateSplash.Build(112);
         _host.Children.Clear();
-        _host.Children.Add(box);
+        _host.Children.Add(root);
         TitleBar.SetShellMode(false);
         return (text, bar);
     }
 
-    async Task GateThenStart(TextBlock text, ProgressBar bar)
+    async Task GateThenStart(UpdateSplash? splash)
     {
         var updating = false;
         try
         {
-            updating = await Updater.StartupUpdate((msg, pct) => Dq.TryEnqueue(() =>
-            {
-                text.Text = msg;
-                if (pct is int p) { bar.IsIndeterminate = false; bar.Value = p; } else bar.IsIndeterminate = true;
-            }));
+            updating = await Updater.StartupUpdate((msg, pct) => Dq.TryEnqueue(() => splash?.Set(msg, pct)));
         }
         catch (Exception ex) { App.Log("Aktualizacja przy starcie: " + ex.Message); }
         if (updating) return; // aplikacja zaraz uruchomi się od nowa w nowej wersji
-        _host.Children.Clear();
         StartApp();
+        splash?.Finish(); // po pokazaniu głównego okna — bez chwili, w której nie ma żadnego okna
     }
 
     /// <summary>Właściwy start: klient, usługi, logowanie albo okno główne.</summary>

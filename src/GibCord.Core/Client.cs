@@ -43,7 +43,11 @@ public sealed partial class GibCordClient : IAsyncDisposable
     /// <summary>Ustawienia tego komputera (lokalne notatki do czasu, aż serwer je obsłuży).</summary>
     public Prefs? Prefs { get; set; }
     public GatewayStatus Status { get; private set; } = GatewayStatus.Offline;
-    public TimeSpan? Rtt => _gw?.Rtt;
+    public TimeSpan? Rtt => DemoRtt is { Length: > 0 } d ? TimeSpan.FromMilliseconds(d[^1]) : _gw?.Rtt;
+    /// <summary>Ostatnie pomiary pingu w ms (do małego wykresu).</summary>
+    public double[] RttHistory => DemoRtt ?? _gw?.RttHistory ?? [];
+    /// <summary>Tryb pokazowy (zrzuty CI): udawana historia pingu.</summary>
+    public double[]? DemoRtt { get; set; }
 
     /// <summary>Kanał otwarty w oknie (0 = żaden, np. Znajomi).</summary>
     public long ActiveChannelId { get; private set; }
@@ -168,7 +172,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
         // drugi Start (np. podwójne „Już potwierdziłem”) nie może zostawić osieroconego połączenia
         var old = _gw; _gw = null;
         if (old is not null) _ = old.DisposeAsync().AsTask();
-        _gw = new Gateway(Api.BaseUri, token);
+        _gw = new Gateway(Api.BaseUri, token) { Fast = () => VoiceChannelId != 0 }; // w rozmowie ping co 3 s (wykres w panelu)
         _gw.Event += ev => _ui(() => { if (session == _session) OnEvent(ev); });
         _gw.StatusChanged += (s, d) => _ui(() => { if (session == _session) OnStatus(s, d); });
         _gw.Start();

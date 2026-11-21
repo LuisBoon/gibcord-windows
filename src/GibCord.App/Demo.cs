@@ -38,7 +38,11 @@ public static class Demo
         {
             case "friends": sh.Go(0, 0); break;
             case "dm": sh.Go(0, DmOla); break;
-            case "voice": sh.C.DemoSpeaker = OlaId; sh.JoinVoiceChannel(Eg, Pogaduchy); break;
+            case "voice":
+                sh.C.DemoSpeaker = OlaId;
+                sh.C.DemoRtt = [38, 41, 36, 52, 47, 39, 35, 44, 61, 48, 40, 37, 42, 39, 36, 45, 50, 41, 38, 34]; // wykres pingu w panelu rozmowy
+                sh.JoinVoiceChannel(Eg, Pogaduchy);
+                break;
             case "overlay": sh.C.DemoSpeaker = OlaId; sh.JoinVoiceChannel(Eg, Pogaduchy); break; // obraz nakładki zapisuje się obok zrzutu
             case "watch":
                 sh.C.Store.Watches[Pogaduchy] = new WatchState { Kind = "yt", VideoId = "jNQXAC9IVRw", Title = "Me at the zoo", State = "playing", Position = 3, UpdatedAt = Format.NowMs(), AddedBy = OlaId, By = OlaId, Key = "demo",

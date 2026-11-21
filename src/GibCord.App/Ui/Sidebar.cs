@@ -286,7 +286,16 @@ public sealed class Sidebar : Grid
         var fg = sel || (unread && !muted) ? Theme.Fg : muted ? Theme.Mu2 : Theme.Mu;
         FrameworkElement glyph = c.IsVoice ? U.I("", 15, fg) : U.T("#", 17, U.Semi, fg).With(t => t.Width = 16);
         var name = U.T(c.Name, 14, unread && !muted ? U.Bold : U.Semi, fg);
-        var g = new Grid { Height = 32 }.Cols("22", "*", "auto").Add(glyph.At(0, 0), name.At(0, 1));
+        var g = new Grid { Height = 32 }.Cols("22", "*", "auto", "auto").Add(glyph.At(0, 0), name.At(0, 1));
+        // kółko zębate (po najechaniu): ustawienia kanału — tylko dla osób, które mogą nim zarządzać
+        Button? gear = null;
+        if (S.Can(c.Id, Perm.ManageChannels))
+        {
+            gear = U.IconButton("\uE713", "Edytuj kanał", () => _sh.ShowServerSettings(srv.Id, "channels", editChannel: c.Id), 13, 26);
+            gear.Visibility = Visibility.Collapsed;
+            gear.Margin = U.Th(4, 0, -6, 0);
+            g.Add(gear.At(0, 3));
+        }
         if (mentions > 0) g.Add(U.Badge(mentions).At(0, 2));
         else if (!c.IsVoice && !sel && App.Prefs.Drafts.ContainsKey(c.Id))
             g.Add(U.I("\uE70F", 12, Theme.Mu2).With(i => i.Tip("Masz tu niewysłany szkic")).At(0, 2));
@@ -300,6 +309,12 @@ public sealed class Sidebar : Grid
             g.Add(new Ellipse { Width = 6, Height = 6, Fill = Theme.Fg, HorizontalAlignment = HorizontalAlignment.Left, Margin = U.Th(-14, 0, 0, 0) }.At(0, 0));
         var row = U.Row(g, () => { if (c.IsVoice) _sh.JoinVoiceChannel(srv.Id, c.Id); else _sh.Go(srv.Id, c.Id); }, sel, selectedBg: Theme.Transparent);
         if (sel) _selRow = row;
+        if (gear is not null)
+        {
+            gear.Tapped += (_, e) => e.Handled = true; // klik w kółko nie przełącza kanału
+            row.PointerEntered += (_, _) => gear.Visibility = Visibility.Visible;
+            row.PointerExited += (_, _) => gear.Visibility = Visibility.Collapsed;
+        }
         if (!string.IsNullOrEmpty(c.Topic)) row.Tip(c.Topic!);
         var menu = new MenuFlyout();
         if (!c.IsVoice)

@@ -356,6 +356,12 @@ public sealed partial class ServerSettingsPage : Grid
         return Run(async () => ApplyServer(await Api.PutJson($"servers/{_sid}/layout", new { channels = list.Select((c, k) => new { id = c.Id, categoryId = c.CategoryId, position = k }).ToList() })));
     }
 
+    /// <summary>Kółko zębate przy kanale w kolumnie: od razu okienko ustawień tego kanału (na stronie „Kanały i kategorie”).</summary>
+    public void EditChannelById(long cid)
+    {
+        if (Srv?.Channels.Find(x => x.Id == cid) is { } c) EditChannel(c, c.IsVoice ? "voice" : "text", c.CategoryId);
+    }
+
     async void EditChannel(Channel? c, string type, long? categoryId)
     {
         var srv = Srv!;

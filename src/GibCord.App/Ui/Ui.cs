@@ -397,6 +397,28 @@ public static class U
         VerticalAlignment = VerticalAlignment.Center,
     };
 
+    /// <summary>Mały wykres linii (np. ping): wartości od lewej do prawej, skala 0 … max(wartości, <paramref name="minMax"/>).</summary>
+    public static FrameworkElement Sparkline(IReadOnlyList<double> v, double w, double h, Brush stroke, double minMax = 100, bool fill = false)
+    {
+        var g = new Grid { Width = w, Height = h, IsHitTestVisible = false };
+        if (v.Count < 2) { g.Children.Add(new Rectangle { Height = 1.5, Fill = stroke, Opacity = .5, VerticalAlignment = VerticalAlignment.Bottom }); return g; }
+        var max = Math.Max(minMax, v.Max() * 1.2);
+        var pts = new PointCollection();
+        for (var i = 0; i < v.Count; i++) pts.Add(new Windows.Foundation.Point(w * i / (v.Count - 1), h - 1 - (h - 2) * Math.Min(1, v[i] / max)));
+        if (fill)
+        {
+            var area = new PointCollection { new Windows.Foundation.Point(0, h) };
+            foreach (var p in pts) area.Add(p);
+            area.Add(new Windows.Foundation.Point(w, h));
+            g.Children.Add(new Polygon { Points = area, Fill = stroke, Opacity = .18 });
+        }
+        g.Children.Add(new Polyline { Points = pts, Stroke = stroke, StrokeThickness = 1.5, StrokeLineJoin = PenLineJoin.Round });
+        return g;
+    }
+
+    /// <summary>Kolor pingu: zielony do 80 ms, żółty do 200 ms, potem czerwony.</summary>
+    public static Brush PingBrush(double? ms) => ms is null ? Theme.Mu : ms < 80 ? Theme.Green : ms < 200 ? Theme.Yellow : Theme.Red;
+
     public static Rectangle HLine(double opacity = .07) => new() { Height = 1, Fill = U.W(opacity), HorizontalAlignment = HorizontalAlignment.Stretch };
 
     public static ScrollViewer Scroll(UIElement content) => new()

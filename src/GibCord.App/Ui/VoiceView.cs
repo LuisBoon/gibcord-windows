@@ -52,9 +52,21 @@ static class VoiceUi
         var (title, sub) = RoomName(sh.S, c.VoiceChannelId);
         var state = U.T(StateText(c), 12.5, U.Bold, StateBrush(c));
         var where = U.T(string.IsNullOrEmpty(sub) ? title : $"{title} / {sub}", 11.5, null, Theme.Mu);
-        var text = U.V(0, state, where);
+        // ping na żywo: mały wykres ostatnich pomiarów + liczba (co 3 s, w rozmowie serwer pingowany częściej)
+        var spark = new Border { Width = 26, Height = 12, Margin = U.Th(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center };
+        var ms = U.T("", 11.5, U.Bold, Theme.Mu);
+        void Ping()
+        {
+            var rtt = c.Rtt?.TotalMilliseconds;
+            ms.Text = rtt is double r ? $"{Math.Round(r)} ms · " : "";
+            ms.Foreground = U.PingBrush(rtt);
+            spark.Child = U.Sparkline(c.RttHistory.TakeLast(20).ToList(), 26, 12, U.PingBrush(rtt));
+        }
+        Ping();
+        var line2 = U.HG(0, spark, ms, where);
+        var text = U.V(0, state, line2);
         var go = new Border { Child = new Grid().Cols("auto", "*").Add(U.I(G.Signal, 16, StateBrush(c)).With(i => i.Margin = U.Th(2, 0, 8, 0)).At(0, 0), text.At(0, 1)), Background = Theme.Transparent, CornerRadius = new CornerRadius(8), Padding = U.Th(4, 4) };
-        go.Tip("Przejdź do rozmowy (prawy przycisk: stan połączenia)");
+        go.Tip("Przejdź do rozmowy (prawy przycisk: stan połączenia i wykres pingu)");
         go.RightTapped += (_, e) => { e.Handled = true; ShowStats(sh, go); };
         go.PointerEntered += (_, _) => go.Background = Theme.Hover;
         go.PointerExited += (_, _) => go.Background = Theme.Transparent;
@@ -67,6 +79,11 @@ static class VoiceUi
         right.Add(leave);
         var row = new Grid().Cols("*", "auto").Add(go.At(0, 0), right.At(0, 1));
         var box = new Border { Child = row, Padding = U.Th(8, 6, 6, 6), Background = Theme.Rail, BorderBrush = Theme.Line, BorderThickness = U.Th(0, 1, 0, 0) };
+        var pingTimer = sh.DispatcherQueue.CreateTimer();
+        pingTimer.Interval = TimeSpan.FromSeconds(3);
+        pingTimer.Tick += (_, _) => Ping();
+        box.Loaded += (_, _) => pingTimer.Start();
+        box.Unloaded += (_, _) => pingTimer.Stop();
         if (c.Voice.ScreenSharing)
             return U.V(0, box, new Border { Background = U.Alpha("#ff4d6a", .18), Padding = U.Th(12, 4), Child = U.T("Nadajesz ekran", 11.5, U.Bold, Theme.Red) });
         return box;
@@ -86,7 +103,15 @@ static class VoiceUi
             panel.Add(U.T("Stan połączenia", 15, U.Bold));
             FrameworkElement Row(string k, string v, Brush? fg = null) => new Grid().Cols("*", "auto").Add(U.T(k, 13, null, Theme.Mu).At(0, 0), U.T(v, 13, U.Bold, fg ?? Theme.Fg).At(0, 1));
             var rtt = c.Rtt?.TotalMilliseconds;
-            panel.Add(Row("Ping do serwera", rtt is double r ? $"{Math.Round(r)} ms" : "—", rtt is null ? Theme.Mu : rtt < 80 ? Theme.Green : rtt < 200 ? Theme.Yellow : Theme.Red));
+            panel.Add(Row("Ping do serwera", rtt is double r ? $"{Math.Round(r)} ms" : "—", U.PingBrush(rtt)));
+            // wykres pingu z ostatnich ~3 minut (pomiar co 3 s w rozmowie)
+            var hist = c.RttHistory.TakeLast(60).ToList();
+            if (hist.Count >= 2)
+            {
+                var chart = new Border { Background = U.W(.04), CornerRadius = new CornerRadius(8), Padding = U.Th(8, 6), Child = U.Sparkline(hist, 284, 52, U.PingBrush(rtt), 100, fill: true) };
+                panel.Add(chart);
+                panel.Add(U.T($"najniższy {Math.Round(hist.Min())} ms · średni {Math.Round(hist.Average())} ms · najwyższy {Math.Round(hist.Max())} ms", 11, null, Theme.Mu2));
+            }
             var q = c.Voice.Quality;
             panel.Add(Row("Jakość głosu", q switch { >= 3 => "świetna", 2 => "dobra", 1 => "słaba", _ => "bardzo słaba" }, q >= 3 ? Theme.Green : q == 2 ? Theme.Teal : q == 1 ? Theme.Yellow : Theme.Red));
             panel.Add(Row("Stan", StateText(c)));

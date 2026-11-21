@@ -80,7 +80,26 @@ public sealed partial class ChatView : Grid, IDisposable
     bool _loadingOlder, _loadingNewer, _unreadShown;
     bool _disposed;
     int _bottomTries;
-    bool _bottomQueued;
+    bool _bottomQueued, _bottomSoon;
+    long _burstAt;
+    int _burst;
+
+    /// <summary>Dociągnięcie na dół po skończonym układaniu (wołane ze zmian rozmiaru). Najwyżej ~25 razy na 2 s — potem odpuszcza do następnej zmiany.</summary>
+    void BottomAfterLayout()
+    {
+        if (_bottomSoon || _disposed) return;
+        var now = Environment.TickCount64;
+        if (now - _burstAt > 2000) { _burstAt = now; _burst = 0; }
+        if (++_burst > 25) { Watchdog.Crumb("na dół: za często — przerwa"); return; }
+        _bottomSoon = true;
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+        {
+            _bottomSoon = false;
+            if (!_stick || _disposed) return;
+            _bottomTries = 0;
+            ScrollToBottom();
+        });
+    }
     double _lastOffset;
     long _progUntil;
 
@@ -103,8 +122,11 @@ public sealed partial class ChatView : Grid, IDisposable
         Loaded += (_, _) => Motion.SlideIn(_sv, new System.Numerics.Vector3(16, 0, 0));
         _sv.ViewChanged += (_, _) => OnScrolled();
         // dociąganie na dół tylko, gdy wysokość naprawdę się zmieniła (wcześniej każda drobna zmiana zerowała licznik prób i kolejne próby mogły się łańcuchować)
-        content.SizeChanged += (_, e) => { if (_stick && Math.Abs(e.NewSize.Height - e.PreviousSize.Height) > 1) { _bottomTries = 0; ScrollToBottom(); } };
-        _sv.SizeChanged += (_, e) => { if (_stick && Math.Abs(e.NewSize.Height - e.PreviousSize.Height) > 1) { _bottomTries = 0; ScrollToBottom(); } };
+        // NIE przewijamy w środku układania (SizeChanged): przewinięcie zmienia, które wiadomości są zbudowane, to zmienia wysokość listy,
+        // a to znów SizeChanged — przy zmianie szerokości okna (zawijanie tekstu) kończyło się pętlą układu i zawieszonym oknem.
+        // Przewinięcie idzie po skończonym układaniu, najwyżej raz naraz i z limitem w krótkim czasie.
+        content.SizeChanged += (_, e) => { if (_stick && Math.Abs(e.NewSize.Height - e.PreviousSize.Height) > 1) BottomAfterLayout(); };
+        _sv.SizeChanged += (_, e) => { if (_stick && Math.Abs(e.NewSize.Height - e.PreviousSize.Height) > 1) BottomAfterLayout(); };
 
         _pill = new Border
         {

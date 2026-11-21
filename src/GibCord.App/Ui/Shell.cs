@@ -67,7 +67,8 @@ public sealed class Shell : Grid
         {
             _threadHost.Width = Math.Clamp(e.NewSize.Width - 68 - 240 - 420, 300, 480);
             // wąskie okno: lista osób chowa się sama (przycisk w nagłówku pokazuje ją na chwilę), szerokie — wraca wg ustawienia
-            var narrow = e.NewSize.Width < 1000;
+            // z marginesem (980/1020): przeciąganie okna przy granicy nie przełącza listy osób w kółko
+            var narrow = _narrow ? e.NewSize.Width < 1020 : e.NewSize.Width < 980;
             if (narrow == _narrow) return;
             _narrow = narrow;
             _narrowMembers = null;
@@ -771,13 +772,17 @@ public sealed class Shell : Grid
 
     ServerSettingsPage? _srvSettings;
 
-    public void ShowServerSettings(long serverId, string section = "overview", long? selectRole = null)
+    public void ShowServerSettings(long serverId, string section = "overview", long? selectRole = null, long? editChannel = null)
     {
         CloseServerSettings();
         _srvSettings = new ServerSettingsPage(this, serverId, section, selectRole);
         _srvSettings.At(0, 0, colSpan: 5);
         Children.Add(_srvSettings);
-        _srvSettings.Loaded += (_, _) => _srvSettings?.Focus(FocusState.Programmatic);
+        _srvSettings.Loaded += (_, _) =>
+        {
+            _srvSettings?.Focus(FocusState.Programmatic);
+            if (editChannel is long ec) _srvSettings?.EditChannelById(ec);
+        };
     }
 
     public void CloseServerSettings()
