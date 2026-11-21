@@ -854,7 +854,7 @@ public sealed class Shell : Grid
             {
                 Content = U.T("Uruchom ponownie", 12.5, U.Bold, Theme.Fg), Background = U.B("#2a1630"), CornerRadius = new CornerRadius(8),
                 Padding = U.Th(12, 4), BorderThickness = U.Th(0),
-            }.With(b => b.Click += (_, _) => Updater.Restart()).At(0, 1));
+            }.With(b => b.Click += (_, _) => { if (Updater.Restart() is { } err) Info(err, true); }).At(0, 1));
         _updateBar.Visibility = Visibility.Visible;
     }
 

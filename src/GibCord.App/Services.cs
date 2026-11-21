@@ -293,12 +293,63 @@ public static class Updater
             onReady(u.TargetFullRelease.Version.ToString());
             return null;
         }
-        catch (Exception ex) { App.Log("Sprawdzanie aktualizacji: " + ex.Message); return "Nie udało się sprawdzić aktualizacji"; }
+        catch (Exception ex) { App.Log("Sprawdzanie aktualizacji: " + ex); return "Nie udało się pobrać aktualizacji: " + Why(ex); }
     }
 
-    public static void Restart()
+    /// <summary>Zrozumiała przyczyna błędu aktualizacji (szuka też w wyjątkach wewnętrznych).</summary>
+    static string Why(Exception ex)
     {
-        if (_mgr is null || _ready is null) return;
-        try { _mgr.ApplyUpdatesAndRestart(_ready.TargetFullRelease); } catch (Exception ex) { App.Log("Restart z aktualizacją: " + ex.Message); }
+        for (var e = ex; e is not null; e = e.InnerException)
+            switch (e)
+            {
+                case HttpRequestException h when h.StatusCode is System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.TooManyRequests:
+                    return "GitHub chwilowo ogranicza sprawdzanie aktualizacji. Spróbuj za godzinę albo pobierz instalator ze strony gibcord.luisboon.pl.";
+                case HttpRequestException:
+                    return "brak połączenia z GitHubem. Sprawdź internet i spróbuj jeszcze raz.";
+                case TaskCanceledException or TimeoutException:
+                    return "GitHub nie odpowiada. Spróbuj za chwilę.";
+                case UnauthorizedAccessException:
+                    return "brak dostępu do folderu aplikacji. Zainstaluj GibCorda instalatorem ze strony gibcord.luisboon.pl.";
+                case IOException when e.Message.Contains("disk", StringComparison.OrdinalIgnoreCase) || e.Message.Contains("space", StringComparison.OrdinalIgnoreCase):
+                    return "za mało miejsca na dysku.";
+                case IOException:
+                    return "pliki aplikacji są zajęte. Zamknij wszystkie okna GibCorda (także ikonę przy zegarze) i spróbuj ponownie.";
+            }
+        return ex.Message;
+    }
+
+    /// <summary>Inne okna GibCorda z tego samego folderu (np. drugie uruchomienie z --server) trzymają pliki — zamknij je przed podmianą.</summary>
+    static void CloseOtherInstances()
+    {
+        try
+        {
+            var me = Environment.ProcessId;
+            var dir = AppContext.BaseDirectory.TrimEnd('\\', '/');
+            var parent = Path.GetDirectoryName(dir) ?? dir; // …\GibCord6 (obejmuje current\ i stare wersje)
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName("GibCord"))
+            {
+                if (p.Id == me) continue;
+                try
+                {
+                    var path = p.MainModule?.FileName;
+                    if (path is not null && path.StartsWith(parent, StringComparison.OrdinalIgnoreCase)) { p.Kill(); p.WaitForExit(3000); App.Log("Aktualizacja: zamknięto inne okno GibCorda (pid " + p.Id + ")"); }
+                }
+                catch { }
+            }
+        }
+        catch { }
+    }
+
+    /// <summary>Instaluje pobraną aktualizację i uruchamia aplikację od nowa. Zwraca komunikat błędu albo null.</summary>
+    public static string? Restart()
+    {
+        if (_mgr is null || _ready is null) return "Najpierw sprawdź aktualizacje.";
+        try
+        {
+            CloseOtherInstances();
+            _mgr.ApplyUpdatesAndRestart(_ready.TargetFullRelease);
+            return null;
+        }
+        catch (Exception ex) { App.Log("Restart z aktualizacją: " + ex); return "Nie udało się zainstalować aktualizacji: " + Why(ex); }
     }
 }
