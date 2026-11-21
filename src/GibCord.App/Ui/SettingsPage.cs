@@ -40,6 +40,13 @@ public sealed class SettingsPage : Grid
         KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape) { e.Handled = true; sh.CloseSettings(); } };
         S.Changed += OnChange;
         Unloaded += (_, _) => S.Changed -= OnChange;
+        if (App.Window?.Presence is { } pr)
+        {
+            // wykryta gra zmienia się w tle — karta „Wykrywanie gier” nadąża bez przerysowania całej strony
+            void OnGame() => DispatcherQueue.TryEnqueue(() => { if (_section == "privacy" && _gamesHost is { } h) FillGames(h); });
+            pr.Changed += OnGame;
+            Unloaded += (_, _) => pr.Changed -= OnGame;
+        }
         Draw();
     }
 
@@ -108,6 +115,89 @@ public sealed class SettingsPage : Grid
         Background = U.W(.045), CornerRadius = new CornerRadius(14), Padding = U.Th(18, 16), BorderBrush = U.W(.07), BorderThickness = U.Th(1),
         Child = U.V(10, children),
     };
+
+    // ── wykrywanie gier: co teraz, „To nie gra”, własna lista ──
+
+    Border? _gamesHost;
+
+    void FillGames(Border host)
+    {
+        var pr = App.Window?.Presence;
+        var p = App.Prefs;
+        var cur = pr?.Current;
+        var items = U.V(10);
+        void Changed() { p.Save(); pr?.RescanSoon(); FillGames(host); }
+        if (!p.GameDetection) items.Add(U.T("Wykrywanie jest wyłączone — włączysz je przełącznikiem „Pokazuj innym, w co grasz”.", 13, null, Theme.Mu, wrap: true));
+        else if (cur is null) items.Add(U.T("Teraz nie wykryto żadnej gry.", 13, null, Theme.Mu));
+        else
+        {
+            var exe = cur.Exe;
+            items.Add(new Grid { ColumnSpacing = 12 }.Cols("auto", "*", "auto").Add(
+                U.I("\uE7FC", 18, Theme.Green).At(0, 0),
+                U.V(1, U.T("Grasz w: " + cur.Name, 14, U.Bold), U.T($"wykryte: {cur.Source} · {exe}", 11.5, null, Theme.Mu2)).At(0, 1),
+                U.Ghost("To nie gra", () => { if (!p.NotGames.Contains(exe)) p.NotGames.Add(exe); p.MyGames.Remove(exe); Changed(); }, 32).At(0, 2)));
+        }
+        items.Add(U.T("GibCord rozpoznaje gry z listy GibCorda, z bibliotek Steam, Epic, GOG, Xbox, EA, Ubisoft, Riot i Rockstar oraz gry na pełnym ekranie. Nie widzi Twojej gry? Włącz ją i dodaj z listy uruchomionych programów.", 12, null, Theme.Mu2, wrap: true));
+        var add = U.Ghost("Dodaj grę z uruchomionych programów…", () => { }, 34).With(b => b.HorizontalAlignment = HorizontalAlignment.Left);
+        add.Click += async (_, _) => await AddGame(add, () => FillGames(host));
+        items.Add(add);
+        FrameworkElement Line(string title, string sub, Action remove) => new Grid { ColumnSpacing = 10 }.Cols("*", "auto").Add(
+            U.V(0, U.T(title, 13.5, U.Semi), string.IsNullOrEmpty(sub) ? null : U.T(sub, 11, null, Theme.Mu2)).At(0, 0),
+            U.IconButton(G.Close, "Usuń z listy", remove, 11, 28).At(0, 1));
+        if (p.MyGames.Count > 0)
+        {
+            items.Add(Label("Twoje gry"));
+            foreach (var (exe, name) in p.MyGames.OrderBy(x => x.Value, StringComparer.CurrentCultureIgnoreCase).ToList())
+                items.Add(Line(name, exe, () => { p.MyGames.Remove(exe); Changed(); }));
+        }
+        if (p.NotGames.Count > 0)
+        {
+            items.Add(Label("Nie pokazuj — to nie gry"));
+            foreach (var exe in p.NotGames.OrderBy(x => x).ToList())
+                items.Add(Line(exe, "", () => { p.NotGames.Remove(exe); Changed(); }));
+        }
+        host.Child = Card(Label("Wykrywanie gier"), items);
+    }
+
+    /// <summary>„Dodaj grę”: lista programów z oknami → wybór → nazwa (podpowiedziana z tytułu okna).</summary>
+    async Task AddGame(FrameworkElement anchor, Action done)
+    {
+        var list = new StackPanel { Spacing = 2 };
+        list.Add(new ProgressRing { IsActive = true, Width = 22, Height = 22, Foreground = Theme.Mu, Margin = U.Th(8) });
+        var fly = new Flyout { Content = new ScrollViewer { Content = list, MaxHeight = 420, Width = 380 }, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
+        fly.ShowAt(anchor);
+        List<(string Exe, string Title, string? Path)> apps;
+        try { apps = await Task.Run(GameScan.WindowedApps); }
+        catch (Exception ex) { list.Children.Clear(); list.Add(U.T("Nie udało się odczytać programów: " + ex.Message, 13, null, Theme.Red, wrap: true)); return; }
+        list.Children.Clear();
+        list.Add(U.T("Włącz grę i wybierz ją z listy:", 12, U.Bold, Theme.Mu2).With(t => t.Margin = U.Th(6, 2, 6, 6)));
+        if (apps.Count == 0) list.Add(U.T("Nie widać żadnych programów z oknami.", 13, null, Theme.Mu, wrap: true));
+        foreach (var (exe, title, _) in apps)
+        {
+            var row = U.Row(U.V(0, U.T(title, 13.5, U.Semi), U.T(exe, 11, null, Theme.Mu2)), null, false, 8, U.Th(10, 6), U.Th(0, 1));
+            row.Tapped += async (_, e) =>
+            {
+                e.Handled = true;
+                fly.Hide();
+                await M.WaitNoDialog(XamlRoot);
+                var box = new TextBox { Text = GameDetect.Pretty(title.Split(" - ")[0].Split(" — ")[0]), PlaceholderText = "Nazwa gry", MaxLength = 64 };
+                box.Loaded += (_, _) => { box.SelectAll(); box.Focus(FocusState.Programmatic); };
+                var d = new ContentDialog
+                {
+                    Title = "Dodaj grę", Content = U.V(8, U.T($"Gdy działa {exe}, inni zobaczą przy Twoim nicku:", 13, null, Theme.Mu, wrap: true), box),
+                    PrimaryButtonText = "Dodaj", CloseButtonText = "Anuluj", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
+                };
+                if (await d.ShowAsync() != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(box.Text)) return;
+                App.Prefs.MyGames[exe] = box.Text.Trim();
+                App.Prefs.NotGames.Remove(exe);
+                App.Prefs.Save();
+                App.Window?.Presence?.RescanSoon();
+                Ok($"Dodano: {box.Text.Trim()}");
+                done();
+            };
+            list.Add(row);
+        }
+    }
 
     void Ok(string msg) => _sh.Info(msg);
     void Err(Exception ex) => _sh.Info(GibCordClient.Friendly(ex), true);
@@ -446,6 +536,9 @@ public sealed class SettingsPage : Grid
             Toggle("Pokazuj innym, w co grasz", p.GameDetection, v => { p.GameDetection = v; p.Save(); }),
             Toggle("Pokazuj, czego słuchasz w Spotify", p.MusicDetection, v => { p.MusicDetection = v; p.Save(); }),
             U.T("Gry i muzykę wykrywa ta aplikacja na Twoim komputerze. Po wyłączeniu nikt ich nie zobaczy.", 12, null, Theme.Mu2, wrap: true)));
+        _gamesHost = new Border();
+        FillGames(_gamesHost);
+        _body.Add(_gamesHost);
         var me = S.Me;
         var spotify = U.V(8);
         if (me.SpotifyConnected)

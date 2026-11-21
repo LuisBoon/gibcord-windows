@@ -26,6 +26,8 @@ public sealed class MainWindow : Window
     public ScreenShare? Screen { get; private set; }
     public Camera? Cam { get; private set; }
     Presence? _presence;
+    /// <summary>Wykrywanie gier i muzyki (ustawienia pokazują wykrytą grę i własną listę).</summary>
+    public Presence? Presence => _presence;
     GameOverlay? _overlay;
     public IntPtr Hwnd { get; }
     public DispatcherQueue Dq { get; }

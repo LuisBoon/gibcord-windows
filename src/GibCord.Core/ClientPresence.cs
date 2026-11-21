@@ -17,6 +17,13 @@ public sealed partial class GibCordClient
         _ = g is null ? _gw.Send(new { t = "game_clear" }) : _gw.Send(new { t = "game_set", name = g.Name, appId = g.Id, startedAt });
     }
 
+    /// <summary>Gra spoza listy serwera (sklep, pełny ekran, dodana ręcznie) — serwer przyjmuje samą nazwę; z listy — także jej numer.</summary>
+    public void SendGame(GameHit? g, long startedAt)
+    {
+        if (Offline || _gw is null) return;
+        _ = g is null ? _gw.Send(new { t = "game_clear" }) : _gw.Send(new { t = "game_set", name = g.Name, appId = g.AppId, startedAt });
+    }
+
     public void SendMusic(MusicNow? m)
     {
         if (Offline || _gw is null) return;

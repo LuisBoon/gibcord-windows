@@ -59,6 +59,11 @@ public static class Demo
             case "srvroles" or "srvroles2": sh.Go(Eg, Ogolne); sh.ShowServerSettings(Eg, "roles", selectRole: 1); break; // srvroles2: po „forest” — przełączniki w kolorze motywu Las
             case "srvmembers": sh.Go(Eg, Ogolne); sh.ShowServerSettings(Eg, "members"); break;
             case "setapp": sh.Go(Eg, Ogolne); sh.ShowSettings("app"); break;
+            case "setgames": // karta „Wykrywanie gier” z własną listą (bez zapisu ustawień)
+                App.Prefs.MyGames["tibia.exe"] = "Tibia";
+                if (!App.Prefs.NotGames.Contains("vlc.exe")) App.Prefs.NotGames.Add("vlc.exe");
+                sh.Go(Eg, Ogolne); sh.ShowSettings("privacy");
+                break;
             case "adminsys": sh.Go(Eg, Ogolne); sh.ShowAdmin("system"); break;
             case "adminmail": sh.Go(Eg, Ogolne); sh.ShowAdmin("mail"); break;
             case "forest":

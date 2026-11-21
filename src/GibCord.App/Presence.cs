@@ -5,19 +5,25 @@ using Windows.Media.Control;
 namespace GibCord.App;
 
 /// <summary>
-/// „Gra w …” i „Słucha Spotify” przy nicku — jak w starej aplikacji, ale natywnie:
-/// gry po nazwach procesów (lista z serwera), muzyka z Windowsa (sterowanie multimediami, SMTC) — bez PowerShella i bez logowania do Spotify.
+/// „Gra w …” i „Słucha Spotify” przy nicku — natywnie, bez PowerShella i bez logowania do Spotify.
+/// Gry (od 6.0.5): Twoja lista, lista z serwera, gry ze sklepów po folderze instalacji (Steam, Epic, GOG, Xbox, EA, Ubisoft, Riot,
+/// Rockstar, Amazon, itch, wpisy w rejestrze) i programy na pełnym ekranie — logika w <see cref="GameDetect"/>.
+/// Muzyka z Windowsa (sterowanie multimediami, SMTC).
 /// </summary>
 public sealed class Presence
 {
     readonly GibCordClient _c;
     List<DetectableGame> _games = [];
     DateTime _gamesAt;
-    DetectableGame? _game;
+    volatile GameHit? _hit;
+    string? _fsBefore;
     long _gameSince;
+    GameLibrary? _lib;
+    DateTime _libAt;
     string? _musicKey;
     GlobalSystemMediaTransportControlsSessionManager? _smtc;
     readonly CancellationTokenSource _cts = new();
+    readonly SemaphoreSlim _wake = new(0, 1);
 
     // serwer zapomina grę i muzykę po rozłączeniu (i po każdym wdrożeniu) — po ponownym połączeniu wysyłamy je jeszcze raz
     volatile bool _resendGame, _resendMusic;
@@ -39,49 +45,59 @@ public sealed class Presence
     public void Stop() { _c.StatusChanged -= OnStatus; _cts.Cancel(); }
 
     /// <summary>Czy właśnie wykryliśmy grę (nakładka w trybie „tylko w grze”).</summary>
-    public bool InGame => _game is not null;
+    public bool InGame => _hit is not null;
+
+    /// <summary>Wykryta teraz gra (ustawienia pokazują ją z przyciskiem „To nie gra”).</summary>
+    public GameHit? Current => _hit;
+
+    /// <summary>Zmiana wykrytej gry (wołane z wątku w tle).</summary>
+    public event Action? Changed;
+
+    /// <summary>Skan od razu (po zmianie listy gier w ustawieniach), bez czekania 15 s.</summary>
+    public void RescanSoon() { try { if (_wake.CurrentCount == 0) _wake.Release(); } catch { } }
 
     async Task Loop(CancellationToken ct)
     {
         await Task.Delay(8000, ct).ConfigureAwait(false);
         while (!ct.IsCancellationRequested)
         {
-            try { if (_c.Status == GatewayStatus.Connected) { await ScanGames(); await ScanMusic(); } }
+            try { if (_c.Status == GatewayStatus.Connected) { await ScanGames().ConfigureAwait(false); await ScanMusic().ConfigureAwait(false); } }
             catch (Exception ex) { App.Log("Obecność: " + ex.Message); }
-            try { await Task.Delay(15000, ct).ConfigureAwait(false); } catch { return; }
+            try { await _wake.WaitAsync(15000, ct).ConfigureAwait(false); } catch { return; }
         }
     }
 
     async Task ScanGames()
     {
-        if (!App.Prefs.GameDetection) { if (_game is not null) { _game = null; _c.SendGame(null, 0); } return; }
+        if (!App.Prefs.GameDetection) { if (_hit is not null) { _hit = null; _c.SendGame((GameHit?)null, 0); Changed?.Invoke(); } return; }
         if (_games.Count == 0 || DateTime.UtcNow - _gamesAt > TimeSpan.FromHours(6))
         {
-            try { _games = await _c.DetectableGames(); _gamesAt = DateTime.UtcNow; } catch { if (_games.Count == 0) return; }
+            try { _games = await _c.DetectableGames().ConfigureAwait(false); _gamesAt = DateTime.UtcNow; } catch { }
         }
-        var procs = Process.GetProcesses();
-        var running = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var byExe = new Dictionary<string, List<Process>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var p in procs)
-        {
-            var exe = p.ProcessName.ToLowerInvariant() + ".exe";
-            running.Add(exe);
-            if (!byExe.TryGetValue(exe, out var l)) byExe[exe] = l = [];
-            l.Add(p);
-        }
-        IEnumerable<string> Titles(string exe) => byExe.TryGetValue(exe, out var l) ? l.Select(p => { try { return p.MainWindowTitle; } catch { return ""; } }) : [];
-        var pick = GibCordClient.PickGame(_games, running, Titles, _game);
-        foreach (var p in procs) p.Dispose();
+        if (_lib is null || DateTime.UtcNow - _libAt > TimeSpan.FromMinutes(30)) { _lib = GameScan.Library(); _libAt = DateTime.UtcNow; }
+
+        var procs = GameScan.Processes();
+        Dictionary<string, string> mine;
+        HashSet<string> not;
+        try { mine = new(App.Prefs.MyGames, StringComparer.OrdinalIgnoreCase); not = new(App.Prefs.NotGames, StringComparer.OrdinalIgnoreCase); }
+        catch { mine = new(StringComparer.OrdinalIgnoreCase); not = new(StringComparer.OrdinalIgnoreCase); }
+        var pick = GameDetect.Pick(procs, _games, _lib, mine, not, _hit, _fsBefore);
+        // pełny ekran liczy się dopiero przy drugim skanie z rzędu — zapamiętujemy dzisiejszego kandydata
+        _fsBefore = procs.FirstOrDefault(p => p.Fullscreen && GameDetect.IsFullscreenGameCandidate(p) && !not.Contains(p.Exe))?.Exe;
+
         var resend = _resendGame;
         _resendGame = false;
-        if (pick?.Name == _game?.Name)
+        if (pick?.Name == _hit?.Name && pick?.Exe == _hit?.Exe)
         {
             if (resend && pick is not null) _c.SendGame(pick, _gameSince);
             return;
         }
-        _game = pick;
-        _gameSince = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        if (pick is not null && pick.Name != _hit?.Name) App.Log($"Gra: {pick.Name} ({pick.Source}, {pick.Exe})");
+        var sameName = pick is not null && pick.Name == _hit?.Name;
+        _hit = pick;
+        if (!sameName) _gameSince = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         _c.SendGame(pick, _gameSince);
+        Changed?.Invoke();
     }
 
     async Task ScanMusic()

@@ -107,6 +107,10 @@ public sealed class Prefs
     /// <summary>Pokazuj innym, w co grasz (wykrywanie po procesach) i czego słuchasz w Spotify.</summary>
     public bool GameDetection { get; set; } = true;
     public bool MusicDetection { get; set; } = true;
+    /// <summary>Gry dodane ręcznie: plik (małymi literami, z .exe) → nazwa do pokazania.</summary>
+    public Dictionary<string, string> MyGames { get; set; } = [];
+    /// <summary>Pliki oznaczone „To nie gra” — wykrywanie je pomija.</summary>
+    public List<string> NotGames { get; set; } = [];
     /// <summary>Nakładka w grze: "off", "game" (tylko gdy wykryto grę), "always" (zawsze w rozmowie); róg: tl, tr, bl, br.</summary>
     public string OverlayMode { get; set; } = "game";
     public string OverlayCorner { get; set; } = "tl";
