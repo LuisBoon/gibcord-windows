@@ -698,26 +698,31 @@ public sealed class MainWindow : Window
             if (fromBottom > 0) { ch.DemoScrollTo(Math.Max(0, ch.ScrollMax - fromBottom)); await Task.Delay(900); }
             var jumps0 = ch.BottomJumps;
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            var s = new List<(long T, double Off, double Max)>();
-            EventHandler<object> h = (_, _) => s.Add((sw.ElapsedMilliseconds, ch.ScrollOffset, ch.ScrollMax));
+            var s = new List<(long T, double Off, double Max, Dictionary<long, double> Vis)>();
+            EventHandler<object> h = (_, _) => s.Add((sw.ElapsedMilliseconds, ch.ScrollOffset, ch.ScrollMax, ch.DemoVisible()));
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += h;
             for (var i = 0; i < ticks; i++) { mouse_event(0x0800, 0, 0, -120, 0); await Task.Delay(55); }
             await Task.Delay(1300);
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= h;
-            int back = 0, ext = 0; double backMax = 0, fwdMax = 0, gap = 0;
+            // ruch na ekranie: o ile przesunęły się wiadomości widoczne w obu klatkach (mediana); dodatni = treść jedzie w górę (przewijanie w dół)
+            int back = 0, ext = 0, big = 0, lost = 0; double backMax = 0, fwdMax = 0, gap = 0, offBackMax = 0;
             var trace = new System.Text.StringBuilder();
             for (var i = 1; i < s.Count; i++)
             {
-                var d = s[i].Off - s[i - 1].Off;
-                if (d < -0.5) { back++; backMax = Math.Max(backMax, -d); }
-                fwdMax = Math.Max(fwdMax, d);
                 gap = Math.Max(gap, s[i].T - s[i - 1].T);
                 if (Math.Abs(s[i].Max - s[i - 1].Max) > 0.5) ext++;
-                if (Math.Abs(d) > 0.5 && trace.Length < 900) trace.Append(d > 0 ? "+" : "").Append(Math.Round(d)).Append(' ');
+                offBackMax = Math.Max(offBackMax, s[i - 1].Off - s[i].Off);
+                var common = s[i].Vis.Keys.Where(s[i - 1].Vis.ContainsKey).Select(k => s[i - 1].Vis[k] - s[i].Vis[k]).OrderBy(x => x).ToList();
+                if (common.Count == 0) { lost++; continue; }
+                var d = common[common.Count / 2];
+                if (d < -0.5) { back++; backMax = Math.Max(backMax, -d); }
+                if (d > 120) big++;
+                fwdMax = Math.Max(fwdMax, d);
+                if (Math.Abs(d) > 0.5 && trace.Length < 700) trace.Append(d > 0 ? "+" : "").Append(Math.Round(d)).Append(' ');
             }
             var end = s.Count > 0 ? s[^1].Max - s[^1].Off : -1;
-            return $"klatek {s.Count}, cofnięć {back} (max {backMax:0} px), największy krok {fwdMax:0} px, najdłuższa klatka {gap} ms, zmian wysokości listy {ext}, " +
-                $"skoków na dół {ch.BottomJumps - jumps0}, na końcu od dołu {end:0} px | kroki: {trace}";
+            return $"klatek {s.Count}, NA EKRANIE: cofnięć {back} (max {backMax:0} px), skoków >120 px {big}, największy krok {fwdMax:0} px, klatek bez wspólnych wiadomości {lost}; " +
+                $"przesunięcie listy w tył max {offBackMax:0} px, najdłuższa klatka {gap} ms, zmian wysokości listy {ext}, skoków na dół {ch.BottomJumps - jumps0}, na końcu od dołu {end:0} px | kroki na ekranie: {trace}";
         }
         catch (Exception ex) { return "błąd: " + ex.Message; }
     }
@@ -735,7 +740,7 @@ public sealed class MainWindow : Window
                 App.Prefs.SmoothWheel = true;
                 App.Log($"Kółko (3 ząbki w górę): z wygładzaniem {smooth:0} px, systemowe {plain:0} px, przewijalne {wch.ScrollMax:0} px");
                 // podskakiwanie przy przewijaniu w dół: na samym dole (dalej w dół) i z ~2500 px nad dołem do końca
-                App.Log("Kółko na dole, dalej w dół: " + await WheelDownProbe(wch, 0, 4));
+                App.Log("Kółko z 600 px nad dołem (dojazd i dalej w dół): " + await WheelDownProbe(wch, 600, 10));
                 App.Log("Kółko w dół do końca (wygładzone): " + await WheelDownProbe(wch, 2500, 24));
                 App.Prefs.SmoothWheel = false;
                 App.Log("Kółko w dół do końca (systemowe): " + await WheelDownProbe(wch, 2500, 24));

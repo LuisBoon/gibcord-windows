@@ -241,6 +241,19 @@ public sealed partial class ChatView : Grid, IDisposable
     public FrameworkElement ListArea => _sv;
     /// <summary>Ile razy lista sama przewinęła się na dół (samotest: przy przewijaniu kółkiem nie powinna szarpać).</summary>
     public int BottomJumps { get; private set; }
+    /// <summary>Samotest: położenie widocznych wiadomości względem okna listy (id → y) — prawdziwy ruch na ekranie, niezależnie od szacowanej wysokości listy.</summary>
+    public Dictionary<long, double> DemoVisible()
+    {
+        var res = new Dictionary<long, double>();
+        var n = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(_rep);
+        for (var i = 0; i < n; i++)
+            if (Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(_rep, i) is MessageView { MsgId: > 0 } mv && mv.Visibility == Visibility.Visible)
+            {
+                var y = mv.TransformToVisual(_sv).TransformPoint(default).Y;
+                if (y > -mv.ActualHeight && y < _sv.ViewportHeight) res[mv.MsgId] = y;
+            }
+        return res;
+    }
     public void DemoScrollTo(double off) { _stick = false; SmoothWheel.Cancel(_sv); _sv.ChangeView(null, off, null, true); }
 
     /// <summary>Rozmowa prywatna z kamerą albo transmisją: kafelki nad czatem (jak na kanale głosowym, tylko mniejsze).</summary>

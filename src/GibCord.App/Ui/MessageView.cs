@@ -14,6 +14,8 @@ public sealed partial class MessageView : Grid
 {
     readonly ChatView _v;
     Row? _row;
+    /// <summary>Samotest przewijania: która wiadomość jest w tym widoku.</summary>
+    internal long MsgId => _row?.M.Id ?? 0;
     Border? _tools;
     readonly Grid _body = new();
     static readonly string[] Quick = ["👍", "❤️", "😂"];
@@ -579,7 +581,7 @@ public sealed partial class MessageView : Grid
         if (_v.CanStartThread(m)) p.Add(U.IconButton(GT.Thread, m.Thread.ValueKind == JsonValueKind.Object ? "Otwórz wątek" : "Utwórz wątek", () => OpenOrStartThread(m), 15, 32));
         if (m.AuthorId == S.Me.Id && !m.IsGame) p.Add(U.IconButton("", "Edytuj", () => _v.Edit(m), 15, 32));
         var more = U.IconButton("", "Więcej", () => { }, 15, 32);
-        more.Flyout = Menu();
+        more.Click += (_, _) => { if (_row is not null) Menu().ShowAt(more); }; // menu budowane dopiero po kliknięciu — najechanie (też przy przewijaniu) ma być lekkie
         p.Add(more);
         _tools = new Border
         {
