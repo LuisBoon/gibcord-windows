@@ -161,7 +161,7 @@ public static class Demo
             Msg(1010, Ogolne, BonkusId, "zrzut z wczoraj, patrzcie jaka baza", now - 5 * 60000),
             Msg(1020, Ogolne, MeId, "nowy GibCord już się buduje 👀 <@2> <@3> sprawdźcie w sobotę", now - 60000),
         };
-        list[8].Attachments = [new Attachment { Id = 1, Url = "https://gibcord.luisboon.pl/icon-512.png", Name = "baza.png", Mime = "image/png", Width = 512, Height = 512, Size = 120000 }];
+        list[8].Attachments = [new Attachment { Id = 1, Url = "https://gibcord.luisboon.pl/icon-512.png", Name = "baza.png", Mime = "image/png", Width = 512, Height = 512, Size = 120000, Preview = "LZD8eGtR0}R-o}buayjZ0}Wp=xoJ" }];
         list[8].Reactions = [new Reaction { Emoji = "🔥", UserIds = [MeId, OlaId, KubaId, MajaId] }, new Reaction { Emoji = "😂", UserIds = [KubaId, BartekId] }];
         list[8].Thread = J(new { id = 1, name = "Sobotni turniej", count = 4, lastAt = now - 2 * 60000 });
         list[7].ReplyTo = new ReplyRef { Id = 1008, AuthorId = KubaId, Content = "ktoś wbija dziś wieczorem na granie?" };

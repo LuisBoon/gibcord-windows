@@ -394,6 +394,8 @@ public sealed class Attachment
     public string Mime { get; set; } = "";
     public int? Width { get; set; }
     public int? Height { get; set; }
+    /// <summary>BlurHash: rozmyta wersja zdjęcia do pokazania, zanim się wczyta (liczy serwer 6.0).</summary>
+    public string? Preview { get; set; }
 
     [JsonIgnore] public bool IsImage => Mime is "image/png" or "image/jpeg" or "image/jpg" or "image/gif" or "image/webp" or "image/bmp" or "image/avif";
 }

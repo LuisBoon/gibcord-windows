@@ -310,6 +310,31 @@ public static class Images
     /// <summary>Nieudane pobrania: nowa próba najwcześniej po 3 minutach (404 nie może kręcić zapytań przy każdym odświeżeniu).</summary>
     static readonly Dictionary<string, long> _failedAt = [];
 
+    static readonly Dictionary<string, Microsoft.UI.Xaml.Media.Imaging.WriteableBitmap> _blur = [];
+
+    /// <summary>Rozmyty podgląd z BlurHash (mały obrazek, rozciągany — rozmycie wychodzi samo). Null przy złym napisie.</summary>
+    public static Microsoft.UI.Xaml.Media.Imaging.WriteableBitmap? Blur(string? hash, double aspect)
+    {
+        if (!GibCord.Core.BlurHash.IsValid(hash)) return null;
+        int w = 32, h = (int)Math.Clamp(Math.Round(32 / Math.Max(.1, aspect)), 8, 32);
+        var key = hash + "|" + h;
+        if (_blur.TryGetValue(key, out var hit)) return hit;
+        try
+        {
+            if (GibCord.Core.BlurHash.Decode(hash!, w, h) is not { } px) return null;
+            var wb = new Microsoft.UI.Xaml.Media.Imaging.WriteableBitmap(w, h);
+            using (var s = System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions.AsStream(wb.PixelBuffer)) s.Write(px, 0, px.Length);
+            wb.Invalidate();
+            if (_blur.Count > 300) _blur.Clear();
+            _blur[key] = wb;
+            return wb;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Czy obraz jest już wczytany (wtedy bez przenikania) albo się nie udał (wtedy też pokazujemy od razu).</summary>
+    public static bool Ready(BitmapImage? b) => b is null || b.PixelWidth > 0 || _failedAt.Keys.Any(k => _cache.TryGetValue(k, out var x) && ReferenceEquals(x, b));
+
     public static BitmapImage? Get(Uri? uri, int decodeWidth = 0)
     {
         if (uri is null) return null;

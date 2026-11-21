@@ -320,8 +320,30 @@ public sealed partial class MessageView : Grid
             double w = a.Width ?? 320, h = a.Height ?? 220;
             var k = Math.Min(1, Math.Min(400 / w, 320 / h));
             w = Math.Max(40, Math.Round(w * k)); h = Math.Max(40, Math.Round(h * k));
-            var img = new Image { Source = Images.Get(url, (int)Math.Min(800, w * 2)), Width = w, Height = h, Stretch = Stretch.UniformToFill };
-            var b = new Border { CornerRadius = new CornerRadius(10), Width = w, Height = h, Child = img, HorizontalAlignment = HorizontalAlignment.Left, Margin = U.Th(0, 3, 0, 2), Background = U.W(.05) };
+            var src = Images.Get(url, (int)Math.Min(800, w * 2));
+            var img = new Image { Source = src, Width = w, Height = h, Stretch = Stretch.UniformToFill };
+            // zanim zdjęcie się wczyta: rozmyta wersja (BlurHash z serwera) albo jasne tło, potem płynne wyostrzenie
+            Brush bg = Images.Blur(a.Preview, w / h) is { } blur ? new ImageBrush { ImageSource = blur, Stretch = Stretch.Fill } : U.W(.05);
+            var b = new Border { CornerRadius = new CornerRadius(10), Width = w, Height = h, Child = img, HorizontalAlignment = HorizontalAlignment.Left, Margin = U.Th(0, 3, 0, 2), Background = bg };
+            if (!Images.Ready(src) && src is not null)
+            {
+                img.Opacity = 0;
+                img.OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(Motion.On ? 320 : 0) };
+                void Show() => img.Opacity = 1;
+                img.ImageOpened += (_, _) => Show();
+                img.ImageFailed += (_, _) => Show();
+                // na wszelki wypadek (zdarzenie mogło przyjść, zanim widok trafił na ekran): po 3 s pokaż i tak
+                img.Loaded += (_, _) =>
+                {
+                    if (img.Opacity >= 1) return;
+                    if (src.PixelWidth > 0) { Show(); return; }
+                    var t = img.DispatcherQueue.CreateTimer();
+                    t.Interval = TimeSpan.FromSeconds(3);
+                    t.IsRepeating = false;
+                    t.Tick += (_, _) => Show();
+                    t.Start();
+                };
+            }
             b.Tapped += (_, e) => { e.Handled = true; Lightbox.Show(_v.Sh, url, a.Name, b); };
             b.Tip(a.Name);
             return b;
