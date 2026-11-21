@@ -27,7 +27,10 @@ public sealed partial class MessageView : Grid
         _v = v;
         Background = Theme.Transparent;
         Children.Add(_body);
-        PointerEntered += (_, _) => { if (!IsStarter) ShowTools(true); };
+        // pasek akcji nie przy przewijaniu kółkiem (wiadomości przesuwają się pod kursorem — budowanie paska co chwilę dławiło przewijanie);
+        // po zatrzymaniu pokazuje się przy pierwszym ruchu myszy
+        PointerEntered += (_, _) => { if (!IsStarter && !SmoothWheel.Busy) ShowTools(true); };
+        PointerMoved += (_, _) => { if (_tools is null && !IsStarter && !SmoothWheel.Busy && _row is { M: { IsSystem: false, Send: SendState.Sent } }) ShowTools(true); };
         PointerExited += (_, _) => { if (!IsStarter) ShowTools(false); };
         RightTapped += (_, e) => { if (!IsStarter && _row is not null && _row.M.Send == SendState.Sent && !_row.M.IsSystem) { Menu().ShowAt(this, e.GetPosition(this)); e.Handled = true; } };
     }

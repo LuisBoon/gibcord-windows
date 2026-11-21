@@ -707,6 +707,7 @@ public sealed class MainWindow : Window
             // ruch na ekranie: o ile przesunęły się wiadomości widoczne w obu klatkach (mediana); dodatni = treść jedzie w górę (przewijanie w dół)
             int back = 0, ext = 0, big = 0, lost = 0; double backMax = 0, fwdMax = 0, gap = 0, offBackMax = 0;
             var trace = new System.Text.StringBuilder();
+            var steps = new List<double>();
             for (var i = 1; i < s.Count; i++)
             {
                 gap = Math.Max(gap, s[i].T - s[i - 1].T);
@@ -718,10 +719,13 @@ public sealed class MainWindow : Window
                 if (d < -0.5) { back++; backMax = Math.Max(backMax, -d); }
                 if (d > 120) big++;
                 fwdMax = Math.Max(fwdMax, d);
+                if (Math.Abs(d) > 0.5) steps.Add(d);
                 if (Math.Abs(d) > 0.5 && trace.Length < 700) trace.Append(d > 0 ? "+" : "").Append(Math.Round(d)).Append(' ');
             }
             var end = s.Count > 0 ? s[^1].Max - s[^1].Off : -1;
-            return $"klatek {s.Count}, NA EKRANIE: cofnięć {back} (max {backMax:0} px), skoków >120 px {big}, największy krok {fwdMax:0} px, klatek bez wspólnych wiadomości {lost}; " +
+            // nierówność: średnia różnica między kolejnymi krokami w stosunku do średniego kroku (0 = idealnie równo)
+            var jerk = steps.Count > 2 ? steps.Zip(steps.Skip(1), (a, b) => Math.Abs(b - a)).Average() / Math.Max(1, steps.Average(Math.Abs)) : 0;
+            return $"klatek {s.Count}, NA EKRANIE: nierówność {jerk:0.00}, cofnięć {back} (max {backMax:0} px), skoków >120 px {big}, największy krok {fwdMax:0} px, klatek bez wspólnych wiadomości {lost}; " +
                 $"przesunięcie listy w tył max {offBackMax:0} px, najdłuższa klatka {gap} ms, zmian wysokości listy {ext}, skoków na dół {ch.BottomJumps - jumps0}, na końcu od dołu {end:0} px | kroki na ekranie: {trace}";
         }
         catch (Exception ex) { return "błąd: " + ex.Message; }

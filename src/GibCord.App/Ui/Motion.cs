@@ -358,7 +358,6 @@ static class Motion
     static readonly ConditionalWeakTable<object, Tw> Tweens = new();
     static readonly List<Tw> Active = [];
     static bool _hooked;
-    static long _frameAt;
 
     /// <summary>Wartość sprężyście z <paramref name="current"/> do <paramref name="to"/>; <paramref name="apply"/> co klatkę. Klucz = element (kolejne wywołania przejmują ruch).</summary>
     public static void Tween(object key, double current, double to, Action<double> apply)
@@ -371,16 +370,17 @@ static class Motion
         if (!_hooked)
         {
             _hooked = true;
-            _frameAt = Environment.TickCount64;
+            _frame = default;
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnFrame;
         }
     }
 
+    static FrameClock _frame;
+
     static void OnFrame(object? sender, object e)
     {
-        var now = Environment.TickCount64;
-        var dt = Math.Clamp((now - _frameAt) / 1000.0, .001, .05);
-        _frameAt = now;
+        var dt = _frame.Next(e);
+        if (dt <= 0) return; // drugi raz w tej samej klatce
         for (var i = Active.Count - 1; i >= 0; i--)
         {
             var t = Active[i];
@@ -395,17 +395,49 @@ static class Motion
 }
 
 /// <summary>
-/// Kółko myszy z wygładzaniem (szlif, pkt 9): każdy ząbek dodaje ~100 px do drogi, a lista dojeżdża tam płynnie z wyhamowaniem
-/// (jak w Edge); szybkie kręcenie się sumuje. Touchpady precyzyjne zostają przy systemowym przewijaniu (DirectManipulation).
-/// Wyłączone przy „Mniej ruchu” albo w ustawieniach.
+/// Czas między klatkami do animacji liczonych w CompositionTarget.Rendering. Bierze czas klatki z RenderingEventArgs
+/// (zapasowo Stopwatch) — Environment.TickCount64 tyka co ~15,6 ms, więc przy 60/144 Hz część klatek wychodziła „bez ruchu”,
+/// a następna nadrabiała podwójnie (przewijanie szarpało).
+/// </summary>
+struct FrameClock
+{
+    TimeSpan _last;
+    long _lastSw;
+
+    /// <summary>Sekundy od poprzedniej klatki (najwyżej 0,05); 0 = to ta sama klatka co poprzednio.</summary>
+    public double Next(object e)
+    {
+        var sw = System.Diagnostics.Stopwatch.GetTimestamp();
+        var rt = e is Microsoft.UI.Xaml.Media.RenderingEventArgs r ? r.RenderingTime : TimeSpan.Zero;
+        double dt;
+        if (_lastSw == 0) dt = 1 / 60.0;
+        else
+        {
+            var swDt = (sw - _lastSw) / (double)System.Diagnostics.Stopwatch.Frequency;
+            var rtDt = (rt - _last).TotalSeconds;
+            dt = rtDt > .0005 ? rtDt : swDt > .004 ? swDt : 0; // czas klatki; gdy stoi, a minęło > 4 ms — zegar
+        }
+        if (dt <= 0) return 0;
+        _last = rt; _lastSw = sw;
+        return Math.Min(dt, .05);
+    }
+}
+
+/// <summary>
+/// Kółko myszy z wygładzaniem: każdy ząbek przesuwa cel o ~100 px, a lista goni go sprężyną krytycznie tłumioną
+/// (prędkość się nie urywa między ząbkami — przy szybkim kręceniu jedzie równo, bez pulsowania). Przy końcu listy
+/// droga i prędkość są przycinane, więc lista łagodnie hamuje do samego końca zamiast stawać jak wryta.
+/// Touchpady precyzyjne zostają przy systemowym przewijaniu (DirectManipulation). Wyłączone przy „Mniej ruchu” albo w ustawieniach.
 /// </summary>
 static class SmoothWheel
 {
-    sealed class St { public ScrollViewer Sv = null!; public double Pending; }
+    /// <summary>Left = ile jeszcze do celu (px, + w dół), V = prędkość (px/s).</summary>
+    sealed class St { public ScrollViewer Sv = null!; public double Left, V; }
     static readonly List<St> Running = [];
     static bool _hooked;
-    static long _at;
+    static FrameClock _clock;
     const double Step = 100;
+    const double W = 24; // sztywność sprężyny (1/s): ząbek ~100 px w ~0,2 s
 
     public static bool Enabled => App.Prefs.SmoothWheel && Motion.On;
 
@@ -423,32 +455,50 @@ static class SmoothWheel
         var p = e.GetCurrentPoint(st.Sv).Properties;
         if (p.IsHorizontalMouseWheel || p.MouseWheelDelta == 0 || st.Sv.ScrollableHeight <= 0) return;
         e.Handled = true;
-        st.Pending -= p.MouseWheelDelta / 120.0 * Step;
-        if (!Running.Contains(st)) Running.Add(st);
+        var d = -p.MouseWheelDelta / 120.0 * Step;
+        if (!Running.Contains(st)) { st.Left = 0; st.V = 0; Running.Add(st); }
+        if ((st.Left != 0 && Math.Sign(d) != Math.Sign(st.Left)) || (st.V != 0 && Math.Sign(d) != Math.Sign(st.V))) { st.Left = 0; st.V = 0; } // zmiana kierunku: od razu w drugą stronę
+        st.Left += d;
         if (!_hooked)
         {
             _hooked = true;
-            _at = Environment.TickCount64;
+            _clock = default;
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnFrame;
         }
     }
 
     static void OnFrame(object? sender, object e)
     {
-        var now = Environment.TickCount64;
-        var dt = Math.Clamp((now - _at) / 1000.0, .001, .05);
-        _at = now;
-        var k = 1 - Math.Exp(-dt * 13); // ok. 90% drogi w 180 ms
+        var dt = _clock.Next(e);
+        if (dt <= 0) return;
+        var decay = Math.Exp(-W * dt);
         for (var i = Running.Count - 1; i >= 0; i--)
         {
             var st = Running[i];
-            var step = Math.Abs(st.Pending) < 1 ? st.Pending : st.Pending * k;
-            var from = st.Sv.VerticalOffset;
-            var to = Math.Clamp(from + step, 0, st.Sv.ScrollableHeight);
-            st.Pending -= step;
-            if (Math.Abs(to - from) < .01 && (to <= 0 || to >= st.Sv.ScrollableHeight)) st.Pending = 0; // dojechało do końca listy
-            else try { st.Sv.ChangeView(null, to, null, true); } catch { st.Pending = 0; }
-            if (Math.Abs(st.Pending) < .01) Running.RemoveAt(i);
+            var sv = st.Sv;
+            var off = sv.VerticalOffset;
+            var max = sv.ScrollableHeight;
+            // do końca listy zostało mniej niż do celu: cel na końcu, prędkość taka, żeby wyhamować bez przestrzelenia
+            var room = st.Left > 0 ? max - off : -off;
+            if (Math.Abs(st.Left) > Math.Abs(room))
+            {
+                st.Left = room;
+                if (Math.Abs(st.V) > W * Math.Abs(room)) st.V = W * room;
+            }
+            // sprężyna krytycznie tłumiona, rozwiązanie dokładne (x = położenie względem celu)
+            var x0 = -st.Left;
+            var c = st.V + W * x0;
+            var x1 = (x0 + c * dt) * decay;
+            st.V = (st.V - W * c * dt) * decay;
+            var move = x1 - x0;
+            st.Left = -x1;
+            var done = Math.Abs(st.Left) < .5 && Math.Abs(st.V) < 30;
+            if (done) move += st.Left;
+            var to = Math.Clamp(off + move, 0, max);
+            if (Math.Abs(to - off) >= .01)
+                try { sv.ChangeView(null, to, null, true); } catch { done = true; }
+            else if (Math.Abs(room) < .5) done = true; // stoi na końcu listy
+            if (done) { st.Left = 0; st.V = 0; Running.RemoveAt(i); }
         }
         if (Running.Count == 0) { Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnFrame; _hooked = false; }
     }
@@ -457,8 +507,11 @@ static class SmoothWheel
     public static void Cancel(ScrollViewer sv)
     {
         for (var i = Running.Count - 1; i >= 0; i--)
-            if (ReferenceEquals(Running[i].Sv, sv)) { Running[i].Pending = 0; Running.RemoveAt(i); }
+            if (ReferenceEquals(Running[i].Sv, sv)) { Running[i].Left = 0; Running[i].V = 0; Running.RemoveAt(i); }
     }
+
+    /// <summary>Czy ta lista właśnie jedzie od kółka (wtedy lista nie „dociąga” sama na dół — skok w połowie ruchu).</summary>
+    public static bool IsActive(ScrollViewer sv) => Running.Exists(r => ReferenceEquals(r.Sv, sv));
 
     /// <summary>Do samotestu w CI: czy coś jeszcze jedzie.</summary>
     public static bool Busy => Running.Count > 0;

@@ -88,6 +88,8 @@ public sealed partial class ChatView : Grid, IDisposable
     void BottomAfterLayout()
     {
         if (_bottomSoon || _disposed) return;
+        // w trakcie przewijania kółkiem lista sama dojedzie do końca (łagodnie) — dociąganie tu dawało skok w połowie ruchu
+        if (SmoothWheel.IsActive(_sv)) return;
         var now = Environment.TickCount64;
         if (now - _burstAt > 2000) { _burstAt = now; _burst = 0; }
         if (++_burst > 25) { Watchdog.Crumb("na dół: za często — przerwa"); return; }
@@ -95,7 +97,7 @@ public sealed partial class ChatView : Grid, IDisposable
         DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
         {
             _bottomSoon = false;
-            if (!_stick || _disposed) return;
+            if (!_stick || _disposed || SmoothWheel.IsActive(_sv)) return;
             _bottomTries = 0;
             ScrollToBottom();
         });
@@ -566,8 +568,9 @@ public sealed partial class ChatView : Grid, IDisposable
     void OnScrolled()
     {
         var off = _sv.VerticalOffset;
-        var atBottom = _sv.ScrollableHeight - off < 80;
-        // „przyklejenie” do dołu puszcza tylko przewinięcie w górę przez człowieka (lista rośnie przy wczytywaniu)
+        // „przyklejenie” do dołu łapie dopiero sam koniec listy (wcześniej 80 px przed końcem — każda zmiana wysokości wiadomości
+        // szarpała wtedy listę na dół w połowie przewijania); puszcza je tylko przewinięcie w górę przez człowieka (lista rośnie przy wczytywaniu)
+        var atBottom = _sv.ScrollableHeight - off < 12;
         if (atBottom) _stick = S.Window(Key).AtTail;
         if (_unreadBar.Visibility == Visibility.Visible && off < 200 && _rows.Count > 0 && !S.Window(Key).HasOlder) _unreadBar.Visibility = Visibility.Collapsed;
         else if (off < _lastOffset - 1 && Environment.TickCount64 > _progUntil) _stick = false;
