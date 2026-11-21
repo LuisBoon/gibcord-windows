@@ -379,7 +379,7 @@ static class Motion
 
     static void OnFrame(object? sender, object e)
     {
-        var dt = _frame.Next(e);
+        var dt = _frame.Next();
         if (dt <= 0) return; // drugi raz w tej samej klatce
         for (var i = Active.Count - 1; i >= 0; i--)
         {
@@ -395,30 +395,22 @@ static class Motion
 }
 
 /// <summary>
-/// Czas między klatkami do animacji liczonych w CompositionTarget.Rendering. Bierze czas klatki z RenderingEventArgs
-/// (zapasowo Stopwatch) — Environment.TickCount64 tyka co ~15,6 ms, więc przy 60/144 Hz część klatek wychodziła „bez ruchu”,
-/// a następna nadrabiała podwójnie (przewijanie szarpało).
+/// Czas między klatkami do animacji liczonych w CompositionTarget.Rendering — dokładny zegar (Stopwatch).
+/// Environment.TickCount64 tyka co ~15,6 ms (przy 60/144 Hz część klatek wychodziła „bez ruchu”, a następna nadrabiała podwójnie),
+/// a RenderingTime z RenderingEventArgs skacze (pomiar w CI: 5, 25, 8, 16 ms przy równych klatkach co 15,8 ms) — oba dawały szarpanie.
 /// </summary>
 struct FrameClock
 {
-    TimeSpan _last;
-    long _lastSw;
+    long _last;
 
-    /// <summary>Sekundy od poprzedniej klatki (najwyżej 0,05); 0 = to ta sama klatka co poprzednio.</summary>
-    public double Next(object e)
+    /// <summary>Sekundy od poprzedniej klatki (najwyżej 0,05); 0 = drugie wywołanie w tej samej klatce.</summary>
+    public double Next()
     {
-        var sw = System.Diagnostics.Stopwatch.GetTimestamp();
-        var rt = e is Microsoft.UI.Xaml.Media.RenderingEventArgs r ? r.RenderingTime : TimeSpan.Zero;
-        double dt;
-        if (_lastSw == 0) dt = 1 / 60.0;
-        else
-        {
-            var swDt = (sw - _lastSw) / (double)System.Diagnostics.Stopwatch.Frequency;
-            var rtDt = (rt - _last).TotalSeconds;
-            dt = rtDt > .0005 ? rtDt : swDt > .004 ? swDt : 0; // czas klatki; gdy stoi, a minęło > 4 ms — zegar
-        }
-        if (dt <= 0) return 0;
-        _last = rt; _lastSw = sw;
+        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (_last == 0) { _last = now; return 1 / 60.0; }
+        var dt = (now - _last) / (double)System.Diagnostics.Stopwatch.Frequency;
+        if (dt < .0015) return 0;
+        _last = now;
         return Math.Min(dt, .05);
     }
 }
@@ -469,7 +461,7 @@ static class SmoothWheel
 
     static void OnFrame(object? sender, object e)
     {
-        var dt = _clock.Next(e);
+        var dt = _clock.Next();
         if (dt <= 0) return;
         var decay = Math.Exp(-W * dt);
         for (var i = Running.Count - 1; i >= 0; i--)
