@@ -90,34 +90,49 @@ public static class Picker
         static TextBlock Head(string t) => U.T(t.ToUpperInvariant(), 10.5, U.Bold, Theme.Mu2).With(x => x.Margin = U.Th(2, 8, 0, 2));
 
         // ── emoji ──
+        // Siatka emoji ma ~1500 przycisków: budowanie naraz blokowało okno na kilka sekund (strażnik złapał to w CI).
+        // Teraz porcjami: pierwsze ~40 ms od razu (Ostatnio i pierwsza grupa), reszta w kolejnych chwilach wolnego czasu okna.
+        var emojiDraw = 0;
+        fly.Closed += (_, _) => emojiDraw++; // zamknięte okienko — reszta siatki już się nie buduje
         void DrawEmoji()
         {
+            var ver = ++emojiDraw;
             var q = EmojiData.Fold(search.Text.Trim());
             var panel = new StackPanel { Spacing = 2 };
-            void Group(string name, IEnumerable<FrameworkElement> items)
-            {
-                var wrap = new WrapPanel { Spacing = 2 };
-                foreach (var i in items) wrap.Children.Add(i);
-                if (wrap.Children.Count == 0) return;
-                panel.Children.Add(Head(name));
-                panel.Children.Add(wrap);
-            }
+            var groups = new Queue<(string Name, IEnumerator<FrameworkElement> Items)>();
+            void Group(string name, IEnumerable<FrameworkElement> items) => groups.Enqueue((name, items.GetEnumerator()));
             var servers = s.Servers.Where(x => x.Emojis.Count > 0).OrderByDescending(x => x.Id == v.Srv?.Id).ToList();
             if (q.Length == 0)
             {
                 Group("Ostatnio", App.Prefs.RecentEmoji.Where(e => !e.StartsWith('<') || (Markup.ParseInline(e).FirstOrDefault() is EmojiSpan es && s.EmojiById(es.Id) is not null)).Select(EmojiCell));
                 foreach (var srv in servers) Group(srv.Name, srv.Emojis.Select(e => EmojiCell($"<{(e.Animated ? "a" : "")}:{e.Name}:{e.Id}>")));
                 foreach (var (name, data) in EmojiData.Groups) Group(name, EmojiData.InGroup(data).Select(EmojiCell));
-                panel.Children.Add(U.T("Jeszcze więcej emoji: Win + . (kropka)", 11, null, Theme.Mu2).With(t => t.Margin = U.Th(2, 8, 0, 0)));
             }
             else
             {
                 foreach (var srv in servers) Group(srv.Name, srv.Emojis.Where(e => EmojiData.Fold(e.Name).Contains(q)).Select(e => EmojiCell($"<{(e.Animated ? "a" : "")}:{e.Name}:{e.Id}>")));
                 Group("Emoji", EmojiData.All.Where(x => EmojiData.Fold(x.Keys).Split(' ').Any(k => k.StartsWith(q)) || (q.Length >= 3 && EmojiData.Fold(x.Keys).Contains(q))).Select(x => EmojiCell(x.E)));
-                if (panel.Children.Count == 0) panel.Children.Add(U.T("Nic nie znaleziono. Spróbuj innego słowa albo Win + . (kropka).", 13, null, Theme.Mu, wrap: true).With(t => t.Margin = U.Th(4, 12)));
+            }
+            (string Name, IEnumerator<FrameworkElement> Items)? cur = null;
+            WrapPanel? wrap = null;
+            void Pump(int budgetMs)
+            {
+                if (ver != emojiDraw) return; // w międzyczasie nowe szukanie albo zamknięte okienko
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                while (sw.ElapsedMilliseconds < budgetMs)
+                {
+                    if (cur is null) { if (groups.Count == 0) break; cur = groups.Dequeue(); wrap = null; }
+                    if (!cur.Value.Items.MoveNext()) { cur = null; continue; }
+                    if (wrap is null) { wrap = new WrapPanel { Spacing = 2 }; panel.Children.Add(Head(cur.Value.Name)); panel.Children.Add(wrap); }
+                    wrap.Children.Add(cur.Value.Items.Current);
+                }
+                if (cur is not null || groups.Count > 0) { root.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => Pump(14)); return; }
+                if (q.Length == 0) panel.Children.Add(U.T("Jeszcze więcej emoji: Win + . (kropka)", 11, null, Theme.Mu2).With(t => t.Margin = U.Th(2, 8, 0, 0)));
+                else if (panel.Children.Count == 0) panel.Children.Add(U.T("Nic nie znaleziono. Spróbuj innego słowa albo Win + . (kropka).", 13, null, Theme.Mu, wrap: true).With(t => t.Margin = U.Th(4, 12)));
             }
             body.Children.Clear();
             body.Children.Add(U.Scroll(panel));
+            Pump(40);
         }
 
         // ── GIF-y ──

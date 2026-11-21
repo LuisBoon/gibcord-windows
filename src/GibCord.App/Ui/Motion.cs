@@ -161,39 +161,38 @@ static class Motion
         return e;
     }
 
-    // ── ikony serwerów (6.0.6): koło ↔ kwadrat i pasek z boku liczone przez kompozycję, nie klatka po klatce w wątku okna ──
+    // ── ikony serwerów (6.0.6): koło ↔ kwadrat i pasek z boku bez pracy w każdej klatce w wątku okna ──
 
-    static readonly ConditionalWeakTable<FrameworkElement, CompositionRoundedRectangleGeometry> RoundClips = new();
+    sealed class RoundState { public Microsoft.UI.Dispatching.DispatcherQueueTimer T = null!; public double From, To; public int Step; }
+    static readonly ConditionalWeakTable<Border, RoundState> Rounds = new();
 
     /// <summary>
-    /// Zaokrąglenie elementu o stałym rozmiarze przez przycięcie kompozycji: zmiana koło → kwadrat to sprężyna w kompozycji
-    /// (wcześniej CornerRadius ustawiany co klatkę z CompositionTarget.Rendering — przy najeżdżaniu na serwery obciążał okno).
+    /// Zaokrąglenie ikony serwera (koło ↔ kwadrat): 4 kroki co 28 ms z wyhamowaniem — zamiast ustawiania CornerRadius w każdej klatce
+    /// (CompositionTarget.Rendering). Przycięcie przez kompozycję odpada: Windows nie pozwala zmieniać Clip warstwy elementu XAML.
     /// </summary>
-    public static void RoundTo(FrameworkElement e, double radius, bool animate = true)
+    public static void RoundTo(Border e, double to, bool animate = true)
     {
         try
         {
-            var vis = ElementCompositionPreview.GetElementVisual(e);
-            var c = vis.Compositor;
-            var r = new Vector2((float)radius);
-            if (!RoundClips.TryGetValue(e, out var geo))
+            var st = Rounds.GetValue(e, b =>
             {
-                geo = c.CreateRoundedRectangleGeometry();
-                geo.Size = new Vector2((float)e.Width, (float)e.Height);
-                geo.CornerRadius = r;
-                vis.Clip = c.CreateGeometricClip(geo);
-                RoundClips.AddOrUpdate(e, geo);
-                return;
-            }
-            if (!animate || !On) { geo.StopAnimation("CornerRadius"); geo.CornerRadius = r; return; }
-            var a = c.CreateSpringVector2Animation();
-            a.FinalValue = r;
-            a.DampingRatio = .6f;
-            a.Period = TimeSpan.FromMilliseconds(45);
-            geo.StartAnimation("CornerRadius", a);
-            Started++;
+                var x = new RoundState { T = b.DispatcherQueue.CreateTimer() };
+                x.T.Interval = TimeSpan.FromMilliseconds(28);
+                x.T.Tick += (_, _) =>
+                {
+                    x.Step++;
+                    var k = Math.Min(1, x.Step / 4.0);
+                    b.CornerRadius = new CornerRadius(x.From + (x.To - x.From) * (1 - Math.Pow(1 - k, 3)));
+                    if (k >= 1) x.T.Stop();
+                };
+                return x;
+            });
+            st.T.Stop();
+            if (!animate || !On || Math.Abs(e.CornerRadius.TopLeft - to) < .5) { e.CornerRadius = new CornerRadius(to); return; }
+            st.From = e.CornerRadius.TopLeft; st.To = to; st.Step = 0;
+            st.T.Start();
         }
-        catch (Exception ex) { Fail(ex); }
+        catch (Exception ex) { Fail(ex); e.CornerRadius = new CornerRadius(to); }
     }
 
     /// <summary>Pasek przy ikonie serwera: wysokość <paramref name="to"/> z <paramref name="max"/> jako skala pionowa w kompozycji (bez przeliczania układu co klatkę).</summary>

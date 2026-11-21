@@ -525,6 +525,7 @@ public sealed class MainWindow : Window
     public void Quit()
     {
         _quitting = true;
+        Watchdog.Stop(); // zamykanie trwa chwilę — to nie zawieszenie
         SaveBounds();
         Tray.Dispose();
         Toasts.Unregister();

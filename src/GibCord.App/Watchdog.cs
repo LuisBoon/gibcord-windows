@@ -10,6 +10,10 @@ namespace GibCord.App;
 public static class Watchdog
 {
     static long _pong = Environment.TickCount64;
+    static volatile bool _stopped;
+
+    /// <summary>Koniec pracy (zamykanie aplikacji) — bez alarmów.</summary>
+    public static void Stop() => _stopped = true;
     static readonly string?[] _crumbs = new string?[24];
     static int _next;
 
@@ -33,9 +37,10 @@ public static class Watchdog
         var t = new Thread(() =>
         {
             var hungSince = 0L;
-            while (true)
+            while (!_stopped)
             {
                 Thread.Sleep(1000);
+                if (_stopped) return;
                 try { dq.TryEnqueue(DispatcherQueuePriority.High, () => Volatile.Write(ref _pong, Environment.TickCount64)); } catch { }
                 var now = Environment.TickCount64;
                 var late = now - Volatile.Read(ref _pong);
