@@ -91,6 +91,38 @@ public sealed class MainWindow : Window
         };
     }
 
+    /// <summary>CI (--clip-test --clip-out plik.mp4): 20 s bufora z ekranu, zapis 10 s, sprawdzenie długości, wyjście.</summary>
+    async Task ClipTest()
+    {
+        try
+        {
+            var s = ScreenSources.Screens().FirstOrDefault();
+            var item = s is null ? null : ScreenSources.ItemFor(s);
+            App.Log("Klipy test: ekran " + (item is null ? "BRAK" : $"{item.Size.Width}×{item.Size.Height}"));
+            var rec = item is null ? null : ClipRecorder.Start("Test", item, "720p60", true, Client);
+            App.Log("Klipy test: bufor " + (rec is null ? "NIE RUSZYŁ" : "działa"));
+            if (rec is not null)
+            {
+                for (var i = 0; i < 20; i++) { await Task.Delay(1000); if (i % 5 == 4) App.Log($"Klipy test: w buforze {rec.Buffered:0.#} s"); }
+                var outPath = Path.GetFullPath(Options.Arg("--clip-out") ?? "klip.mp4");
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var saved = await rec.Save(10, outPath);
+                App.Log($"Klipy test: zapis {(saved is null ? "NIEUDANY: " + rec.LastError : "OK")} w {sw.ElapsedMilliseconds} ms");
+                if (saved is not null)
+                {
+                    var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(await Windows.Storage.StorageFile.GetFileFromPathAsync(saved));
+                    var vp = clip.GetVideoEncodingProperties();
+                    App.Log($"Klipy test: plik {new FileInfo(saved).Length / 1024} KB, {clip.OriginalDuration.TotalSeconds:0.0} s, {vp.Width}×{vp.Height}, {vp.Bitrate / 1000} kb/s");
+                }
+                rec.Dispose();
+                await Task.Delay(500);
+            }
+        }
+        catch (Exception ex) { App.Log("Klipy test: BŁĄD " + ex); }
+        App.Log("Klipy test: koniec");
+        Environment.Exit(0);
+    }
+
     public void Start()
     {
         if (Options.Demo)
@@ -104,6 +136,8 @@ public sealed class MainWindow : Window
             else if (Options.View == "updating") { var (t, b) = ShowUpdating(); t.Text = "Pobieranie GibCorda 6.0.9…"; b.IsIndeterminate = false; b.Value = 42; } // zrzut ekranu aktualizacji przy starcie
             else ShowShell();
             Activate();
+            if (Program.Args.Contains("--clip-test")) { _ = ClipTest(); return; } // 6.2: CI — nagranie ekranu i zapis klipu
+            if (Options.View == "clipedit" && Options.Arg("--clip-file") is { } cf && CurrentShell is { } csh) Ui.ClipEditor.Show(csh, Path.GetFullPath(cf));
             if (Options.Screenshot is { } path) _ = Screenshot(path);
             return;
         }
@@ -156,6 +190,7 @@ public sealed class MainWindow : Window
         Accounts.Background.Ui = UiRun;
         Accounts.Background.Notify += OnBackgroundNotify;
         Accounts.Background.UnreadChanged += () => Dq.TryEnqueue(() => { _lastUnread = -1; UpdateUnread(); _shell?.RefreshAccounts(); });
+        Toasts.OpenClip = path => Dq.TryEnqueue(() => { BringToFront(); if (CurrentShell is { } sh) Ui.ClipEditor.Show(sh, path); });
         Toasts.OpenAccount = (acc, cid) => Dq.TryEnqueue(async () => { BringToFront(); await SwitchAccount(acc); if (cid != 0) OpenFromNotification(cid); });
         Client.Voice.Options = App.Prefs.Voice;
         Screen = new ScreenShare(Client);
@@ -164,6 +199,8 @@ public sealed class MainWindow : Window
         _presence = new Presence(Client);
         _overlay = new GameOverlay(Client, Dq, () => _presence.InGame);
         _keys = new GlobalKeys(Client);
+        _clips?.Dispose();
+        _clips = new ClipCtl(this, Client, _presence); // 6.2: klipy z gry
         Client.SessionEnded += why => ShowLogin(why);
         Client.EmailGateRequired += ShowEmailGate;
         // wzmianka na kanale (albo w wątku), który właśnie czytasz w aktywnym oknie — od razu „widziana”, bez czerwonej kropki
@@ -362,6 +399,8 @@ public sealed class MainWindow : Window
     }
 
     GlobalKeys? _keys;
+    ClipCtl? _clips;
+    public GameOverlay? Overlay => _overlay;
     public GlobalKeys? Keys => _keys;
 
     public void ShowEmailGate()

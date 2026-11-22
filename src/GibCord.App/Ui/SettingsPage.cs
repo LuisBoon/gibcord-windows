@@ -730,6 +730,7 @@ public sealed class SettingsPage : Grid
         _body.Add(Card(Label("Nakładka w grze (Ctrl+Shift+O)"), mode, corner, size,
             Toggle("Nowe wiadomości w nakładce, gdy grasz (dymek na kilka sekund)", p.OverlayMessages, v => { p.OverlayMessages = v; p.Save(); }),
             U.T("Pokazuje w grze, kto jest na kanale i kto mówi.", 12, null, Theme.Mu2, wrap: true)));
+        _body.Add(ClipsCard(p));
         _body.Add(Card(Label("Aktualizacje"), U.T($"Masz wersję {Updater.Version}. Nowe wersje instalują się same po ponownym uruchomieniu.", 13, null, Theme.Mu, wrap: true),
             U.Ghost("Sprawdź teraz", async () =>
             {
@@ -749,6 +750,45 @@ public sealed class SettingsPage : Grid
                 U.Ghost("Kopiuj dane diagnostyczne", () => { Sidebar.Copy(Diagnostics()); _sh.Info("Skopiowano — wklej to (Ctrl+V) w wiadomości."); }, 34),
                 U.Ghost("Otwórz folder z dziennikiem", () => _ = Launcher.LaunchFolderPathAsync(App.DataDir), 34))));
         _body.Add(Card(Label("Strona"), U.Ghost("Otwórz GibCorda w przeglądarce", () => _ = Launcher.LaunchUriAsync(Api.BaseUri), 34).With(b => b.HorizontalAlignment = HorizontalAlignment.Left)));
+    }
+
+    /// <summary>6.2: klipy z gry — nagrywanie w tle, długość, jakość, dźwięk, folder i ostatni klip.</summary>
+    FrameworkElement ClipsCard(Prefs p)
+    {
+        if (!ClipCtl.Supported) return Card(Label("Klipy z gry (Alt+F9)"), U.T("Ten Windows nie pozwala nagrywać ekranu (potrzebny Windows 10 w wersji 1903 albo nowszy).", 12.5, null, Theme.Mu, wrap: true));
+        var mode = new RadioField { Header = U.T("Nagrywanie w tle", 13.5, U.Semi) };
+        foreach (var label in new[] { "Wyłączone", "Tylko gdy grasz", "Zawsze (cały ekran)" }) mode.Items.Add(label);
+        var modes = new[] { "off", "game", "always" };
+        mode.SelectedIndex = Math.Max(0, Array.IndexOf(modes, p.ClipMode));
+        var secs = new[] { 15, 30, 60 };
+        var len = new DropField { Header = U.T("Długość klipu", 13.5, U.Semi), Width = 220 };
+        foreach (var s in secs) len.Items.Add($"Ostatnie {s} s");
+        len.SelectedIndex = Math.Max(0, Array.IndexOf(secs, p.ClipSeconds));
+        len.SelectionChanged += (_, _) => { p.ClipSeconds = secs[Math.Max(0, len.SelectedIndex)]; p.Save(); };
+        var qs = new[] { "720p60", "1080p30", "1080p60" };
+        var q = new DropField { Header = U.T("Jakość", 13.5, U.Semi), Width = 260 };
+        foreach (var s in new[] { "720p, 60 kl/s (polecana)", "1080p, 30 kl/s", "1080p, 60 kl/s (duże pliki)" }) q.Items.Add(s);
+        q.SelectedIndex = Math.Max(0, Array.IndexOf(qs, p.ClipQuality));
+        var status = U.T("", 12, U.Semi, Theme.Mu, wrap: true);
+        void Status()
+        {
+            var r = ClipCtl.Instance?.Recorder;
+            status.Text = p.ClipMode == "off" ? "Wyłączone — Alt+F9 nic nie robi."
+                : r is { Running: true } ? $"● Nagrywa w tle: {r.Label}. Alt+F9 zapisze ostatnie {p.ClipSeconds} s."
+                : p.ClipMode == "game" ? "Czeka na grę — nagrywanie ruszy samo, gdy GibCord wykryje grę." : "Uruchamianie…";
+            status.Foreground = r is { Running: true } ? Theme.Green : Theme.Mu;
+        }
+        void Restart() { App.Prefs.Save(); ClipCtl.Instance?.Sync(); Status(); }
+        mode.SelectionChanged += (_, _) => { p.ClipMode = modes[Math.Max(0, mode.SelectedIndex)]; p.ClipAsked = true; Restart(); };
+        q.SelectionChanged += (_, _) => { p.ClipQuality = qs[Math.Max(0, q.SelectedIndex)]; if (ClipCtl.Instance is { } ci) { ci.Dispose(); } Restart(); _sh.Info("Nowa jakość działa od następnej gry (albo po ponownym uruchomieniu GibCorda)."); };
+        Status();
+        var last = ClipCtl.LastClip ?? (Directory.Exists(ClipRecorder.OutDir) ? new DirectoryInfo(ClipRecorder.OutDir).GetFiles("*.mp4").OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault()?.FullName : null);
+        return Card(Label("Klipy z gry (Alt+F9)"), mode, status, U.H(12, len, q),
+            Toggle("Dźwięk gry w klipie (bez rozmowy z GibCorda)", p.ClipAudio, v => { p.ClipAudio = v; Restart(); }),
+            U.T("GibCord trzyma w tle ostatnią minutę obrazu (karta graficzna koduje sama, gra nie zwalnia). Alt+F9 zapisuje klip do folderu Wideo\\GibCord — potem możesz go przyciąć i wysłać na kanał. Na Windows 10 wokół gry może się pokazać żółta ramka nagrywania.", 11.5, null, Theme.Mu2, wrap: true),
+            U.H(8,
+                U.Ghost("Otwórz folder z klipami", () => { Directory.CreateDirectory(ClipRecorder.OutDir); _ = Launcher.LaunchFolderPathAsync(ClipRecorder.OutDir); }, 34),
+                last is null ? null : U.Ghost("Ostatni klip: przytnij i wyślij", () => ClipEditor.Show(_sh, last), 34)));
     }
 
     /// <summary>Wersja, system, urządzenia dźwięku, stan rozmowy i końcówka dziennika — bez tokenów i treści wiadomości.</summary>

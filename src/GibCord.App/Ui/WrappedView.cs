@@ -261,7 +261,7 @@ static class WrappedView
     }
 
     /// <summary>Wybór kanału tekstowego albo rozmowy (z szukaniem).</summary>
-    static async Task<(long Id, string Label)?> PickChannel(Shell sh)
+    public static async Task<(long Id, string Label)?> PickChannel(Shell sh, string title = "Gdzie wysłać podsumowanie?")
     {
         var all = new List<(long Id, string Label, string Sub)>();
         foreach (var srv in sh.S.Servers.OrderBy(s => s.Name))
@@ -272,7 +272,7 @@ static class WrappedView
         var search = new TextBox { PlaceholderText = "Szukaj kanału albo osoby", Margin = U.Th(0, 0, 0, 8) };
         var list = new StackPanel { Spacing = 2 };
         (long Id, string Label)? chosen = null;
-        var d = new AppDialog { Title = "Gdzie wysłać podsumowanie?", CloseButtonText = "Anuluj" };
+        var d = new AppDialog { Title = title, CloseButtonText = "Anuluj" };
         void Fill()
         {
             list.Children.Clear();

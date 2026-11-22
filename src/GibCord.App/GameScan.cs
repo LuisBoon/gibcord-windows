@@ -97,6 +97,32 @@ public static class GameScan
         finally { CloseHandle(h); }
     }
 
+    [DllImport("user32.dll")] static extern bool IsIconic(nint hwnd);
+
+    /// <summary>6.2 klipy: największe widoczne okno procesu o tej nazwie pliku (okno gry do nagrywania), albo 0.</summary>
+    public static nint MainWindowOf(string exe)
+    {
+        exe = exe.ToLowerInvariant();
+        var pids = new HashSet<uint>();
+        foreach (var p in Process.GetProcesses())
+        {
+            try { if (p.ProcessName.ToLowerInvariant() + ".exe" == exe) pids.Add((uint)p.Id); } catch { }
+            finally { p.Dispose(); }
+        }
+        if (pids.Count == 0) return 0;
+        nint best = 0; long bestArea = 0;
+        EnumWindows((h, _) =>
+        {
+            if (!IsWindowVisible(h) || IsIconic(h) || GetWindow(h, 4) != 0) return true; // 4 = GW_OWNER
+            GetWindowThreadProcessId(h, out var pid);
+            if (!pids.Contains(pid) || !GetWindowRect(h, out var r)) return true;
+            var area = (long)(r.Right - r.Left) * (r.Bottom - r.Top);
+            if (area > bestArea) { bestArea = area; best = h; }
+            return true;
+        }, 0);
+        return bestArea >= 320 * 240 ? best : 0;
+    }
+
     /// <summary>Uruchomione programy: nazwa pliku każdego procesu; ścieżka i tytuły tylko dla tych z oknami (tanio).</summary>
     public static List<ProcInfo> Processes()
     {

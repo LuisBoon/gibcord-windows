@@ -14,7 +14,9 @@ public sealed class ScreenAudio : IDisposable
     Thread? _thread;
     volatile bool _stop;
 
-    public ScreenAudio(GibCordClient c) { _c = c; }
+    readonly Action<short[]>? _sink;
+    /// <param name="sink">6.2: zamiast do rozmowy — do klipów z gry (bufor nagrania).</param>
+    public ScreenAudio(GibCordClient c, Action<short[]>? sink = null) { _c = c; _sink = sink; }
 
     volatile bool _running;
     public bool Active => _thread is not null && _running;
@@ -84,7 +86,7 @@ public sealed class ScreenAudio : IDisposable
                         filled += n; i += n;
                         if (filled == chunk.Length)
                         {
-                            _c.Voice.PushScreenAudio(chunk);
+                            if (_sink is not null) _sink(chunk); else _c.Voice.PushScreenAudio(chunk);
                             chunk = new short[960 * 2];
                             filled = 0;
                         }

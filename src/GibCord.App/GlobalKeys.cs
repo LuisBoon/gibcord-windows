@@ -10,7 +10,7 @@ namespace GibCord.App;
 public sealed class GlobalKeys : IDisposable
 {
     const int WM_HOTKEY = 0x312, MOD_CONTROL = 2, MOD_SHIFT = 4, MOD_NOREPEAT = 0x4000;
-    const int IdMute = 0x6C11, IdDeaf = 0x6C12;
+    const int IdMute = 0x6C11, IdDeaf = 0x6C12, IdClip = 0x6C13, MOD_ALT = 1, VK_F9 = 0x78;
     static readonly IntPtr HWND_MESSAGE = new(-3);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -42,7 +42,15 @@ public sealed class GlobalKeys : IDisposable
         c.VoiceChanged += Sync;
     }
 
-    bool _on;
+    bool _on, _clipOn;
+    /// <summary>6.2: Alt+F9 zajmujemy tylko, gdy bufor klipów nagrywa (inaczej skrót zostaje dla innych programów).</summary>
+    public void SetClipKey(bool on)
+    {
+        if (on == _clipOn || _hwnd == IntPtr.Zero) return;
+        _clipOn = on;
+        if (on) { if (!RegisterHotKey(_hwnd, IdClip, MOD_ALT | MOD_NOREPEAT, VK_F9)) App.Log("Skrót Alt+F9 zajęty przez inny program"); }
+        else UnregisterHotKey(_hwnd, IdClip);
+    }
 
     /// <summary>Skróty zajmujemy tylko w trakcie rozmowy (poza nią Ctrl+Shift+M/D działają w innych programach).</summary>
     public void Sync()
@@ -66,6 +74,7 @@ public sealed class GlobalKeys : IDisposable
             {
                 case IdMute: _c.ToggleMute(); Tones.Play(_c.Voice.Options.Muted ? "mute" : "unmute"); App.Prefs.Save(); return IntPtr.Zero;
                 case IdDeaf: _c.ToggleDeafen(); Tones.Play(_c.Voice.Options.Deafened ? "mute" : "unmute"); App.Prefs.Save(); return IntPtr.Zero;
+                case IdClip: App.Window?.UiRun(() => ClipCtl.Instance?.SaveNow()); return IntPtr.Zero;
             }
         }
         return DefWindowProc(hwnd, msg, w, l);
@@ -77,6 +86,7 @@ public sealed class GlobalKeys : IDisposable
         if (_hwnd == IntPtr.Zero) return;
         UnregisterHotKey(_hwnd, IdMute);
         UnregisterHotKey(_hwnd, IdDeaf);
+        UnregisterHotKey(_hwnd, IdClip);
         DestroyWindow(_hwnd);
         _hwnd = IntPtr.Zero;
     }

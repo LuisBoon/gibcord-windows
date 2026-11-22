@@ -130,6 +130,16 @@ public sealed class Prefs
     public bool CompactMessages { get; set; }
     /// <summary>Mniej ruchu: bez animacji (sprężyn, wjazdów, przenikania).</summary>
     public bool ReduceMotion { get; set; }
+    /// <summary>6.2 klipy z gry: "off", "game" (bufor tylko w wykrytej grze), "always" (cały ekran).</summary>
+    public string ClipMode { get; set; } = "off";
+    /// <summary>Długość zapisywanego klipu (15 / 30 / 60 s).</summary>
+    public int ClipSeconds { get; set; } = 30;
+    /// <summary>Jakość klipów: "720p60", "1080p30", "1080p60".</summary>
+    public string ClipQuality { get; set; } = "720p60";
+    /// <summary>Dźwięk gry w klipach (bez rozmowy z GibCorda).</summary>
+    public bool ClipAudio { get; set; } = true;
+    /// <summary>Czy zapytaliśmy już przy pierwszej wykrytej grze, czy włączyć klipy.</summary>
+    public bool ClipAsked { get; set; }
     /// <summary>6.1 zimowy wygląd: "auto" (1.12–6.01, z serwera), "on" (zawsze), "off" (wyłączony).</summary>
     public string WinterMode { get; set; } = "auto";
     /// <summary>6.1: zamknięty krzyżykiem baner „Twój GibCord ROK” (rok).</summary>

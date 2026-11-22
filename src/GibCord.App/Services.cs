@@ -18,6 +18,8 @@ public static class Toasts
     public static Action<long>? MarkRead;
     /// <summary>Kliknięcie w powiadomienie z konta w tle: (konto, klucz rozmowy).</summary>
     public static Action<long, long>? OpenAccount;
+    /// <summary>6.2: „Przytnij i wyślij” z powiadomienia o zapisanym klipie (ścieżka pliku).</summary>
+    public static Action<string>? OpenClip;
 
     public static void Init(Action<long> open)
     {
@@ -29,8 +31,15 @@ public static class Toasts
                 a.Arguments.TryGetValue("a", out var act);
                 long.TryParse(cs, out var cid);
                 if (a.Arguments.TryGetValue("acc", out var accs) && long.TryParse(accs, out var acc) && acc != 0) { OpenAccount?.Invoke(acc, cid); return; }
+                a.Arguments.TryGetValue("p", out var clipPath);
                 switch (act)
                 {
+                    case "clip" when !string.IsNullOrEmpty(clipPath):
+                        OpenClip?.Invoke(clipPath);
+                        return;
+                    case "folder" when !string.IsNullOrEmpty(clipPath):
+                        try { System.Diagnostics.Process.Start("explorer.exe", "/select,\"" + clipPath + "\""); } catch { }
+                        return;
                     case "reply" when a.UserInput.TryGetValue("odp", out var text) && !string.IsNullOrWhiteSpace(text):
                         Reply?.Invoke(cid, text);
                         return;
@@ -70,6 +79,26 @@ public static class Toasts
             AppNotificationManager.Default.Show(n);
         }
         catch (Exception ex) { App.Log("Powiadomienie: " + ex.Message); }
+    }
+
+    /// <summary>6.2: klip zapisany (ścieżka) albo błąd zapisu (null).</summary>
+    public static void ShowClip(string? path, string text)
+    {
+        if (!_ok) return;
+        try
+        {
+            var b = new AppNotificationBuilder().AddText(path is null ? "Klip nie zapisany" : "Klip zapisany").AddText(text);
+            if (path is not null)
+            {
+                b.AddArgument("a", "clip").AddArgument("p", path)
+                 .AddButton(new AppNotificationButton("Przytnij i wyślij").AddArgument("a", "clip").AddArgument("p", path))
+                 .AddButton(new AppNotificationButton("Pokaż w folderze").AddArgument("a", "folder").AddArgument("p", path));
+            }
+            var n = b.BuildNotification();
+            n.Group = "klipy";
+            AppNotificationManager.Default.Show(n);
+        }
+        catch (Exception ex) { App.Log("Powiadomienie (klip): " + ex.Message); }
     }
 
     public static void ClearFor(long channelId)

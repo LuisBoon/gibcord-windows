@@ -73,7 +73,7 @@ jobs:
           Get-ChildItem publish -Recurse -File | Sort-Object Length -Descending | Select-Object -First 30 | ForEach-Object { "{0,8:N1} MB  {1}" -f ($_.Length / 1MB), $_.FullName.Substring((Resolve-Path publish).Path.Length + 1) }
 
       - name: Zrzuty ekranu (tryb pokazowy)
-        timeout-minutes: 8
+        timeout-minutes: 12
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force zrzuty | Out-Null
@@ -88,7 +88,17 @@ jobs:
           $p = Start-Process -FilePath publish\GibCord.exe -ArgumentList '--demo','--view','chat','--motion','--wheel-test','--screenshot',"`"$out`"" -PassThru
           if (-not $p.WaitForExit(45000)) { $p.Kill(); Write-Host "::warning::Zrzut ruch - przekroczony czas" }
           Get-ChildItem zrzuty | Format-Table Name, Length
+          # 6.2 klipy z gry: 20 s bufora z ekranu, zapis 10 s (zrzuty\klip.mp4), potem okienko przycinania z tym klipem
+          $p = Start-Process -FilePath publish\GibCord.exe -ArgumentList '--demo','--view','chat','--clip-test','--clip-out',"`"$(Join-Path $pwd 'zrzuty\klip.mp4')`"" -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); Write-Host "::warning::Test klipów - przekroczony czas" }
+          if (Test-Path zrzuty\klip.mp4) {
+            Write-Host ("Klip: {0:N0} KB" -f ((Get-Item zrzuty\klip.mp4).Length / 1KB))
+            $out = Join-Path $pwd "zrzuty\clipedit.png"
+            $p = Start-Process -FilePath publish\GibCord.exe -ArgumentList '--demo','--view','clipedit','--clip-file',"`"$(Join-Path $pwd 'zrzuty\klip.mp4')`"",'--screenshot',"`"$out`"" -PassThru
+            if (-not $p.WaitForExit(45000)) { $p.Kill(); Write-Host "::warning::Zrzut clipedit - przekroczony czas" }
+          } else { Write-Host "::warning::Brak klipu z testu" }
           $log = Join-Path $env:LOCALAPPDATA 'GibCord6-dane\dziennik.txt'
+          if (Test-Path $log) { Write-Host '--- klipy ---'; Select-String -Path $log -Pattern 'Klipy' | ForEach-Object { $_.Line } }
           if (Test-Path $log) { Copy-Item $log zrzuty\dziennik.txt; Get-Content $log -Tail 60 }
           Write-Host '--- pliki .pri i .exe ---'
           Get-ChildItem publish -File | Where-Object { $_.Extension -in '.pri','.exe','.winmd' } | Format-Table Name, Length

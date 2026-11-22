@@ -70,7 +70,7 @@ public static class Program
 /// <summary>Opcje z wiersza poleceń (zrzuty ekranu w CI, tryb pokazowy).</summary>
 public static class Options
 {
-    static string? Arg(string name)
+    public static string? Arg(string name)
     {
         var a = Program.Args;
         var i = Array.IndexOf(a, name);
