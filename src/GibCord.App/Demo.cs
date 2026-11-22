@@ -92,6 +92,25 @@ public static class Demo
                 Ui.VoiceView.BoardOpenFor = Pogaduchy;
                 sh.JoinVoiceChannel(Eg, Pogaduchy);
                 break;
+            case "kalambury" or "kalambury2" or "kalkoniec": // 6.2: Kalambury na tablicy
+                sh.C.Store.Voice[Pogaduchy] = [new VoiceMember { UserId = MeId }, new VoiceMember { UserId = OlaId }, new VoiceMember { UserId = KubaId }, new VoiceMember { UserId = MajaId }];
+                BoardPanel.DemoKal(Pogaduchy, Options.View, MeId, OlaId, KubaId, MajaId);
+                Ui.VoiceView.BoardOpenFor = Pogaduchy;
+                sh.C.DemoSpeaker = OlaId;
+                sh.JoinVoiceChannel(Eg, Pogaduchy);
+                break;
+            case "vfx": // 6.2: zmieniacz głosu — ja jako robot, Ola jako Gibek
+                sh.C.Store.Voice[Pogaduchy] = [new VoiceMember { UserId = OlaId, Fx = "gibek" }, new VoiceMember { UserId = KubaId }, new VoiceMember { UserId = MajaId, Fx = "jaskinia" }];
+                sh.C.DemoSpeaker = OlaId;
+                sh.JoinVoiceChannel(Eg, Pogaduchy);
+                sh.C.SetFx("robot");
+                break;
+            case "radio": // 6.2: radio na kanale — pasek nad przyciskami i w panelu rozmowy
+                sh.C.Store.Watches[Pogaduchy] = new WatchState { Mode = "radio", Session = "demo", Kind = "yt", VideoId = "jNQXAC9IVRw", Title = "Składanka do grania wieczorem", State = "playing", Position = 1040, UpdatedAt = Format.NowMs(), AddedBy = KubaId, By = KubaId, Key = "demo",
+                    Queue = [new WatchItem { VideoId = "aqz-KE-bpKQ", Title = "Muzyka z gier na fortepianie", By = OlaId, Qid = "q1" }, new WatchItem { Kind = "file", Audio = true, Title = "nasz-hymn.mp3", By = MeId, Qid = "q2" }] };
+                sh.C.DemoSpeaker = OlaId;
+                sh.JoinVoiceChannel(Eg, Pogaduchy);
+                break;
             case "wrapcard": sh.Go(Eg, Ogolne); break;
             case "wrapped" or "wrapped2" or "wrapped3": sh.Go(0, 0); WrappedView.Open(sh); break;
             case "forest":

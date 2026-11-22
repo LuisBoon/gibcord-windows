@@ -88,6 +88,8 @@ public sealed class Shell : Grid
         Canvas.SetZIndex(snow, 90);
         this.Add(snow);
         C.SeasonChanged += Winter.Notify;
+        _ = new RadioHost(this, this); // 6.2: radio gra w tle niezależnie od tego, co jest na ekranie
+        C.VoiceChanged += () => { if (C.VoiceChannelId == 0) BoardPanel.ForgetGames(); };
         // 6.3: tablica i scena
         C.Live += ev =>
         {

@@ -367,7 +367,14 @@ public sealed partial class MessageView : Grid
             together.Click += (_, _) => WatchUi.StartFile(_v.Sh, a.Id, _v.S.Watches.ContainsKey(_v.Sh.C.VoiceChannelId));
             return U.V(2, player, together);
         }
-        if (url is not null && a.Mime.StartsWith("audio/")) return MediaViews.Audio(url, a);
+        if (url is not null && a.Mime.StartsWith("audio/"))
+        {
+            var audio = MediaViews.Audio(url, a);
+            if (_v.Sh.C.VoiceChannelId == 0 || _v.Sh.C.Offline) return audio;
+            var toRadio = new HyperlinkButton { Content = U.T("📻 Puść w radiu na kanale", 12, U.Bold, Theme.Accent), Padding = U.Th(0) }; // 6.2
+            toRadio.Click += (_, _) => RadioUi.PlayFile(_v.Sh, a.Id);
+            return U.V(2, audio, toRadio);
+        }
         var icon = a.Mime.StartsWith("video/") ? "\uE714" : a.Mime.StartsWith("audio/") ? "\uE8D6" : a.Mime == "application/pdf" ? "\uEA90" : "\uE8A5";
         var card = new Grid { Width = 360, HorizontalAlignment = HorizontalAlignment.Left }.Cols("auto", "*", "auto").Add(
             U.I(icon, 26, Theme.Accent).At(0, 0),
@@ -392,7 +399,9 @@ public sealed partial class MessageView : Grid
         if (_v.Sh.C.VoiceChannelId == 0 || _v.Sh.C.Offline) return b;
         var together = new HyperlinkButton { Content = U.T("📺 Oglądajcie razem w rozmowie", 12, U.Bold, Theme.Accent), Padding = U.Th(0) };
         together.Click += (_, _) => WatchUi.Start(_v.Sh, id, null, _v.S.Watches.ContainsKey(_v.Sh.C.VoiceChannelId));
-        return U.V(2, b, together);
+        var toRadio = new HyperlinkButton { Content = U.T("📻 Do radia", 12, U.Bold, Theme.Accent), Padding = U.Th(0) }; // 6.2
+        toRadio.Click += (_, _) => RadioUi.PlayYt(_v.Sh, id);
+        return U.V(2, b, U.H(14, together, toRadio));
     }
 
     FrameworkElement Reactions(Message m, Dictionary<string, int>? prev)

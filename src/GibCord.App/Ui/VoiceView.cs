@@ -84,9 +84,10 @@ static class VoiceUi
         pingTimer.Tick += (_, _) => Ping();
         box.Loaded += (_, _) => pingTimer.Start();
         box.Unloaded += (_, _) => pingTimer.Stop();
+        var radio = RadioUi.Mini(sh); // 6.2
         if (c.Voice.ScreenSharing)
-            return U.V(0, box, new Border { Background = U.Alpha("#ff4d6a", .18), Padding = U.Th(12, 4), Child = U.T("Nadajesz ekran", 11.5, U.Bold, Theme.Red) });
-        return box;
+            return U.V(0, radio, box, new Border { Background = U.Alpha("#ff4d6a", .18), Padding = U.Th(12, 4), Child = U.T("Nadajesz ekran", 11.5, U.Bold, Theme.Red) });
+        return radio is null ? box : U.V(0, radio, box);
     }
 
     /// <summary>Stan połączenia: ping do serwera, jakość głosu, ustawienia pokoju, odświeżane co sekundę.</summary>
@@ -275,6 +276,7 @@ sealed class VoiceTile : Grid
         var icons = U.H(4);
         if (vm.Muted || vm.ServerMuted || vm.Suppressed) icons.Add(U.I(G.MicOff, 13, Theme.Red));
         if (vm.Deafened || vm.ServerDeafened) icons.Add(U.I(G.SpeakerOff, 13, Theme.Red));
+        if (VoiceFxUi.Badge(vm.Fx) is { } fxb) icons.Add(fxb); // 6.2
         var name = U.T(sh.S.NameOf(vm.UserId, srv) + (me ? " (Ty)" : ""), 12.5, U.Semi);
         var label = new Border { Background = U.B("#99120c22"), CornerRadius = new CornerRadius(8), Padding = U.Th(8, 3), Margin = U.Th(8), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Child = U.H(6, name, icons) };
         var center = new Grid().Add(avBox);
@@ -424,7 +426,12 @@ public sealed class VoiceView : Grid, IDisposable
         var boardShown = Here && BoardOpenFor == _cid;
         if (boardShown)
         {
-            if (_board is null) { _board = new BoardPanel(_sh, _cid); if (Options.Demo && Options.View == "board") _board.Demo(GibCord.App.Demo.OlaId); }
+            if (_board is null)
+            {
+                _board = new BoardPanel(_sh, _cid);
+                if (Options.Demo && Options.View == "board") _board.Demo(GibCord.App.Demo.OlaId);
+                if (Options.Demo && Options.View is "kalambury" or "kalambury2" or "kalkoniec") _board.DemoCastle(Options.View == "kalambury2" ? GibCord.App.Demo.MeId : GibCord.App.Demo.OlaId); // 6.2
+            }
             if (_board.Parent is Panel bp) bp.Children.Remove(_board);
             _stage.Rows("*", "auto");
             _stage.Add(_board.At(0));
@@ -435,8 +442,9 @@ public sealed class VoiceView : Grid, IDisposable
         }
         else if (_board is not null) { _board.Dispose(); _board = null; }
         if (!boardShown) {
-        // wspólne oglądanie: odtwarzacz na dużo (jeden na cały czas — bez przeładowania przy odświeżeniu)
-        if (Here && s.Watches.ContainsKey(_cid))
+        // wspólne oglądanie: odtwarzacz na dużo (jeden na cały czas — bez przeładowania przy odświeżeniu); radio (6.2) gra w tle bez obrazu
+        var videoWatch = s.Watches.GetValueOrDefault(_cid) is { Radio: false };
+        if (Here && videoWatch)
         {
             _watch ??= new WatchPanel(_sh, _cid);
             if (_watch.Parent is Panel wp) wp.Children.Remove(_watch);
@@ -448,7 +456,7 @@ public sealed class VoiceView : Grid, IDisposable
             _stage.Add(new ScrollViewer { Content = strip0, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollMode = ScrollMode.Disabled }.At(1));
         }
         else if (_watch is not null) { _watch.Dispose(); _watch = null; }
-        if (Here && s.Watches.ContainsKey(_cid)) { }
+        if (Here && videoWatch) { }
         else if (watched is not null)
         {
             _stage.Rows("*", "auto");
@@ -511,17 +519,25 @@ public sealed class VoiceView : Grid, IDisposable
             if (C.Offline || _sh.W.Cam is null) cam.Visibility = Visibility.Collapsed;
             var sb = VoiceUi.SoundboardButton(_sh, 44);
             sb.Background = U.W(.1); sb.CornerRadius = new CornerRadius(22);
-            var watching = s.Watches.ContainsKey(_cid);
+            var watching = s.Watches.GetValueOrDefault(_cid) is { Radio: false };
             var tv = U.IconButton("\uE8B2", watching ? "Dodaj film do kolejki" : "Oglądajcie razem (YouTube)", () => WatchUi.AskVideo(_sh, watching), 16, 44, watching ? U.B("#ffffff") : null);
             tv.Background = watching ? U.B("#6b2d7c") : U.W(.1); tv.CornerRadius = new CornerRadius(22);
             if (C.Offline) tv.Visibility = Visibility.Collapsed;
             // 6.3: tablica (podświetlona, gdy ktoś ją ogląda) i przycisk sceny
             var bv = BoardPanel.Viewers.GetValueOrDefault(_cid)?.Count ?? 0;
+            if (BoardPanel.Games.GetValueOrDefault(_cid) is { Phase: not "end" } && !boardShown) bv = Math.Max(bv, 1); // 6.2: trwają Kalambury
             var board = U.IconButton("\uEE56", boardShown ? "Zamknij tablicę" : bv > 0 ? $"Tablica — otwarta u {bv} {Format.Plural(bv, "osoby", "osób", "osób")}" : "Tablica — rysujcie razem", () => { BoardOpenFor = boardShown ? 0 : _cid; Refresh(); }, 16, 44, boardShown || bv > 0 ? U.B("#ffffff") : null);
             board.Background = boardShown ? U.B("#2f7f86") : bv > 0 ? U.B("#24585e") : U.W(.1); board.CornerRadius = new CornerRadius(22);
             if (C.Offline && !Options.Demo) board.Visibility = Visibility.Collapsed;
             var stageBtn = ch?.IsStage == true ? StageView.Button(_sh, _cid, members.FirstOrDefault(m => m.UserId == me)) : null;
-            _controls.Child = U.H(12, stageBtn, mic, deaf, cam, screen, sb, tv, board, settings, leave).With(p => p.HorizontalAlignment = HorizontalAlignment.Center);
+            // 6.2: zmieniacz głosu i radio
+            var fxBtn = VoiceFxUi.Button(_sh, 44);
+            var radioOn = s.Watches.GetValueOrDefault(_cid) is { Radio: true };
+            var radio = U.IconButton("\uE8D6", radioOn ? "Radio gra — dodaj utwory" : "Radio: muzyka dla wszystkich na kanale", () => RadioUi.Ask(_sh), 16, 44, radioOn ? U.B("#ffffff") : null);
+            radio.Background = radioOn ? U.B("#8a3a5c") : U.W(.1); radio.CornerRadius = new CornerRadius(22);
+            if (C.Offline && !Options.Demo) radio.Visibility = Visibility.Collapsed;
+            var row = U.H(12, stageBtn, mic, deaf, cam, screen, fxBtn, sb, radio, tv, board, settings, leave).With(p => p.HorizontalAlignment = HorizontalAlignment.Center);
+            _controls.Child = RadioUi.Bar(_sh, _cid) is { } rbar ? U.V(4, rbar, row) : row;
         }
         else
         {

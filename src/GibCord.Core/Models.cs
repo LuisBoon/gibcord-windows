@@ -182,6 +182,8 @@ public sealed class Channel
     public int Bitrate { get; set; }
     public int UserLimit { get; set; }
     public string? MaxStream { get; set; }
+    /// <summary>6.2: moderator wyłączył efekty głosu na tym kanale.</summary>
+    public bool FxOff { get; set; }
     public List<PermOverride> Overrides { get; set; } = [];
 
     [JsonIgnore] public bool IsVoice => Type == "voice";
@@ -318,6 +320,8 @@ public sealed class WatchItem
     public string? Title { get; set; }
     public string? Qid { get; set; }
     public long By { get; set; }
+    /// <summary>6.2 radio: plik muzyczny z czatu (bez obrazu).</summary>
+    public bool Audio { get; set; }
 }
 
 public sealed class WatchState
@@ -336,7 +340,12 @@ public sealed class WatchState
     public List<long> Skip { get; set; } = [];
     public bool Ended { get; set; }
     public List<WatchItem> Queue { get; set; } = [];
+    /// <summary>6.2: "radio" (sama muzyka, słuchają wszyscy w rozmowie) albo "video" / null (wspólne oglądanie).</summary>
+    public string? Mode { get; set; }
+    public bool Audio { get; set; }
+    public string? Session { get; set; }
 
+    [JsonIgnore] public bool Radio => Mode == "radio";
     [JsonIgnore] public bool Playing => State == "playing" && !Ended;
     /// <summary>Gdzie teraz jesteśmy w filmie (pozycja + czas od ostatniej zmiany, gdy gra).</summary>
     public double Now(long nowMs) => Playing ? Position + Math.Max(0, nowMs - UpdatedAt) / 1000.0 : Position;
@@ -520,6 +529,8 @@ public sealed class VoiceMember
     public bool? Speaker { get; set; }
     /// <summary>6.3 scena: kiedy podniesiona ręka (null = opuszczona).</summary>
     public long? HandAt { get; set; }
+    /// <summary>6.2 zmieniacz głosu: efekt osoby (robot, gibek, olbrzym, jaskinia, radio) albo null.</summary>
+    public string? Fx { get; set; }
 }
 
 public sealed class Friend

@@ -103,6 +103,8 @@ public sealed class GibCordApi : IDisposable
     public Task<Info> GetInfo(CancellationToken ct = default) => Send<Info>(HttpMethod.Get, "info", ct: ct);
     /// <summary>6.1: podsumowanie roku zalogowanej osoby (403 wrapped_closed przed 1 grudnia; admin widzi „podgląd”).</summary>
     public Task<Wrapped> GetWrapped(int year, CancellationToken ct = default) => Send<Wrapped>(HttpMethod.Get, $"wrapped/{year}", ct: ct);
+    /// <summary>6.2 Kalambury: zapisane własne hasła serwera (albo rozmowy) do okienka nowej gry.</summary>
+    public Task<KalWordsInfo> KalamburyWords(long channelId, CancellationToken ct = default) => Send<KalWordsInfo>(HttpMethod.Get, $"channels/{channelId}/kalambury", ct: ct);
     // ── 6.4: boty, komendy, webhooki ──
     public Task<List<BotInfo>> GetBots(CancellationToken ct = default) => Send<List<BotInfo>>(HttpMethod.Get, "bots", ct: ct);
     public Task<BotInfo> CreateBot(string name, string description, CancellationToken ct = default) => Send<BotInfo>(HttpMethod.Post, "bots", new { name, description }, ct);

@@ -336,6 +336,7 @@ public sealed class Sidebar : Grid
         var icons = U.H(4);
         if (_sh.C.SoundLabels.TryGetValue(vm.UserId, out var sl) && sl.Until > Environment.TickCount64) icons.Add(U.Box(U.T(sl.Label, 10, U.Bold, Theme.OnAccent), Theme.Accent, 4, U.Th(4, 0)));
         if (vm.Streaming) icons.Add(U.Box(U.T("NA ŻYWO", 9, U.Bold, U.B("#ffffff")), Theme.Red2, 4, U.Th(4, 0)));
+        if (VoiceFxUi.Badge(vm.Fx) is { } fxb) icons.Add(fxb); // 6.2
         if (vm.Video) icons.Add(U.I("", 12, Theme.Mu));
         if (vm.Muted || vm.ServerMuted || vm.Suppressed) icons.Add(U.I("", 12, Theme.Red));
         if (vm.Deafened || vm.ServerDeafened) icons.Add(U.I("", 12, Theme.Red));

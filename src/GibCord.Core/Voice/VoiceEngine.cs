@@ -107,6 +107,13 @@ public sealed class VoiceEngine : IAsyncDisposable
     string? _camSid;
 
     public VoiceOptions Options { get; set; } = new();
+    /// <summary>6.2 zmieniacz głosu: efekt na moim mikrofonie (null = bez).</summary>
+    public VoiceFx Fx { get; } = new(Rate);
+    /// <summary>6.2 odsłuch: słyszę siebie tak, jak słyszą mnie inni (z efektem).</summary>
+    public bool FxMonitor { get => _fxMonitor; set { _fxMonitor = value; _mon.Clear(); } }
+    bool _fxMonitor;
+    readonly SampleRing _mon = new(Rate / 2);
+    readonly float[] _fxBuf = new float[FrameSamples];
     public VoiceState State { get; private set; } = VoiceState.Idle;
     public long ChannelId => _media?.ChannelId ?? 0;
     public string? RoomName => _media?.Room;
@@ -454,6 +461,14 @@ public sealed class VoiceEngine : IAsyncDisposable
         if (open && send && db > SpeakDb - 6) Interlocked.Exchange(ref _micLoudAt, now);
         if (!send) return;
         if (!open) frame.DataMutable.Clear(); // cisza (DTX wysyła wtedy prawie nic)
+        if (Fx.Effect is not null) // 6.2: efekt za bramką — ogon pogłosu wybrzmiewa też po zamknięciu bramki
+        {
+            var d = frame.DataMutable;
+            for (var i = 0; i < FrameSamples; i++) _fxBuf[i] = d[i] / 32768f;
+            Fx.Process(_fxBuf);
+            for (var i = 0; i < FrameSamples; i++) d[i] = Pcm.ToShort(_fxBuf[i]);
+        }
+        if (_fxMonitor) _mon.Write(frame.Data);
         _micQ.Writer.TryWrite(frame);
     }
 
@@ -489,6 +504,7 @@ public sealed class VoiceEngine : IAsyncDisposable
                 var g = master * (float)Options.VolumeOf(a.UserId) * (a.Screen ? (float)Math.Clamp(Options.StreamVolume, 0, 2) : 1f);
                 a.Ring.MixInto(dst, g, Prebuffer, MaxLatency);
             }
+            if (_fxMonitor) _mon.MixInto(dst, master * .9f, Prebuffer, MaxLatency); // 6.2 odsłuch
             for (var i = 0; i < dst.Length; i++) dst[i] = Pcm.SoftClip(dst[i]);
         }
         // to, co gra w głośnikach, trafia do usuwania echa

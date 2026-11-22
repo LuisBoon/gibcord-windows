@@ -142,6 +142,12 @@ public sealed class Prefs
     public bool ClipAsked { get; set; }
     /// <summary>6.1 zimowy wygląd: "auto" (1.12–6.01, z serwera), "on" (zawsze), "off" (wyłączony).</summary>
     public string WinterMode { get; set; } = "auto";
+    /// <summary>6.2: głośność radia na kanale (0–1, tylko u mnie).</summary>
+    public double RadioVolume { get; set; } = .5;
+    /// <summary>6.2 Kalambury: ostatnie ustawienia nowej gry.</summary>
+    public int KalRounds { get; set; } = 2;
+    public int KalSecs { get; set; } = 80;
+    public string KalCategory { get; set; } = "wszystko";
     /// <summary>6.1: zamknięty krzyżykiem baner „Twój GibCord ROK” (rok).</summary>
     public int WrappedBannerClosed { get; set; }
     /// <summary>Szkło Windows: okno prześwituje pulpit (Mica na Windows 11, akryl na Windows 10). Tylko na tym komputerze.</summary>

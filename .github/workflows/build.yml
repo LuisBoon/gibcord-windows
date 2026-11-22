@@ -77,7 +77,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force zrzuty | Out-Null
-          foreach ($v in 'chat','dm','friends','login','updating','switcher','profile','voice','thread','emoji','search','dmcall','settings','srvsettings','watch','srvroles','srvmembers','setapp','inbox','compact','overlay','adminsys','adminstats','adminact','adminmail','later','imgedit','accounts','loginacc','menu','confirm','setgames','bots','screenpick','fields','dropdown','calendar','timepick','files','tray','forest','srvroles2','winter','winterlogin','wrapcard','wrapped','wrapped2','wrapped3','stage','board') {
+          foreach ($v in 'chat','dm','friends','login','updating','switcher','profile','voice','thread','emoji','search','dmcall','settings','srvsettings','watch','srvroles','srvmembers','setapp','inbox','compact','overlay','adminsys','adminstats','adminact','adminmail','later','imgedit','accounts','loginacc','menu','confirm','setgames','bots','screenpick','fields','dropdown','calendar','timepick','files','tray','forest','srvroles2','winter','winterlogin','wrapcard','wrapped','wrapped2','wrapped3','stage','board','kalambury','kalambury2','kalkoniec','vfx','radio') {
             $out = Join-Path $pwd "zrzuty\$v.png"
             $p = Start-Process -FilePath publish\GibCord.exe -ArgumentList '--demo','--view',$v,'--screenshot',"`"$out`"" -PassThru
             if (-not $p.WaitForExit(45000)) { $p.Kill(); Write-Host "::warning::Zrzut ${v} - przekroczony czas" }

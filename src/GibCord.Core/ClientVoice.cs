@@ -65,6 +65,11 @@ public sealed partial class GibCordClient
         _voiceAttempts = 0;
         _voiceJoinAt = Environment.TickCount64;
         await _gw.Send(new { t = "voice_join", channelId, muted = o.Muted || o.Deafened, deafened = o.Deafened });
+        if (Fx is not null) // 6.2: efekt zostaje przy przejściu na inny kanał — chyba że tam są wyłączone
+        {
+            if (FxAllowed(channelId)) await _gw.Send(new { t = "voice_fx", fx = Fx });
+            else { Fx = null; Voice.Fx.Effect = null; VoiceInfo?.Invoke("Na tym kanale efekty głosu są wyłączone — mówisz zwykłym głosem", false); }
+        }
         VoiceChanged?.Invoke();
         _ = JoinWatchdog(channelId, _voiceJoinAt);
     }
@@ -123,6 +128,30 @@ public sealed partial class GibCordClient
         }
         VoiceChanged?.Invoke();
     }
+
+    // ── 6.2 zmieniacz głosu ──
+
+    /// <summary>Mój efekt głosu (null = zwykły głos). Trzyma się do zamknięcia aplikacji, także po przejściu na inny kanał.</summary>
+    public string? Fx { get; private set; }
+    public bool FxAllowed(long cid) => Store.ChannelById(cid) is not { FxOff: true };
+
+    public void SetFx(string? fx)
+    {
+        if (fx is not null && !VoiceFx.Names.Contains(fx)) fx = null;
+        if (fx is not null && VoiceChannelId != 0 && !FxAllowed(VoiceChannelId)) { VoiceInfo?.Invoke("Na tym kanale efekty głosu są wyłączone", true); return; }
+        Fx = fx;
+        Voice.Fx.Effect = fx;
+        if (VoiceChannelId != 0 && !Offline) _ = _gw?.Send(new { t = "voice_fx", fx });
+        if (Offline && VoiceChannelId != 0 && Store.Voice.GetValueOrDefault(VoiceChannelId)?.Find(m => m.UserId == Store.Me.Id) is { } me)
+        {
+            me.Fx = fx;
+            Store.Apply(new GatewayEvent("voice_state", JsonSerializer.SerializeToElement(new { channelId = VoiceChannelId, members = Store.Voice[VoiceChannelId] }, Json.Options)));
+        }
+        VoiceChanged?.Invoke();
+    }
+
+    /// <summary>Odsłuch: słyszę siebie z efektem (najlepiej w słuchawkach).</summary>
+    public void SetFxMonitor(bool on) { Voice.FxMonitor = on; VoiceChanged?.Invoke(); }
 
     /// <summary>Transmisja ekranu: najpierw serwer (uprawnienia, „NA ŻYWO” u innych), potem obraz.</summary>
     public void SetStreaming(bool on) { if (!Offline) _ = _gw?.Send(new { t = "voice_stream", on }); }
@@ -216,8 +245,17 @@ public sealed partial class GibCordClient
             case "watch_react":
                 if (d.Long("channelId") is long rc2 && d.Long("userId") is long ru && d.Str("emoji") is { } emo) WatchReacted?.Invoke(rc2, ru, emo);
                 return;
-            case "error" when d.Str("op") is { } op && op.StartsWith("watch_"):
+            case "error" when d.Str("op") is { } op && (op.StartsWith("watch_") || op.StartsWith("board_game_") || op == "voice_fx"):
                 VoiceInfo?.Invoke(d.Str("error") ?? "Nie udało się", true);
+                return;
+            case "voice_state" when Fx is not null && d.Long("channelId") is long fc && fc == VoiceChannelId && !FxAllowed(fc):
+                // 6.2: moderator wyłączył efekty na kanale — serwer zdjął mój efekt, zdejmuję też u siebie
+                if (Store.Voice.GetValueOrDefault(fc)?.Find(m => m.UserId == Store.Me.Id) is { Fx: null })
+                {
+                    Fx = null; Voice.Fx.Effect = null;
+                    VoiceInfo?.Invoke("Moderator wyłączył efekty głosu na tym kanale", false);
+                    VoiceChanged?.Invoke();
+                }
                 return;
             case "error" when d.Str("op") == "sound_play":
                 VoiceInfo?.Invoke(d.Str("error") ?? "Nie udało się puścić dźwięku", true);

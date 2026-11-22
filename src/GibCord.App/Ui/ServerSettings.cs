@@ -388,9 +388,10 @@ public sealed partial class ServerSettingsPage : Grid
         var streamVals = new[] { "720p", "1080p", "1440p" };
         foreach (var v in streamVals) stream.Items.Add("Transmisje do " + v);
         stream.SelectedIndex = Math.Max(0, Array.IndexOf(streamVals, c?.MaxStream ?? "1080p"));
+        var fx = new CheckField { Content = "Efekty głosu (robot, Gibek, olbrzym, jaskinia, radio)", IsChecked = c?.FxOff != true }; // 6.2
         var form = U.V(8, U.T("Nazwa", 12.5, U.Semi, Theme.Mu), name, U.T("Kategoria", 12.5, U.Semi, Theme.Mu), cat, sync);
         if (!voice) form.Add(U.T("Opis", 12.5, U.Semi, Theme.Mu), topic, U.T("Tryb powolny", 12.5, U.Semi, Theme.Mu), slow, ro);
-        else form.Add(limit, U.T("Jakość dźwięku", 12.5, U.Semi, Theme.Mu), bitrate, U.T("Transmisje ekranu", 12.5, U.Semi, Theme.Mu), stream);
+        else form.Add(limit, U.T("Jakość dźwięku", 12.5, U.Semi, Theme.Mu), bitrate, U.T("Transmisje ekranu", 12.5, U.Semi, Theme.Mu), stream, fx);
         form.Width = 420;
         var d = Dialog(c is null ? (type == "stage" ? "Nowa scena (mówią tylko osoby na scenie)" : voice ? "Nowy kanał głosowy" : "Nowy kanał tekstowy") : (voice ? "🔊 " : "#") + c.Name, form, c is null ? "Utwórz" : "Zapisz");
         if (await d.ShowAsync() != ContentDialogResult.Primary || name.Text.Trim().Length == 0) return;
@@ -401,7 +402,7 @@ public sealed partial class ServerSettingsPage : Grid
         if (sync.IsChecked == true && cat.SelectedIndex > 0) body["syncPerms"] = true;
         if (c is null) body["type"] = type;
         if (!voice) { body["topic"] = topic.Text.Trim(); body["slowmode"] = slowVals[Math.Max(0, slow.SelectedIndex)]; body["readonly"] = ro.IsChecked == true; }
-        else { body["userLimit"] = (int)(double.IsNaN(limit.Value) ? 0 : limit.Value); body["bitrate"] = bitVals[Math.Max(0, bitrate.SelectedIndex)]; body["maxStream"] = streamVals[Math.Max(0, stream.SelectedIndex)]; }
+        else { body["userLimit"] = (int)(double.IsNaN(limit.Value) ? 0 : limit.Value); body["bitrate"] = bitVals[Math.Max(0, bitrate.SelectedIndex)]; body["maxStream"] = streamVals[Math.Max(0, stream.SelectedIndex)]; body["fxOff"] = fx.IsChecked != true; }
         if (c is null) await Run(() => Api.PostJson($"servers/{_sid}/channels", body), "Kanał utworzony");
         else await Run(() => Api.PatchJson($"channels/{c.Id}", body), "Zapisano");
     }

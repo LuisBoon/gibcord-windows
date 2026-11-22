@@ -319,9 +319,12 @@ static partial class WatchUi
         Start(sh, id, string.IsNullOrWhiteSpace(title.Text) ? null : title.Text.Trim(), queue || sh.S.Watches.ContainsKey(sh.C.VoiceChannelId));
     }
 
+    // 6.2: gdy gra radio, „Oglądajcie razem” zaczyna nowe oglądanie (zamiast dopisywać film do kolejki radia)
+    static bool RadioOn(Shell sh) => sh.S.Watches.GetValueOrDefault(sh.C.VoiceChannelId)?.Radio == true;
+
     public static void Start(Shell sh, string videoId, string? title, bool queue) =>
-        sh.C.Watch(new { t = queue ? "watch_queue" : "watch_set", videoId, title });
+        sh.C.Watch(new { t = queue && !RadioOn(sh) ? "watch_queue" : "watch_set", videoId, title });
 
     public static void StartFile(Shell sh, long uploadId, bool queue) =>
-        sh.C.Watch(new { t = queue ? "watch_queue" : "watch_set", uploadId });
+        sh.C.Watch(new { t = queue && !RadioOn(sh) ? "watch_queue" : "watch_set", uploadId });
 }

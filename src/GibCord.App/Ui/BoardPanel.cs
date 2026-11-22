@@ -19,7 +19,7 @@ namespace GibCord.App.Ui;
 /// z imieniem, cofanie swoich kresek, czyszczenie, zdjęcie jako tło i zapis obrazka na kanał. Płótno 16:9, współrzędne 0–1
 /// (każdy rysuje w swojej skali). Stan trzyma serwer; panel dostaje board_state przy otwarciu i potem zmiany.
 /// </summary>
-public sealed class BoardPanel : Grid, IDisposable
+public sealed partial class BoardPanel : Grid, IDisposable
 {
     public static BoardPanel? Current { get; private set; }
     /// <summary>Kto ma tablicę otwartą (kanał → osoby) — do podświetlenia przycisku w rozmowie.</summary>
@@ -52,7 +52,7 @@ public sealed class BoardPanel : Grid, IDisposable
     {
         _sh = sh; _cid = cid;
         Current = this;
-        this.Rows("auto", "*");
+        this.Rows("auto", "auto", "*");
         Padding = U.Th(16, 12, 16, 8);
         RowSpacing = 10;
         _area.Children.Add(_bg);
@@ -67,8 +67,9 @@ public sealed class BoardPanel : Grid, IDisposable
         _area.PointerCanceled += (_, _) => Cancel();
         _area.PointerCaptureLost += (_, _) => { if (_pts is not null) Up(null, null); };
         _area.SizeChanged += (_, _) => Redraw();
+        var row = KalBuild(host); // 6.2 Kalambury: panel z wynikami obok tablicy
         BuildTools();
-        this.Add(_tools.At(0), host.At(1));
+        this.Add(_tools.At(0), _gameBar.At(1), row.At(2));
         _cursorFade = DispatcherQueue.CreateTimer();
         _cursorFade.Interval = TimeSpan.FromSeconds(1);
         _cursorFade.Tick += (_, _) =>
@@ -84,6 +85,7 @@ public sealed class BoardPanel : Grid, IDisposable
     public void Dispose()
     {
         _cursorFade.Stop();
+        _kalTimer?.Stop();
         _ = _sh.C.SendLive(new { t = "board_close", channelId = _cid });
         if (Current == this) Current = null;
     }
@@ -106,6 +108,7 @@ public sealed class BoardPanel : Grid, IDisposable
     {
         _tools.Children.Clear();
         _tools.VerticalAlignment = VerticalAlignment.Center;
+        _tools.Add(KalButton()); // 6.2
         foreach (var (key, glyph, tip) in new[] { ("pen", "", "Pióro"), ("marker", "", "Zakreślacz"), ("line", "", "Linia"), ("arrow", "", "Strzałka"), ("rect", "", "Prostokąt"), ("ellipse", "", "Elipsa"), ("text", "", "Napis") })
         {
             var on = _tool == key;
@@ -142,8 +145,10 @@ public sealed class BoardPanel : Grid, IDisposable
         }, 15, 34));
         _tools.Add(U.IconButton("", "Zdjęcie jako tło", PickBg, 15, 34));
         _tools.Add(U.IconButton("", "Zapisz obrazek na kanale", () => _ = SaveToChannel(), 15, 34));
+        if (_who.Parent is Panel wp) wp.Children.Remove(_who);
         _tools.Add(_who.With(t => { t.Margin = U.Th(8, 0, 0, 0); t.VerticalAlignment = VerticalAlignment.Center; }));
         UpdateWho();
+        KalLockTools();
     }
 
     void UpdateWho()
@@ -163,6 +168,7 @@ public sealed class BoardPanel : Grid, IDisposable
     async void Down(object sender, PointerRoutedEventArgs e)
     {
         if (e.GetCurrentPoint(_area).Properties.IsRightButtonPressed) return;
+        if (KalBlockDraw()) return; // 6.2: w Kalamburach rysuje tylko rysujący
         var (x, y) = Norm(e);
         if (_tool == "text")
         {
@@ -329,6 +335,7 @@ public sealed class BoardPanel : Grid, IDisposable
             if (Current is { } b0 && b0._cid == cid) b0.UpdateWho();
             return;
         }
+        if (KalEvent(sh, ev, cid)) return; // 6.2 Kalambury
         if (Current is not { } b || b._cid != cid) return;
         b.Apply(ev);
     }
@@ -369,7 +376,7 @@ public sealed class BoardPanel : Grid, IDisposable
                 }
             case "board_clear":
                 _strokes.Clear(); _mine.Clear(); SetBg(null); Redraw();
-                if (d.Long("userId") is long cu && cu != _sh.S.Me.Id) _sh.Info($"{_sh.S.NameOf(cu, _sh.S.ServerOfChannel(_cid))} wyczyścił(a) tablicę");
+                if (d.Bool("game") != true && d.Long("userId") is long cu && cu != _sh.S.Me.Id) _sh.Info($"{_sh.S.NameOf(cu, _sh.S.ServerOfChannel(_cid))} wyczyścił(a) tablicę");
                 break;
             case "board_bg":
                 SetBg(d.Str("url"));
