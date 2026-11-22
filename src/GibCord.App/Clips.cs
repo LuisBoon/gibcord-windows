@@ -43,7 +43,7 @@ public sealed class ClipRecorder : IDisposable
     GraphicsCaptureSession? _session;
     Windows.Graphics.SizeInt32 _poolSize;
     ScreenAudio? _audio;
-    Segment? _cur;
+    Segment? _cur, _next; // _next: nowy odcinek czeka, aż koder będzie gotowy — dopiero wtedy przejmuje nagrywanie (bez dziury w obrazie)
     Timer? _rot;
     long _lastFrame;
     bool _disposed;
@@ -54,7 +54,7 @@ public sealed class ClipRecorder : IDisposable
     public bool Running => _session is not null && !_disposed;
     public string? LastError { get; private set; }
     /// <summary>Ile sekund nagrania jest już w buforze.</summary>
-    public double Buffered { get { lock (_lock) return _done.Sum(s => s.Duration.TotalSeconds) + (_cur is { } c ? (_clock.ElapsedTicks - c.StartTicks) / (double)Stopwatch.Frequency : 0); } }
+    public double Buffered { get { lock (_lock) return _done.Sum(s => s.Duration.TotalSeconds) + (_cur is { Started: true } c ? (_clock.ElapsedTicks - c.StartTicks) / (double)Stopwatch.Frequency : 0); } }
 
     ClipRecorder(string label, GraphicsCaptureItem item, int fps, uint bitrate, bool audio, (int, int) max)
     {
@@ -141,7 +141,7 @@ public sealed class ClipRecorder : IDisposable
             _poolSize = f.ContentSize;
             if (_poolSize.Width < 16 || _poolSize.Height < 16) return;
             try { pool.Recreate(_dev, DirectXPixelFormat.B8G8R8A8UIntNormalized, 4, _poolSize); } catch { }
-            lock (_lock) { if (_cur is { } c) c.Ending = true; NewSegment(); }
+            lock (_lock) { if (_cur is { } c) c.Ending = true; if (_next is { } n) n.Ending = true; _next = null; NewSegment(); }
             return;
         }
         _lastFrame = now;
@@ -164,7 +164,7 @@ public sealed class ClipRecorder : IDisposable
             lock (_lock)
             {
                 if (_disposed || _cur is null) return;
-                if ((_clock.ElapsedTicks - _cur.StartTicks) / (double)Stopwatch.Frequency >= SegmentSeconds) { _cur.Ending = true; NewSegment(); }
+                if (_next is null && _cur.Started && (_clock.ElapsedTicks - _cur.StartTicks) / (double)Stopwatch.Frequency >= SegmentSeconds) NewSegment();
                 Cleanup();
             }
         }
@@ -187,12 +187,26 @@ public sealed class ClipRecorder : IDisposable
         }
     }
 
+    /// <summary>Przygotowuje następny odcinek; poprzedni nagrywa dalej, aż ten nowy dostanie pierwsze żądanie próbki (Activate).</summary>
     void NewSegment()
     {
-        if (_disposed) return;
-        var seg = new Segment(this, Path.Combine(BufferDir, $"odcinek-{++_seq:D5}.mp4"), _clock.ElapsedTicks, _poolSize);
-        _cur = seg;
+        if (_disposed || _next is not null) return;
+        var seg = new Segment(this, Path.Combine(BufferDir, $"odcinek-{++_seq:D5}.mp4"), _poolSize);
+        _next = seg;
+        _cur ??= seg;
         _ = seg.Run();
+    }
+
+    /// <summary>Koder nowego odcinka ruszył: od tej chwili liczy się jego czas, a poprzedni odcinek się kończy.</summary>
+    internal void Activate(Segment s)
+    {
+        lock (_lock)
+        {
+            if (s.Started) return;
+            s.StartTicks = _clock.ElapsedTicks;
+            if (_next == s) _next = null;
+            if (_cur != s) { var old = _cur; _cur = s; if (old is not null) old.Ending = true; }
+        }
     }
 
     internal void Finished(Segment s)
@@ -214,7 +228,7 @@ public sealed class ClipRecorder : IDisposable
             lock (_lock)
             {
                 cur = _cur;
-                if (cur is not null) { cur.Ending = true; NewSegment(); }
+                if (cur is not null) { cur.Ending = true; NewSegment(); } // nagranie do teraz; następny odcinek ruszy sam
             }
             if (cur is not null) await Task.WhenAny(cur.Done, Task.Delay(8000));
             List<Segment> segs;
@@ -280,10 +294,12 @@ public sealed class ClipRecorder : IDisposable
     }
 
     /// <summary>Jeden odcinek nagrania: MediaStreamSource → MediaTranscoder → plik MP4.</summary>
-    internal sealed class Segment(ClipRecorder r, string path, long startTicks, Windows.Graphics.SizeInt32 size)
+    internal sealed class Segment(ClipRecorder r, string path, Windows.Graphics.SizeInt32 size)
     {
         public string Path { get; } = path;
-        public long StartTicks { get; } = startTicks;
+        /// <summary>Chwila, od której liczą się znaczniki czasu (pierwsze żądanie próbki), -1 = jeszcze nie ruszył.</summary>
+        public long StartTicks { get; set; } = -1;
+        public bool Started => StartTicks >= 0;
         public volatile bool Ending;
         public bool Ok;
         public TimeSpan Duration;
@@ -333,6 +349,7 @@ public sealed class ClipRecorder : IDisposable
             var def = req.GetDeferral();
             try
             {
+                if (!Started) r.Activate(this);
                 if (req.StreamDescriptor is VideoStreamDescriptor) req.Sample = await NextVideo();
                 else req.Sample = await NextAudio();
             }
@@ -396,7 +413,7 @@ public sealed class ClipRecorder : IDisposable
         if (_disposed) return;
         _disposed = true;
         try { _rot?.Dispose(); } catch { }
-        lock (_lock) { if (_cur is { } c) c.Ending = true; }
+        lock (_lock) { if (_cur is { } c) c.Ending = true; if (_next is { } n) n.Ending = true; }
         try { _audio?.Stop(); } catch { }
         try { _session?.Dispose(); } catch { }
         try { _pool?.Dispose(); } catch { }
