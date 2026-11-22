@@ -75,6 +75,8 @@ public sealed class User
     public string? BannerImage { get; set; }
     public List<string> Badges { get; set; } = [];
     public bool Staff { get; set; }
+    /// <summary>6.4: "bot" albo "webhook" (null = człowiek).</summary>
+    public string? Bot { get; set; }
     public string? Birthday { get; set; }
     public bool BirthdayToday { get; set; }
     public Activity? Activity { get; set; }
@@ -458,6 +460,8 @@ public sealed class Message
     public JsonElement Game { get; set; }
     public Sticker? Sticker { get; set; }
     public JsonElement Card { get; set; }
+    /// <summary>6.4: odpowiedź bota na komendę — {userId, command}.</summary>
+    public JsonElement Interaction { get; set; }
     /// <summary>Karta automoderacji (wiadomość typu „automod” na kanale powiadomień).</summary>
     public JsonElement Automod { get; set; }
     public string? Nonce { get; set; }

@@ -429,7 +429,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
             case "birthday_self":
                 Birthday?.Invoke(Store.Me.Id);
                 break;
-            case var lt when lt.StartsWith("board_") || lt.StartsWith("stage_"):
+            case var lt when lt.StartsWith("board_") || lt.StartsWith("stage_") || lt is "interaction_reply" or "commands_update":
                 Live?.Invoke(ev);
                 break;
             case "season": // 6.1: admin włączył/wyłączył zimę dla wszystkich

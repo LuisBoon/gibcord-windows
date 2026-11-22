@@ -45,7 +45,7 @@ public sealed class BoardPanel : Grid, IDisposable
     FrameworkElement? _preview;
     long _lastDraft, _lastCursor;
     string? _bgUrl;
-    readonly StackPanel _tools = U.H(6);
+    readonly WrapPanel _tools = new() { Spacing = 6 }; // w wąskim oknie przyciski schodzą do drugiego rzędu
     readonly TextBlock _who = U.T("", 12, U.Semi, Theme.Mu);
 
     public BoardPanel(Shell sh, long cid)

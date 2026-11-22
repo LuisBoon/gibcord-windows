@@ -89,7 +89,13 @@ public sealed class Shell : Grid
         this.Add(snow);
         C.SeasonChanged += Winter.Notify;
         // 6.3: tablica i scena
-        C.Live += ev => { if (ev.Type.StartsWith("board_")) BoardPanel.OnEvent(this, ev); else StageView.OnEvent(this, ev); };
+        C.Live += ev =>
+        {
+            if (ev.Type.StartsWith("board_")) BoardPanel.OnEvent(this, ev);
+            else if (ev.Type == "commands_update") { if (ev.Data.Long("serverId") is long cs) Commands.Invalidate(cs); } // 6.4
+            else if (ev.Type == "interaction_reply") Info($"{S.NameOf(ev.Data.Long("botUserId") ?? 0, S.ServerOfChannel(ev.Data.Long("channelId") ?? 0))} (tylko dla Ciebie): {ev.Data.Str("content") ?? ev.Data.Prop("card").Str("title") ?? ""}");
+            else StageView.OnEvent(this, ev);
+        };
         BoardPanel.StatusChanged = cid => { if (cid == C.VoiceChannelId) RefreshVoice(); };
 
         _refresh = DispatcherQueue.CreateTimer();

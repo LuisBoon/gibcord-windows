@@ -121,53 +121,109 @@ public sealed class SettingsPage : Grid
 
     // ── Moje boty (szkic, wybór użytkownika: wersja A „panel twórcy”) — jeszcze nie działa, przyciski nieaktywne ──
 
-    void Bots()
+    // ───────────────────────── 6.4: Moje boty ─────────────────────────
+    const string DevDocs = "https://gibcord.luisboon.pl/dla-tworcow/";
+
+    async void Bots()
     {
         _body.MaxWidth = 760;
         var head = new Grid { ColumnSpacing = 12 }.Cols("*", "auto").Add(
-            U.V(6,
-                U.HG(10, U.T("Moje boty", 24, U.Bold), U.Box(U.T("WKRÓTCE", 10.5, U.Bold, Theme.OnAccent), Theme.Accent, 6, U.Th(7, 2))),
-                U.T("Bot to konto, którym steruje Twój program: odpisuje, moderuje, gra muzykę. Ta strona to szkic — boty ruszą w jednej z kolejnych wersji.", 13.5, null, Theme.Mu, wrap: true)).At(0, 0),
-            U.Primary("+ Nowy bot", () => { }, 40).With(b => { b.IsEnabled = false; b.HorizontalAlignment = HorizontalAlignment.Right; b.VerticalAlignment = VerticalAlignment.Top; b.Tip("Już wkrótce"); }).At(0, 1));
+            U.V(6, U.T("Moje boty", 24, U.Bold),
+                U.T("Bot to konto, którym steruje Twój program: odpisuje na komendy „/”, wysyła powiadomienia, pilnuje porządku. Klucz bota widzisz tylko raz — trzymaj go w tajemnicy.", 13.5, null, Theme.Mu, wrap: true)).At(0, 0),
+            U.Primary("+ Nowy bot", NewBot, 40).With(b => { b.HorizontalAlignment = HorizontalAlignment.Right; b.VerticalAlignment = VerticalAlignment.Top; }).At(0, 1));
         _body.Add(head);
+        FrameworkElement Step(string t, string d) => U.V(4, U.T(t, 13.5, U.Bold, Theme.Accent), U.T(d, 12.5, null, Theme.Mu, wrap: true));
+        var steps = Card(Label("Jak zacząć"),
+            new Grid { ColumnSpacing = 16 }.Cols("*", "*", "*").Add(
+                Step("1. Utwórz bota", "Nadaj nazwę i skopiuj klucz gcb_…").At(0, 0),
+                Step("2. Uruchom program", "Gotowy przykład w Node.js jest w dokumentacji — wystarczy wkleić klucz.").At(0, 1),
+                Step("3. Dodaj na serwer", "Jego komendy pojawią się po wpisaniu „/” w czacie.").At(0, 2)),
+            U.Ghost("Dokumentacja dla twórców", () => _ = Launcher.LaunchUriAsync(new Uri(DevDocs)), 34).With(b => b.HorizontalAlignment = HorizontalAlignment.Left));
+        var list = new StackPanel { Spacing = 12 };
+        _body.Add(list);
+        _body.Add(steps);
+        list.Add(U.T("Wczytywanie…", 13, null, Theme.Mu));
+        List<BotInfo> bots;
+        try { bots = _sh.C.Offline ? GibCord.App.Demo.Bots() : await Api.GetBots(); }
+        catch (Exception ex) { list.Children.Clear(); list.Add(U.T(GibCordClient.Friendly(ex), 13, null, Theme.Red, wrap: true)); return; }
+        list.Children.Clear();
+        if (bots.Count == 0)
+            list.Add(U.Box(U.T("Nie masz jeszcze botów. Kliknij „+ Nowy bot”.", 13.5, null, Theme.Mu), U.W(.04), 14, U.Th(16)));
+        foreach (var b in bots) list.Add(BotCard(b));
+    }
 
-        // przykładowy bot (tak będzie wyglądać karta) i miejsce na kolejnego
-        Button Dim(string text) => U.Ghost(text, () => { }, 32).With(b => { b.IsEnabled = false; b.Tip("Już wkrótce"); });
-        var avatar = new Border { Width = 44, Height = 44, CornerRadius = new CornerRadius(22), Background = Theme.Teal, Child = U.I("\uE99A", 20, U.B("#1b1531")).With(i => i.HorizontalAlignment = HorizontalAlignment.Center) };
-        var key = U.Box(new Grid { ColumnSpacing = 8 }.Cols("auto", "*", "auto").Add(
-                U.T("KLUCZ", 10.5, U.Bold, Theme.Mu2).At(0, 0),
-                U.T("gcb_••••••••••••••••••••", 12, null, Theme.Mu).With(t => t.FontFamily = Theme.Mono).At(0, 1),
-                Dim("Pokaż").At(0, 2)),
-            U.B("#590A0618"), 10, U.Th(10, 6));
-        var card = new Border
+    FrameworkElement BotCard(BotInfo b)
+    {
+        var av = new Avatar(44).SetRaw(b.Name, b.Color ?? "#7fd6cc", Api.Abs(b.Avatar), b.Online ? "online" : "offline");
+        var tag = U.Box(U.T("BOT", 9.5, U.Bold, U.B("#1b1531")), U.B("#7cc7ff"), 5, U.Th(5, 1));
+        var state = U.T(b.Online ? "● działa" : "○ wyłączony", 12, U.Semi, b.Online ? Theme.Green : Theme.Mu2);
+        var info = U.V(2, U.HG(6, U.T(b.Name, 15, U.Bold), tag, state),
+            U.T(b.Description.Length > 0 ? b.Description : "Bez opisu", 12.5, null, Theme.Mu, wrap: true));
+        var servers = U.T(b.Servers.Count == 0 ? "Nie jest jeszcze na żadnym serwerze." : "Na serwerach: " + string.Join(", ", b.Servers.Select(s => s.Name)), 12.5, null, Theme.Mu2, wrap: true);
+        var cmds = new WrapPanel { Spacing = 6 };
+        foreach (var c in b.Commands.Take(20)) cmds.Children.Add(U.Box(U.T("/" + c.Name, 12, U.Semi, Theme.Accent).With(t => t.FontFamily = Theme.Mono), U.W(.06), 7, U.Th(7, 2)).With(x => x.Tip(c.Description)));
+        if (b.Commands.Count == 0) cmds.Children.Add(U.T("Komendy pojawią się, gdy program bota je zarejestruje.", 12, null, Theme.Mu2));
+        var mine = _sh.S.Servers.Where(s => _sh.S.CanServer(s, Perm.ManageServer) && b.Servers.All(x => x.Id != s.Id)).ToList();
+        var addTo = U.Ghost("Dodaj do serwera…", async () =>
+        {
+            if (mine.Count == 0) { _sh.Info("Nie ma serwera, na którym możesz dodać bota (potrzebne prawo zarządzania serwerem)."); return; }
+            var pick = new DropField { Header = U.T("Serwer", 12.5, U.Semi), HorizontalAlignment = HorizontalAlignment.Stretch };
+            foreach (var s in mine) pick.Items.Add(s.Name);
+            pick.SelectedIndex = 0;
+            if (await Dialog($"Dodać {b.Name} do serwera?", U.V(8, pick, U.T("Bot zobaczy kanały jak zwykły członek i dostanie role @everyone.", 12, null, Theme.Mu2, wrap: true)).With(x => x.Width = 340), "Dodaj").ShowAsync() != ContentDialogResult.Primary) return;
+            try { await Api.AddBotToServer(mine[Math.Max(0, pick.SelectedIndex)].Id, b.Id); _sh.Info($"{b.Name} jest na serwerze {mine[Math.Max(0, pick.SelectedIndex)].Name}"); Bots0(); }
+            catch (Exception ex) { Err(ex); }
+        }, 32);
+        var token = U.Ghost("Nowy klucz", async () =>
+        {
+            if (!await M.Confirm(_sh, "Wygenerować nowy klucz?", "Stary klucz przestanie działać od razu, a bot się rozłączy. Program trzeba będzie uruchomić z nowym.", "Nowy klucz")) return;
+            try { ShowToken(b.Name, await Api.NewBotToken(b.Id)); } catch (Exception ex) { Err(ex); }
+        }, 32);
+        var del = U.Ghost("Usuń", async () =>
+        {
+            if (!await M.Confirm(_sh, $"Usunąć bota {b.Name}?", "Zniknie ze wszystkich serwerów, a klucz przestanie działać. Jego wiadomości zostaną.", "Usuń")) return;
+            try { await Api.DeleteBot(b.Id); _sh.Info("Bot usunięty"); Bots0(); } catch (Exception ex) { Err(ex); }
+        }, 32);
+        return new Border
         {
             Background = U.W(.05), CornerRadius = new CornerRadius(14), Padding = U.Th(16), BorderBrush = U.W(.08), BorderThickness = U.Th(1),
-            Child = U.V(12,
-                U.HG(12, avatar, U.V(2,
-                    U.HG(6, U.T("Twój bot", 15, U.Bold), U.Box(U.T("BOT", 9.5, U.Bold, U.B("#1b1531")), U.B("#7cc7ff"), 5, U.Th(5, 1))),
-                    U.T("przykładowa karta", 12, null, Theme.Mu2))),
-                key,
-                new WrapPanel { Spacing = 8 }.Add(Dim("Zaproś na serwer"), Dim("Uprawnienia"), Dim("Usuń"))),
+            Child = U.V(12, U.HG(12, av, info), servers, cmds, new WrapPanel { Spacing = 8 }.Add(addTo, token, del)),
         };
-        var add = new Border
-        {
-            CornerRadius = new CornerRadius(14), Padding = U.Th(16), BorderBrush = U.W(.22), BorderThickness = U.Th(1),
-            Child = U.V(6, U.I("\uE710", 22, Theme.Accent).With(i => i.HorizontalAlignment = HorizontalAlignment.Center),
-                U.T("Utwórz kolejnego bota", 14, U.Bold).With(t => t.HorizontalAlignment = HorizontalAlignment.Center),
-                U.T("nazwa, awatar, klucz — w minutę", 12, null, Theme.Mu2).With(t => t.HorizontalAlignment = HorizontalAlignment.Center)).With(v => v.VerticalAlignment = VerticalAlignment.Center),
-        };
-        _body.Add(new Grid { ColumnSpacing = 14 }.Cols("*", "*").Add(card.At(0, 0), add.At(0, 1)));
+    }
 
-        // jak to będzie działać
-        FrameworkElement Step(string t, string d) => U.V(4, U.T(t, 13.5, U.Bold, Theme.Accent), U.T(d, 12.5, null, Theme.Mu, wrap: true));
-        _body.Add(Card(Label("Jak to będzie działać"),
-            new Grid { ColumnSpacing = 16 }.Cols("*", "*", "*").Add(
-                Step("1. Utwórz bota", "Dostajesz klucz — jak hasło dla Twojego programu. Widzisz go tylko Ty.").At(0, 0),
-                Step("2. Podłącz program", "To samo API co aplikacja: wiadomości, reakcje, role, kanały głosowe.").At(0, 1),
-                Step("3. Zaproś na serwer", "Wybierasz serwer i uprawnienia, jakie bot ma dostać.").At(0, 2))));
-        _body.Add(Card(Label("Masz pomysł na bota?"),
-            U.T("Napisz na kanale #pomysły na serwerze „GibCord — społeczność”, czego potrzebujesz — pierwsze boty zrobimy pod Wasze pomysły.", 12.5, null, Theme.Mu, wrap: true),
-            U.Ghost("Przejdź do #pomysły", () => { _sh.CloseSettings(); _sh.OpenChannelByKind("ideas"); }, 34).With(b => b.HorizontalAlignment = HorizontalAlignment.Left)));
+    void Bots0() { _body.Children.Clear(); Bots(); }
+
+    AppDialog Dialog(string title, UIElement content, string ok) => new()
+    {
+        Title = title, Content = new ScrollViewer { Content = content, MaxHeight = 560 }, PrimaryButtonText = ok, CloseButtonText = "Anuluj",
+        DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
+    };
+
+    async void NewBot()
+    {
+        var name = new TextBox { PlaceholderText = "np. Kostka", MaxLength = 32 };
+        var desc = new TextBox { PlaceholderText = "Co robi (opcjonalnie)", MaxLength = 300, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 64 };
+        if (await Dialog("Nowy bot", U.V(8, U.T("Nazwa", 12.5, U.Semi, Theme.Mu), name, U.T("Opis", 12.5, U.Semi, Theme.Mu), desc).With(x => x.Width = 340), "Utwórz").ShowAsync() != ContentDialogResult.Primary) return;
+        if (name.Text.Trim().Length < 2) { _sh.Info("Nazwa bota: co najmniej 2 znaki.", true); return; }
+        try
+        {
+            var b = await Api.CreateBot(name.Text.Trim(), desc.Text.Trim());
+            ShowToken(b.Name, b.Token ?? "");
+            Bots0();
+        }
+        catch (Exception ex) { Err(ex); }
+    }
+
+    async void ShowToken(string name, string token)
+    {
+        var box = new TextBox { Text = token, IsReadOnly = true, FontFamily = Theme.Mono, TextWrapping = TextWrapping.Wrap };
+        var content = U.V(10,
+            U.T("Skopiuj go teraz — później nie da się go już zobaczyć (można tylko wygenerować nowy). Nie wklejaj go nikomu na czacie.", 13, null, Theme.Mu, wrap: true),
+            box,
+            U.Ghost("Kopiuj klucz", () => { Sidebar.Copy(token); _sh.Info("Klucz skopiowany"); }, 32).With(x => x.HorizontalAlignment = HorizontalAlignment.Left)).With(x => x.Width = 420);
+        var d = new AppDialog { Title = $"Klucz bota {name}", Content = content, CloseButtonText = "Gotowe" };
+        await M.WaitNoDialog(_sh.XamlRoot);
+        await d.ShowAsync();
     }
 
     // ── wykrywanie gier: co teraz, „To nie gra”, własna lista ──

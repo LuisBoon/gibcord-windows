@@ -84,6 +84,7 @@ public sealed partial class ServerSettingsPage : Grid
         if (Can(Perm.ManageExpressions)) Item("emoji", "", "Emoji, naklejki, dźwięki");
         if (Can(Perm.ManageServer) || Can(Perm.ManageMessages)) Item("automod", "", "Automoderacja");
         if (Can(Perm.ManageServer)) Item("template", "\uE8A5", "Szablon serwera");
+        if (Can(Perm.ManageServer) || Can(Perm.ManageChannels)) Item("integrations", "\uE99A", "Integracje"); // 6.4
         if (Can(Perm.ManageMessages)) Item("reports", "", "Zgłoszenia");
         if (Can(Perm.ViewAuditLog)) Item("audit", "", "Dziennik zmian");
         if (Owner)
@@ -110,6 +111,7 @@ public sealed partial class ServerSettingsPage : Grid
             case "reports": Reports(); break;
             case "audit": Audit(); break;
             case "template": Template(); break;
+            case "integrations": Integrations(); break;
             default: Overview(); break;
         }
         if (keepScroll) _sv.ChangeView(null, off, null, true);

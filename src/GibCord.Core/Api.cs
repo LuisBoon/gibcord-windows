@@ -103,6 +103,19 @@ public sealed class GibCordApi : IDisposable
     public Task<Info> GetInfo(CancellationToken ct = default) => Send<Info>(HttpMethod.Get, "info", ct: ct);
     /// <summary>6.1: podsumowanie roku zalogowanej osoby (403 wrapped_closed przed 1 grudnia; admin widzi „podgląd”).</summary>
     public Task<Wrapped> GetWrapped(int year, CancellationToken ct = default) => Send<Wrapped>(HttpMethod.Get, $"wrapped/{year}", ct: ct);
+    // ── 6.4: boty, komendy, webhooki ──
+    public Task<List<BotInfo>> GetBots(CancellationToken ct = default) => Send<List<BotInfo>>(HttpMethod.Get, "bots", ct: ct);
+    public Task<BotInfo> CreateBot(string name, string description, CancellationToken ct = default) => Send<BotInfo>(HttpMethod.Post, "bots", new { name, description }, ct);
+    public Task<BotInfo> PatchBot(long id, object changes, CancellationToken ct = default) => Send<BotInfo>(HttpMethod.Patch, $"bots/{id}", changes, ct);
+    public async Task<string> NewBotToken(long id, CancellationToken ct = default) => (await Send(HttpMethod.Post, $"bots/{id}/token", ct: ct)).Str("token") ?? "";
+    public Task DeleteBot(long id, CancellationToken ct = default) => Send(HttpMethod.Delete, $"bots/{id}", ct: ct);
+    public Task AddBotToServer(long serverId, long botId, CancellationToken ct = default) => Send(HttpMethod.Post, $"servers/{serverId}/bots", new { botId }, ct);
+    public Task<List<BotCommand>> GetCommands(long serverId, CancellationToken ct = default) => Send<List<BotCommand>>(HttpMethod.Get, $"servers/{serverId}/commands", ct: ct);
+    public Task Interact(long channelId, long botId, string command, Dictionary<string, object?> options, CancellationToken ct = default) =>
+        Send(HttpMethod.Post, $"channels/{channelId}/interactions", new { botId, command, options }, ct);
+    public Task<List<WebhookInfo>> GetWebhooks(long channelId, CancellationToken ct = default) => Send<List<WebhookInfo>>(HttpMethod.Get, $"channels/{channelId}/webhooks", ct: ct);
+    public Task<WebhookInfo> CreateWebhook(long channelId, string name, CancellationToken ct = default) => Send<WebhookInfo>(HttpMethod.Post, $"channels/{channelId}/webhooks", new { name }, ct);
+    public Task DeleteWebhook(long id, CancellationToken ct = default) => Send(HttpMethod.Delete, $"webhooks/{id}", ct: ct);
     /// <summary>6.3 scena: hand / lower / speak / listen (userId — gdy moderator zmienia komuś).</summary>
     public Task Stage(long channelId, string action, long? userId = null) => Send(HttpMethod.Post, $"channels/{channelId}/stage", userId is null ? new { action } : new { action, userId }, default);
     /// <summary>6.1: wysyła kartę „Mój GibCord ROK” na kanał albo do rozmowy.</summary>

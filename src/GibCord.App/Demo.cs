@@ -224,6 +224,14 @@ public static class Demo
         return list;
     }
 
+    /// <summary>6.4: przykładowe boty (zrzut CI --view bots).</summary>
+    public static List<BotInfo> Bots() =>
+    [
+        new BotInfo { Id = 1, UserId = 50, Name = "Kostka", Username = "botk3x9a", Color = "#7fd6cc", Description = "Rzuca kośćmi i losuje, kto stawia pizzę.", Online = true,
+            Servers = [new BotServer { Id = Eg, Name = "Ekipa Gibka" }], Commands = [new BotCommandName { Name = "kostka", Description = "Rzut kością" }, new BotCommandName { Name = "moneta", Description = "Orzeł czy reszka" }, new BotCommandName { Name = "wybierz", Description = "Wybiera jedno z podanych" }] },
+        new BotInfo { Id = 2, UserId = 51, Name = "Strażnik serwera", Username = "bot7f21c", Color = "#ffb98f", Description = "Wysyła alarmy z panelu serwera.", Online = false },
+    ];
+
     /// <summary>Przykładowe podsumowanie roku (zrzuty CI: --view wrapped / wrapped2 / wrapped3).</summary>
     static Wrapped DemoWrapped() => new()
     {

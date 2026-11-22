@@ -47,6 +47,8 @@ public sealed partial class Composer : StackPanel
     List<(string Label, string Insert)> _sugg = [];
     int _suggIdx;
     bool _emojiMode; // podpowiedzi „:serce” zamiast „@osoba”
+    bool _cmdMode; // 6.4: podpowiedzi komend po „/”
+    List<Commands.Cmd> _cmds = [];
     int _atStart = -1;
 
     sealed class Pending
@@ -277,9 +279,24 @@ public sealed partial class Composer : StackPanel
         return true;
     }
 
+    bool CommandSuggest(string upto)
+    {
+        _cmdMode = false;
+        if (!upto.StartsWith('/') || upto.Contains(' ') || upto.Contains('\n') || _v.Srv is null) return false;
+        var q = upto[1..].ToLowerInvariant();
+        var all = Commands.For(_v.Sh, _v.Srv.Id, () => DispatcherQueue.TryEnqueue(UpdateSuggest));
+        _cmds = all.Where(c => c.Name.StartsWith(q)).Take(8).ToList();
+        if (_cmds.Count == 0) return false;
+        _cmdMode = true;
+        _sugg = _cmds.Select(c => ($"/{c.Name}  ·  {c.Description}{(c.Options.Count > 0 ? "  (" + string.Join(", ", c.Options.Select(o => o.Name + (o.Required ? "" : "?"))) + ")" : "")}", "/" + c.Name)).ToList();
+        _atStart = 0;
+        return true;
+    }
+
     void UpdateSuggest()
     {
         var upto = _box.Text[..Math.Min(_box.SelectionStart, _box.Text.Length)];
+        if (CommandSuggest(upto)) { _emojiMode = false; ShowSuggest(); return; }
         if (EmojiSuggest(upto)) { ShowSuggest(); return; }
         _emojiMode = false;
         var m = AtRe().Match(upto);
@@ -331,7 +348,9 @@ public sealed partial class Composer : StackPanel
             var (label, ins) = _sugg[i];
             var key = ins[(ins.LastIndexOf('|') + 1)..];
             UIElement icon;
-            if (_emojiMode)
+            if (_cmdMode && i < _cmds.Count)
+                icon = _cmds[i].BotUserId != 0 ? new Avatar(24).Set(S, _v.Sh.C.Api, _cmds[i].BotUserId, _v.Srv) : U.I("\uE945", 16, Theme.Accent);
+            else if (_emojiMode)
                 icon = Markup.ParseInline(ins).FirstOrDefault() is EmojiSpan es && S.EmojiById(es.Id) is { } ce
                     ? new Image { Source = Images.Get(_v.Sh.C.Api.Abs(ce.Url), 48), Width = 22, Height = 22 }
                     : U.T(ins, 18).With(t => { t.Width = 24; t.TextAlignment = TextAlignment.Center; });
@@ -349,6 +368,16 @@ public sealed partial class Composer : StackPanel
     {
         if (i < 0 || i >= _sugg.Count || _atStart < 0) return;
         var ins = _sugg[i].Insert;
+        if (_cmdMode && i < _cmds.Count)
+        {
+            var c = _cmds[i];
+            var text = c.Builtin ?? "/" + c.Name + (c.Options.Count > 0 ? " " : "");
+            _box.Text = text;
+            _box.SelectionStart = text.Length;
+            HideSuggest();
+            if (c.Options.Count > 0) _v.Sh.Info($"/{c.Name}: wpisz {string.Join(", ", c.Options.Select(o => o.Name + (string.IsNullOrEmpty(o.Description) ? "" : " (" + o.Description + ")")))} i Enter");
+            return;
+        }
         if (_emojiMode)
         {
             App.Prefs.UseEmoji(ins);
@@ -532,6 +561,17 @@ public sealed partial class Composer : StackPanel
         }
         var atts = _pending.Where(p => p.Att is not null).Select(p => p.Att!).ToList();
         if (text.Length == 0 && atts.Count == 0) return;
+        // 6.4: komenda bota — idzie do bota, a nie jako wiadomość
+        if (atts.Count == 0 && _v.Srv is { } csrv && Commands.Parse(_v.Sh, csrv.Id, text) is { } cmd)
+        {
+            var missing = cmd.Cmd.Options.Where(o => o.Required && !cmd.Options.ContainsKey(o.Name)).Select(o => o.Name).ToList();
+            if (missing.Count > 0) { _v.Sh.Info($"/{cmd.Cmd.Name}: brakuje {string.Join(", ", missing)}", true); return; }
+            _box.Text = "";
+            App.Prefs.Drafts.Remove(_v.Key);
+            try { await _v.Sh.C.Api.Interact(_v.Key, cmd.Cmd.BotId, cmd.Cmd.Name, cmd.Options); }
+            catch (Exception ex) { _box.Text = text; _v.Sh.Info(ex is ApiException ae ? ae.Message : "Bot nie odpowiedział — spróbuj jeszcze raz.", true); }
+            return;
+        }
         var max = _v.Sh.C.Info?.Limits.MessageLength ?? 4000;
         if (text.Length > max) { _v.Sh.Info($"Wiadomość jest za długa ({text.Length} z {max} znaków).", true); return; }
         var reply = _reply;

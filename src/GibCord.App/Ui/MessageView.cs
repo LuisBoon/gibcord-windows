@@ -218,6 +218,7 @@ public sealed partial class MessageView : Grid
             name.RightTapped += (_, e) => { e.Handled = true; UserMenu.Build(_v.Sh, m.AuthorId, Srv, _v, name).ShowAt(name, e.GetPosition(name)); };
             var head = U.H(8, name);
             if (S.U(m.AuthorId) is { Staff: true }) head.Add(U.Box(U.T("GC", 9, U.Bold, Theme.OnAccent), U.B("#f2a93b"), 5, U.Th(4, 1)).With(b => b.Tip("Właściciel GibCorda")));
+            if (S.U(m.AuthorId)?.Bot is { } botKind) head.Add(U.Box(U.T(botKind == "webhook" ? "WEBHOOK" : "BOT", 9, U.Bold, U.B("#1b1531")), U.B("#7cc7ff"), 5, U.Th(4, 1)).With(b => b.Tip(botKind == "webhook" ? "Wiadomość z innego programu (webhook)" : "Bot — konto sterowane programem"))); // 6.4
             if (S.RolesOf(Srv, m.AuthorId).FirstOrDefault(x => !string.IsNullOrEmpty(x.Icon) && !x.Icon!.StartsWith('/') && !x.Icon.StartsWith("http")) is { } ri)
                 head.Add(U.T(ri.Icon!, 13).With(t => t.Tip(ri.Name)));
             if (S.U(m.AuthorId) is { BirthdayToday: true }) head.Add(U.T("🎂", 12).With(t => t.Tip("Dziś ma urodziny!")));
@@ -230,6 +231,9 @@ public sealed partial class MessageView : Grid
             }
             body.Children.Add(head);
         }
+        // 6.4: odpowiedź bota na komendę — „Ola użył(a) /kostka”
+        if (m.Interaction.ValueKind == System.Text.Json.JsonValueKind.Object && m.Interaction.Long("userId") is long iu)
+            body.Children.Add(U.H(5, U.I("\uE756", 11, Theme.Mu2), U.T($"{S.NameOf(iu, Srv)} · /{m.Interaction.Str("command")}", 12, U.Semi, Theme.Mu2)).With(p => p.Margin = U.Th(0, 0, 0, 2)));
 
         // treść
         var cardDone = false;
