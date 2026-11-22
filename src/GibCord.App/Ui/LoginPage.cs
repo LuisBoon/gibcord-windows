@@ -38,7 +38,7 @@ public sealed class LoginPage : Grid
     void Header(string title, string sub)
     {
         _form.Children.Clear();
-        _form.Children.Add(new Image { Source = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "gibcord.png"))), Width = 72, Height = 72, HorizontalAlignment = HorizontalAlignment.Center });
+        _form.Children.Add(Winter.Hatted(new Image { Source = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "gibcord.png"))), Width = 72, Height = 72 }, 72).With(g => g.HorizontalAlignment = HorizontalAlignment.Center)); // 6.1: zimą w czapce
         _form.Children.Add(U.T(title, 24, U.Bold).With(t => { t.HorizontalAlignment = HorizontalAlignment.Center; t.TextWrapping = TextWrapping.Wrap; t.TextAlignment = TextAlignment.Center; }));
         _form.Children.Add(U.T(sub, 13.5, null, Theme.Mu, wrap: true).With(t => { t.HorizontalAlignment = HorizontalAlignment.Center; t.TextAlignment = TextAlignment.Center; t.Margin = U.Th(0, -8, 0, 6); }));
     }

@@ -19,6 +19,13 @@ public static class Demo
     public static GibCordClient CreateClient(Action<Action> ui)
     {
         var c = new GibCordClient(new Uri("https://gibcord.luisboon.pl"), new MemoryTokenStore("demo"), null, ui) { Offline = true };
+        // 6.1: zima i podsumowanie roku w trybie pokazowym
+        Winter.DemoOn = Options.View is "winter" or "wrapped" or "wrapped2" or "wrapped3" or "wrapcard" or "winterlogin";
+        if (Options.View is "wrapped" or "wrapped2" or "wrapped3")
+        {
+            WrappedView.DemoData = DemoWrapped();
+            WrappedView.DemoSlide = Options.View switch { "wrapped2" => 2, "wrapped3" => 9, _ => 0 };
+        }
         c.Store.Load(State());
         var now = Format.NowMs();
         c.Store.SetWindow(Ogolne, Options.WheelTest ? [.. LongHistory(now), .. Messages(now)] : Messages(now), hasOlder: false);
@@ -73,6 +80,9 @@ public static class Demo
             case "adminstats": sh.Go(Eg, Ogolne); sh.ShowAdmin("stats"); break;
             case "adminact": sh.Go(Eg, Ogolne); sh.ShowAdmin("activity"); break;
             case "adminmail": sh.Go(Eg, Ogolne); sh.ShowAdmin("mail"); break;
+            case "winter": sh.Go(Eg, Ogolne); break; // 6.1: śnieg + Gibek w czapce na pasku serwerów
+            case "wrapcard": sh.Go(Eg, Ogolne); break;
+            case "wrapped" or "wrapped2" or "wrapped3": sh.Go(0, 0); WrappedView.Open(sh); break;
             case "forest":
                 if (Theme.Name != "forest") sh.W.ApplyTheme("forest"); // przebudowa okna — nowe okno wróci tutaj i przejdzie na kanał
                 else sh.Go(Eg, Ogolne);
@@ -184,8 +194,47 @@ public static class Demo
         list[7].ReplyTo = new ReplyRef { Id = 1008, AuthorId = KubaId, Content = "ktoś wbija dziś wieczorem na granie?" };
         list[1].Mentions = [MajaId];
         list[9].Mentions = [OlaId, KubaId];
+        if (Options.View == "wrapcard")
+        {
+            var w = Msg(1030, Ogolne, OlaId, "Mój GibCord 2026", now - 30000);
+            w.Card = J(new
+            {
+                level = "info", kind = "wrapped", year = 2026, title = "Mój GibCord 2026", subtitle = "Nocny marek — Najlepsze rozmowy zaczynają się u Ciebie po północy.",
+                badge = new { text = "Podsumowanie roku", level = "info" },
+                stats = new object[]
+                {
+                    new { label = "Wiadomości", value = "1 284", note = "w 41 dni" }, new { label = "W głosie", value = "62 h" }, new { label = "Ulubiony kanał", value = "#ogólne", note = "Ekipa Gibka" },
+                    new { label = "Emoji roku", value = "😂", note = "212 razy" }, new { label = "Gra roku", value = "Minecraft", note = "38 h" }, new { label = "Najlepsza godzina", value = "22:00" },
+                },
+                buttons = new[] { new { label = "Zobacz swoje", url = "https://gibcord.luisboon.pl/podsumowanie" } },
+            });
+            list.Add(w);
+        }
         return list;
     }
+
+    /// <summary>Przykładowe podsumowanie roku (zrzuty CI: --view wrapped / wrapped2 / wrapped3).</summary>
+    static Wrapped DemoWrapped() => new()
+    {
+        Year = 2026, Since = "2026-11-14", Preview = false, User = new WUser { Id = MeId, Name = "Hubi" },
+        Messages = new WMessages
+        {
+            Total = 1284, Chars = 61_200, Days = 41, TopHour = 22, Night = 214,
+            Hours = [30, 22, 12, 5, 1, 0, 0, 2, 8, 14, 20, 26, 31, 28, 35, 44, 52, 60, 71, 88, 104, 121, 139, 96],
+            BusiestDay = new WDay { Date = "2026-12-06", Count = 143 },
+            TopChannels = [new WChannel { Id = Ogolne, Label = "#ogólne", ServerId = Eg, Server = "Ekipa Gibka", Count = 612 }, new WChannel { Id = Granie, Label = "#granie", ServerId = Eg, Server = "Ekipa Gibka", Count = 301 }, new WChannel { Id = 0, Label = "#pomysły", Server = "GibCord — społeczność", Count = 44 }],
+            MiniGames = 17,
+        },
+        Emoji = [new WEmoji { Emoji = "😂", Count = 212 }, new WEmoji { Emoji = "🔥", Count = 96 }, new WEmoji { Emoji = "❤️", Count = 71 }, new WEmoji { Emoji = "👀", Count = 40 }, new WEmoji { Emoji = "💀", Count = 33 }],
+        Reactions = new WReactions { Given = 402, Received = 515 },
+        Media = new WMedia { Photos = 88, Videos = 6, Gifs = 140, Stickers = 23, VoiceNotes = 12, Polls = 4, Files = 104 },
+        Voice = new WVoice { Minutes = 3720, StreamMinutes = 410, TopPeople = [new WPerson { UserId = KubaId, Minutes = 1500 }, new WPerson { UserId = OlaId, Minutes = 1210 }], TopChannel = new WChannel { Id = Pogaduchy, Label = "🔊 Pogaduchy", Server = "Ekipa Gibka", Minutes = 2900 } },
+        Games = [new WGame { Name = "Minecraft", Minutes = 2280 }, new WGame { Name = "Counter-Strike 2", Minutes = 1310 }, new WGame { Name = "Rocket League", Minutes = 420 }],
+        Servers = new WCount { Count = 4, Joined = 4 }, Friends = new WFriends { Count = 9, New = 9 }, Level = new WLevel { Level = 14, Server = "Ekipa Gibka" },
+        Everyone = new WEveryone { Messages = 9810, VoiceMinutes = 18_400, Writers = 12, People = 14, Rank = 2 },
+        Persona = new WPersona { Key = "night", Title = "Nocny marek", Text = "Najlepsze rozmowy zaczynają się u Ciebie po północy." },
+        TopPeople = [new WPerson { UserId = OlaId, Count = 388 }, new WPerson { UserId = KubaId, Count = 251 }, new WPerson { UserId = MajaId, Count = 120 }],
+    };
 
     /// <summary>CI (--wheel-test): długa historia o różnej wysokości wiadomości (krótkie, długie, kod, zdjęcia) — jak prawdziwy pełny kanał.</summary>
     static IEnumerable<Message> LongHistory(long now)

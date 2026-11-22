@@ -193,6 +193,7 @@ static class StatusMenu
             App.Prefs.StatusClearText = App.Prefs.StatusClearAt > 0 ? text : "";
             App.Prefs.Save();
         }));
+        if (WrappedView.Available(sh)) f.Items.Add(M.Item($"Twój GibCord {WrappedView.Year(sh)}", "\uE734", () => WrappedView.Open(sh))); // 6.1: podsumowanie roku
         f.Items.Add(M.Item("Edytuj profil", "\uE77B", () => sh.ShowSettings("profile")));
         f.Items.Add(M.Item("Kopiuj nazwę użytkownika", "\uE8C8", () => { Sidebar.Copy(sh.S.Me.Username); sh.Info("Skopiowano @" + sh.S.Me.Username); }));
         return f;

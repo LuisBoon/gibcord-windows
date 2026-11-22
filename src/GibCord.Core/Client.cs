@@ -66,6 +66,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
     public event Action<long>? IdeaEvent;
     /// <summary>Urodziny znajomego (albo moje — id = ja).</summary>
     public event Action<long>? Birthday;
+    /// <summary>6.1: zmiana pory roku (zima) z serwera.</summary>
+    public event Action? SeasonChanged;
     /// <summary>Nowe zgłoszenie na serwerze, który moderuję (albo zatrzymana wiadomość automoderacji).</summary>
     public event Action<JsonElement>? ReportCreated;
     /// <summary>Przypomnienie o wydarzeniu (15 min przed albo start: inMinutes = 0).</summary>
@@ -190,7 +192,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     async Task LoadInfo()
     {
-        try { Info = await Api.GetInfo(); } catch { }
+        try { Info = await Api.GetInfo(); _ui(() => SeasonChanged?.Invoke()); } catch { }
     }
 
     public async Task Stop()
@@ -422,6 +424,9 @@ public sealed partial class GibCordClient : IAsyncDisposable
                 break;
             case "birthday_self":
                 Birthday?.Invoke(Store.Me.Id);
+                break;
+            case "season": // 6.1: admin włączył/wyłączył zimę dla wszystkich
+                if (Info is not null) { Info.Season = ev.Data.Str("season"); SeasonChanged?.Invoke(); }
                 break;
             case "report_create":
                 if (ev.Data.Prop("report") is { ValueKind: JsonValueKind.Object } rep) ReportCreated?.Invoke(rep);

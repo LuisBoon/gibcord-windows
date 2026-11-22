@@ -29,6 +29,7 @@ static class Splash
         var inner = new Grid { Width = size, Height = size };
         inner.Children.Add(img);
         inner.Children.Add(lids);
+        if (Winter.Active) inner.Children.Add(Winter.Hat(size)); // 6.1: zimą Gibek w czapce
         // lekkie „oddychanie” logo (wewnątrz), a całość na start wyskakuje (na zewnątrz) — dwie animacje skali na dwóch elementach
         start.Add(() => Motion.Loop(inner, new Vector3((float)size / 2, (float)size / 2, 0), 2600, (0f, 1f, 1f), (.5f, 1.045f, 1.045f), (1f, 1f, 1f)));
         var g = new Grid { Width = size, Height = size, HorizontalAlignment = HorizontalAlignment.Center, Children = { inner } };

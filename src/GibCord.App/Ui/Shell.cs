@@ -82,6 +82,12 @@ public sealed class Shell : Grid
         _overlay.Background = null;
         Canvas.SetZIndex(_overlay, 100); // dzwonek, Ctrl+K i komunikaty nad ustawieniami i panelem admina
         this.Add(_overlay);
+        // 6.1: zima — śnieg nad wszystkim oprócz okienek (bez klikania)
+        var snow = new Snow();
+        snow.At(0, 0, colSpan: 5);
+        Canvas.SetZIndex(snow, 90);
+        this.Add(snow);
+        C.SeasonChanged += Winter.Notify;
 
         _refresh = DispatcherQueue.CreateTimer();
         _refresh.Interval = TimeSpan.FromMilliseconds(60);

@@ -577,6 +577,10 @@ public sealed class Info
     public string? GifProvider { get; set; }
     public List<BuiltinSound> BuiltinSounds { get; set; } = [];
     public int[]? PollHours { get; set; }
+    /// <summary>6.1: "winter" od 1 grudnia do 6 stycznia (albo wymuszone przez admina), inaczej null.</summary>
+    public string? Season { get; set; }
+    /// <summary>6.1: podsumowanie roku — który rok i czy już otwarte (1.12–31.01).</summary>
+    public WrappedInfo? Wrapped { get; set; }
 
     public bool Has(string feature) => Features.TryGetValue(feature, out var v) && v.ValueKind == JsonValueKind.True;
 }

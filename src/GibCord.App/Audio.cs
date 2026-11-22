@@ -239,7 +239,18 @@ public static class Tones
     public static void Play(string kind)
     {
         if (Options.Demo || (kind == "msg" ? !App.Prefs.MessageSound : !App.Prefs.Sounds)) return;
-        (double f, double ms)[] notes = kind switch
+        var winter = Ui.Winter.Active; // 6.1: zimą dzwoneczki (te same chwile, inna barwa i wyższe nuty)
+        (double f, double ms)[] notes = winter ? kind switch
+        {
+            "join" => [(1046.5, 110), (1567.98, 220)],
+            "leave" => [(1318.51, 110), (880, 220)],
+            "joinOther" => [(1174.66, 180)],
+            "leaveOther" => [(783.99, 180)],
+            "mute" => [(880, 110)],
+            "unmute" => [(1318.51, 110)],
+            "msg" => [(1567.98, 70), (2093, 90), (2637.02, 200)],
+            _ => [(1200, 140)],
+        } : kind switch
         {
             "join" => [(523.25, 90), (783.99, 140)],
             "leave" => [(659.25, 90), (440, 150)],
@@ -255,7 +266,7 @@ public static class Tones
             try
             {
                 using var o = new WasapiOut(AudioClientShareMode.Shared, 60);
-                o.Init(new Notes(notes, 0.18f));
+                o.Init(new Notes(notes, winter ? 0.2f : 0.18f, bell: winter));
                 o.Play();
                 while (o.PlaybackState == PlaybackState.Playing) Thread.Sleep(20);
             }
@@ -270,7 +281,11 @@ public static class Tones
         try
         {
             var o = new WasapiOut(AudioClientShareMode.Shared, 60);
-            o.Init(new Notes([(659.25, 160), (0, 40), (830.61, 160), (0, 40), (987.77, 220), (0, 1200)], 0.16f, loop: true));
+            // 6.1: zimą dzwonek gra „Jingle Bells” (E E E, E E E, E G C D E)
+            o.Init(Ui.Winter.Active
+                ? new Notes([(659.25, 170), (0, 40), (659.25, 170), (0, 40), (659.25, 340), (0, 80), (659.25, 170), (0, 40), (659.25, 170), (0, 40), (659.25, 340), (0, 80),
+                    (659.25, 170), (0, 40), (783.99, 170), (0, 40), (523.25, 250), (0, 30), (587.33, 110), (0, 30), (659.25, 460), (0, 1300)], 0.17f, loop: true, bell: true)
+                : new Notes([(659.25, 160), (0, 40), (830.61, 160), (0, 40), (987.77, 220), (0, 1200)], 0.16f, loop: true));
             o.Play();
             _ring = o;
         }
@@ -283,7 +298,7 @@ public static class Tones
         try { o?.Stop(); o?.Dispose(); } catch { }
     }
 
-    sealed class Notes((double f, double ms)[] notes, float vol, bool loop = false) : ISampleProvider
+    sealed class Notes((double f, double ms)[] notes, float vol, bool loop = false, bool bell = false) : ISampleProvider
     {
         int _i, _pos;
         double _phase;
@@ -298,7 +313,15 @@ public static class Tones
                 var len = (int)(48000 * ms / 1000);
                 var t = _pos / (double)len;
                 var env = Math.Min(1, Math.Min(t * 12, (1 - t) * 6)); // szybki atak, łagodne wygaszenie
-                buffer[offset + n++] = f <= 0 ? 0 : (float)(Math.Sin(_phase) * env * vol);
+                double smp;
+                if (bell)
+                {
+                    // dzwoneczek: uderzenie i wybrzmiewanie, do tego nieharmoniczne alikwoty (jak metal)
+                    env = Math.Min(1, t * 60) * Math.Exp(-t * 4.2) * Math.Min(1, (1 - t) * 20);
+                    smp = (Math.Sin(_phase) + .45 * Math.Sin(_phase * 2.756) + .2 * Math.Sin(_phase * 5.404)) / 1.65;
+                }
+                else smp = Math.Sin(_phase);
+                buffer[offset + n++] = f <= 0 ? 0 : (float)(smp * env * vol);
                 _phase += 2 * Math.PI * f / 48000;
                 if (++_pos >= len) { _pos = 0; _i++; _phase = 0; }
             }

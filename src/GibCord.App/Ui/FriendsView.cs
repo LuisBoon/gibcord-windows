@@ -45,6 +45,7 @@ public sealed class FriendsView : Grid
         add.Click += (_, _) => { _tab = "add"; Refresh(); };
         _tabs.Children.Add(add);
         _list.Children.Clear();
+        if (WrappedView.Available(_sh) && App.Prefs.WrappedBannerClosed != WrappedView.Year(_sh)) _list.Children.Add(WrappedView.Banner(_sh, Refresh)); // 6.1
         DrawActive();
         switch (_tab)
         {

@@ -514,10 +514,12 @@ public sealed partial class MessageView : Grid
 
     static Brush LevelBrush(string? lv) => lv switch { "ok" => Theme.Green, "warn" => Theme.Yellow, "error" => Theme.Red, _ => Theme.Teal };
 
-    static FrameworkElement ServerCard(JsonElement c)
+    FrameworkElement ServerCard(JsonElement c)
     {
         var top = new Grid { Padding = U.Th(14, 12) }.Cols("*", "auto");
         top.Background = U.Alpha(c.Str("level") switch { "ok" => "#6fe3a5", "warn" => "#f2c45a", "error" => "#ff6b81", _ => "#7fd6cc" }, .14);
+        if (c.Str("kind") == "wrapped") // 6.1: karta podsumowania roku — w barwach Gibka
+            top.Background = new LinearGradientBrush { StartPoint = new(0, 0), EndPoint = new(1, 1), Opacity = .55, GradientStops = { new GradientStop { Color = U.C("#e4668f"), Offset = 0 }, new GradientStop { Color = U.C("#f4927f"), Offset = .6 }, new GradientStop { Color = U.C("#ffc49e"), Offset = 1 } } };
         top.Add(U.V(2, U.T(c.Str("title") ?? "", 15, U.Bold, wrap: true), c.Str("subtitle") is { } sub ? U.T(sub, 12.5, null, Theme.Mu, wrap: true) : null).At(0, 0));
         if (c.Prop("badge").Str("text") is { } badge)
             top.Add(U.Box(U.T(badge, 11, U.Bold, Theme.OnAccent), LevelBrush(c.Prop("badge").Str("level") ?? c.Str("level")), 8, U.Th(8, 3)).With(b => b.VerticalAlignment = VerticalAlignment.Top).At(0, 1));
@@ -550,8 +552,13 @@ public sealed partial class MessageView : Grid
         {
             var btns = U.H(8);
             foreach (var b in c.Prop("buttons").EnumerateArray())
-                if (b.Str("url") is { } u && u.StartsWith("https://"))
-                    btns.Add(new HyperlinkButton { Content = U.T(b.Str("label") ?? "Otwórz", 12.5, U.Bold, Theme.OnAccent), NavigateUri = new Uri(u), Background = Theme.Accent, CornerRadius = new CornerRadius(8), Padding = U.Th(12, 5) });
+                if (b.Str("url") is { } u && u.StartsWith("https://") && Uri.TryCreate(u, UriKind.Absolute, out var bu))
+                {
+                    // linki do GibCorda (np. „Zobacz swoje” z podsumowania roku) otwierają się w aplikacji
+                    if (Links.IsOwn(bu))
+                        btns.Add(new Button { Content = U.T(b.Str("label") ?? "Otwórz", 12.5, U.Bold, Theme.OnAccent), Background = Theme.Accent, BorderThickness = U.Th(0), CornerRadius = new CornerRadius(8), Padding = U.Th(12, 5) }.With(x => x.Click += (_, _) => Links.Open(_v.Sh, bu)));
+                    else btns.Add(new HyperlinkButton { Content = U.T(b.Str("label") ?? "Otwórz", 12.5, U.Bold, Theme.OnAccent), NavigateUri = bu, Background = Theme.Accent, CornerRadius = new CornerRadius(8), Padding = U.Th(12, 5) });
+                }
             if (btns.Children.Count > 0) panel.Add(btns);
         }
         var card = new Grid { MaxWidth = 640 }.Rows("auto", "auto").Add(top.At(0), panel.At(1));

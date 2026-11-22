@@ -17,6 +17,7 @@ public static partial class DeepLink
         (new(@"^kanal/(\d{1,12})/(\d{1,12})/watek/(\d{1,12})$"), m => $"/kanal/{m.Groups[1].Value}/{m.Groups[2].Value}/watek/{m.Groups[3].Value}"),
         (new(@"^serwer/(\d{1,12})$"), m => $"/serwer/{m.Groups[1].Value}"),
         (new(@"^dm/(\d{1,12})$"), m => $"/dm/{m.Groups[1].Value}"),
+        (new(@"^podsumowanie$"), _ => "/podsumowanie"),
         (new(@"^$"), _ => "/"),
     ];
 

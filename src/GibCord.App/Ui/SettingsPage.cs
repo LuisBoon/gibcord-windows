@@ -694,6 +694,13 @@ public sealed class SettingsPage : Grid
             _ => null,
         };
         _body.Add(Card(Label("Motyw"), themes, U.T("Motyw zapisuje się na koncie — strona i telefon też go dostaną.", 11.5, null, Theme.Mu2, wrap: true), glass));
+        // 6.1: zima (śnieg, Gibek w czapce, dzwoneczki) — sama od 1 grudnia do 6 stycznia
+        var winter = new DropField { Header = U.T("Zimowy wygląd", 13.5, U.Semi), Width = 260 };
+        var wModes = new[] { "auto", "on", "off" };
+        foreach (var label in new[] { "Automatycznie (1 grudnia – 6 stycznia)", "Zawsze", "Wyłączony" }) winter.Items.Add(label);
+        winter.SelectedIndex = Math.Max(0, Array.IndexOf(wModes, p.WinterMode));
+        winter.SelectionChanged += (_, _) => { p.WinterMode = wModes[Math.Max(0, winter.SelectedIndex)]; p.Save(); Winter.Notify(); };
+        _body.Add(Card(Label("Zima"), winter, U.T("Śnieg w oknie, Gibek w czapce i dzwoneczki zamiast zwykłych dźwięków. Przy „Mniej ruchu” śnieg stoi w miejscu.", 11.5, null, Theme.Mu2, wrap: true)));
         var fontSize = new DropField { Header = U.T("Rozmiar tekstu wiadomości", 13.5, U.Semi), Width = 220 };
         var sizes = new[] { 13.0, 14.5, 16.5, 18.0 };
         foreach (var label in new[] { "Mały", "Zwykły", "Duży", "Bardzo duży" }) fontSize.Items.Add(label);

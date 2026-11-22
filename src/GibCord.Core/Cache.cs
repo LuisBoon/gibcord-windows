@@ -130,6 +130,10 @@ public sealed class Prefs
     public bool CompactMessages { get; set; }
     /// <summary>Mniej ruchu: bez animacji (sprężyn, wjazdów, przenikania).</summary>
     public bool ReduceMotion { get; set; }
+    /// <summary>6.1 zimowy wygląd: "auto" (1.12–6.01, z serwera), "on" (zawsze), "off" (wyłączony).</summary>
+    public string WinterMode { get; set; } = "auto";
+    /// <summary>6.1: zamknięty krzyżykiem baner „Twój GibCord ROK” (rok).</summary>
+    public int WrappedBannerClosed { get; set; }
     /// <summary>Szkło Windows: okno prześwituje pulpit (Mica na Windows 11, akryl na Windows 10). Tylko na tym komputerze.</summary>
     public bool WindowsGlass { get; set; }
     /// <summary>Kółko myszy z wygładzaniem (płynne przewijanie z wyhamowaniem).</summary>

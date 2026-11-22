@@ -59,7 +59,7 @@ public sealed class ServerRail : Grid
         _list.Children.Clear();
         var homeLogo = new Image { Source = new BitmapImage(new Uri(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "gibcord.png"))), Width = 44, Height = 44 };
         var pending = s.Friends.Values.Count(f => f.Status == "incoming");
-        _list.Add(Item(homeLogo, "Rozmowy prywatne i znajomi", _sh.ServerId == 0, unread: false, mentions: s.DmUnreadTotal() + pending, () => _sh.Go(0, _sh.ServerId == 0 ? _sh.ChannelId : App.Prefs.LastDm), home: true, key: 0));
+        _list.Add(Item(Winter.Hatted(homeLogo, 44), "Rozmowy prywatne i znajomi", _sh.ServerId == 0, unread: false, mentions: s.DmUnreadTotal() + pending, () => _sh.Go(0, _sh.ServerId == 0 ? _sh.ChannelId : App.Prefs.LastDm), home: true, key: 0));
         _list.Add(new Rectangle { Width = 28, Height = 1, Fill = U.W(.16), HorizontalAlignment = HorizontalAlignment.Center });
         var ordered = Ordered(s);
         for (var idx = 0; idx < ordered.Count; idx++)

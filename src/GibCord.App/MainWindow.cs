@@ -100,7 +100,7 @@ public sealed class MainWindow : Window
             if (Options.View == "overlay") _overlay = new GameOverlay(Client, Dq, () => true); // obraz nakładki zapisuje się obok zrzutu
             if (Options.View is "accounts" or "loginacc")
                 Accounts.Demo = [(new AccountInfo { Id = 7, Username = "bonkus", Name = "bonkus", Color = "#ffd27a" }, 3), (new AccountInfo { Id = 8, Username = "gibek_test", Name = "Gibek (test)", Color = "#9fe3d5" }, 0)];
-            if (Options.View is "login" or "loginacc") ShowLogin(null);
+            if (Options.View is "login" or "loginacc" or "winterlogin") ShowLogin(null);
             else if (Options.View == "updating") { var (t, b) = ShowUpdating(); t.Text = "Pobieranie GibCorda 6.0.9…"; b.IsIndeterminate = false; b.Value = 42; } // zrzut ekranu aktualizacji przy starcie
             else ShowShell();
             Activate();

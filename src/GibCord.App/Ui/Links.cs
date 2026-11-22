@@ -58,6 +58,9 @@ static partial class Links
                 if (sh.S.DmById(N(1)) is null) { sh.Info("Nie ma takiej rozmowy.", true); return; }
                 if (N(2) > 0) sh.JumpToMessage(N(1), N(2)); else sh.Go(0, N(1));
                 return;
+            case "podsumowanie": // 6.1: przycisk „Zobacz swoje” z karty podsumowania roku
+                WrappedView.Open(sh);
+                return;
             case "i" when p.Length >= 2:
                 await Join(sh, p[1], ask: true); // link albo gibcord:// — bez pytania strona mogłaby po cichu dopisać Cię do swojego serwera
                 return;
