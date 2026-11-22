@@ -234,31 +234,40 @@ public sealed class ClipRecorder : IDisposable
             List<Segment> segs;
             lock (_lock) segs = _done.Where(s => File.Exists(s.Path)).ToList();
             if (segs.Count == 0) { LastError = "W buforze nie ma jeszcze nagrania — poczekaj kilka sekund."; return null; }
-            // od końca: bierzemy odcinki, aż starczy na żądaną długość (prawdziwa długość pliku, nie nasze szacunki)
-            var clips = new List<MediaClip>();
-            double total = 0;
-            for (var i = segs.Count - 1; i >= 0 && total < seconds; i--)
-            {
-                var mc = await MediaClip.CreateFromFileAsync(await StorageFile.GetFileFromPathAsync(segs[i].Path));
-                clips.Insert(0, mc);
-                total += mc.OriginalDuration.TotalSeconds;
-            }
-            var comp = new MediaComposition();
-            foreach (var mc in clips) comp.Clips.Add(mc);
-            if (total > seconds && comp.Clips.Count > 0)
-            {
-                var cut = TimeSpan.FromSeconds(total - seconds);
-                if (cut < comp.Clips[0].OriginalDuration - TimeSpan.FromMilliseconds(200)) comp.Clips[0].TrimTimeFromStart = cut;
-            }
             outPath ??= NewClipPath(_label);
             Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
-            await File.WriteAllBytesAsync(outPath, []);
-            var of = await StorageFile.GetFileFromPathAsync(outPath);
-            var vp = comp.Clips[^1].GetVideoEncodingProperties();
-            var prof = Profile(vp.Width > 0 ? (int)vp.Width : _max.W, vp.Height > 0 ? (int)vp.Height : _max.H, _fps, _bitrate, _audioOn);
-            var r = await comp.RenderToFileAsync(of, MediaTrimmingPreference.Precise, prof);
-            if (r != TranscodeFailureReason.None) { LastError = "Nie udało się złożyć klipu (" + r + ")."; try { File.Delete(outPath); } catch { } return null; }
-            App.Log($"Klipy: zapisano {Math.Min(total, seconds):0.#} s ({new FileInfo(outPath).Length / 1024} KB)");
+            // składanie odcinków gubi trochę czasu na łączeniach — mierzymy wynik i w razie potrzeby składamy jeszcze raz z zapasem
+            double extra = 0, got = 0, total = 0;
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                var want = seconds + extra;
+                var clips = new List<MediaClip>();
+                total = 0;
+                for (var i = segs.Count - 1; i >= 0 && total < want; i--)
+                {
+                    var mc = await MediaClip.CreateFromFileAsync(await StorageFile.GetFileFromPathAsync(segs[i].Path));
+                    clips.Insert(0, mc);
+                    total += mc.OriginalDuration.TotalSeconds;
+                }
+                var comp = new MediaComposition();
+                foreach (var mc in clips) comp.Clips.Add(mc);
+                if (total > want && comp.Clips.Count > 0)
+                {
+                    var cut = TimeSpan.FromSeconds(total - want);
+                    if (cut < comp.Clips[0].OriginalDuration - TimeSpan.FromMilliseconds(200)) comp.Clips[0].TrimTimeFromStart = cut;
+                }
+                await File.WriteAllBytesAsync(outPath, []);
+                var of = await StorageFile.GetFileFromPathAsync(outPath);
+                var vp = comp.Clips[^1].GetVideoEncodingProperties();
+                var prof = Profile(vp.Width > 0 ? (int)vp.Width : _max.W, vp.Height > 0 ? (int)vp.Height : _max.H, _fps, _bitrate, _audioOn);
+                var r = await comp.RenderToFileAsync(of, MediaTrimmingPreference.Precise, prof);
+                if (r != TranscodeFailureReason.None) { LastError = "Nie udało się złożyć klipu (" + r + ")."; try { File.Delete(outPath); } catch { } return null; }
+                try { got = (await MediaClip.CreateFromFileAsync(await StorageFile.GetFileFromPathAsync(outPath))).OriginalDuration.TotalSeconds; } catch { break; }
+                var shortBy = Math.Min(seconds, total) - got;
+                if (shortBy < 0.4 || total < want) break; // dość dokładnie albo w buforze nie ma więcej nagrania
+                extra += shortBy + 0.1;
+            }
+            App.Log($"Klipy: zapisano {got:0.#} s z {seconds} s ({new FileInfo(outPath).Length / 1024} KB)");
             return outPath;
         }
         catch (Exception ex) { LastError = "Nie udało się zapisać klipu: " + ex.Message; App.Log("Klipy (zapis): " + ex); return null; }
