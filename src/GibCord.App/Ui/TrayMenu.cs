@@ -90,13 +90,15 @@ static class TrayMenu
         win.Closed += (_, _) => { if (ReferenceEquals(_open, win)) _open = null; };
         root.Loaded += (_, _) =>
         {
-            // po pierwszym ułożeniu znamy prawdziwą wysokość — dopasuj okno
-            items.Measure(new Windows.Foundation.Size(root.ActualWidth - 14, double.PositiveInfinity));
-            var real = (int)Math.Ceiling((items.DesiredSize.Height + 14) * root.XamlRoot.RasterizationScale);
-            if (real > 0 && Math.Abs(real - hPx) > 2)
+            // po pierwszym ułożeniu: ile brakuje do pełnej wysokości (ramka okna zjada kilka pikseli) — powiększ i podnieś okno
+            items.Measure(new Windows.Foundation.Size(Math.Max(1, root.ActualWidth - 14), double.PositiveInfinity));
+            var need = items.DesiredSize.Height + 14;
+            if (need > root.ActualHeight + .5)
             {
-                var ny = y < cursorY ? cursorY - real - 8 : y;
-                aw.MoveAndResize(new RectInt32(x, Math.Max(area.Y + 4, ny), wPx, real));
+                var grow = (int)Math.Ceiling((need - root.ActualHeight) * root.XamlRoot.RasterizationScale);
+                var pos = aw.Position;
+                var ny = pos.Y < cursorY ? Math.Max(area.Y + 4, pos.Y - grow) : pos.Y;
+                aw.MoveAndResize(new RectInt32(pos.X, ny, aw.Size.Width, aw.Size.Height + grow));
             }
             if (items.Children.OfType<Border>().FirstOrDefault() is { } first) first.Focus(FocusState.Programmatic);
         };
