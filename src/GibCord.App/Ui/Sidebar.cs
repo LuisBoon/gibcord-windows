@@ -284,7 +284,7 @@ public sealed class Sidebar : Grid
         var muted = S.ChannelMuted(c.Id);
         var mentions = S.MentionsIn(c.Id);
         var fg = sel || (unread && !muted) ? Theme.Fg : muted ? Theme.Mu2 : Theme.Mu;
-        FrameworkElement glyph = c.IsVoice ? U.I("", 15, fg) : U.T("#", 17, U.Semi, fg).With(t => t.Width = 16);
+        FrameworkElement glyph = c.IsStage ? U.I("\uE789", 15, fg) : c.IsVoice ? U.I("", 15, fg) : U.T("#", 17, U.Semi, fg).With(t => t.Width = 16);
         var name = U.T(c.Name, 14, unread && !muted ? U.Bold : U.Semi, fg);
         var g = new Grid { Height = 32 }.Cols("22", "*", "auto", "auto").Add(glyph.At(0, 0), name.At(0, 1));
         // kółko zębate (po najechaniu): ustawienia kanału — tylko dla osób, które mogą nim zarządzać

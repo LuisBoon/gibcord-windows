@@ -81,6 +81,17 @@ public static class Demo
             case "adminact": sh.Go(Eg, Ogolne); sh.ShowAdmin("activity"); break;
             case "adminmail": sh.Go(Eg, Ogolne); sh.ShowAdmin("mail"); break;
             case "winter": sh.Go(Eg, Ogolne); break; // 6.1: śnieg + Gibek w czapce na pasku serwerów
+            case "stage": // 6.3: scena — dwie osoby na scenie, ręka w górze, widownia
+                if (sh.S.ChannelById(Pogaduchy) is { } stg) { stg.Kind = "stage"; stg.Name = "Quiz w piątek"; }
+                sh.C.Store.Voice[Pogaduchy] = [new VoiceMember { UserId = MeId, Speaker = true }, new VoiceMember { UserId = OlaId, Speaker = true }, new VoiceMember { UserId = KubaId, Speaker = false, Suppressed = true, HandAt = Format.NowMs() - 30000 },
+                    new VoiceMember { UserId = MajaId, Speaker = false, Suppressed = true }, new VoiceMember { UserId = BartekId, Speaker = false, Suppressed = true }];
+                sh.C.DemoSpeaker = OlaId;
+                sh.JoinVoiceChannel(Eg, Pogaduchy);
+                break;
+            case "board": // 6.3: tablica w rozmowie
+                Ui.VoiceView.BoardOpenFor = Pogaduchy;
+                sh.JoinVoiceChannel(Eg, Pogaduchy);
+                break;
             case "wrapcard": sh.Go(Eg, Ogolne); break;
             case "wrapped" or "wrapped2" or "wrapped3": sh.Go(0, 0); WrappedView.Open(sh); break;
             case "forest":

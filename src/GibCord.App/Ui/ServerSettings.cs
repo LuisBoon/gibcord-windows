@@ -276,6 +276,7 @@ public sealed partial class ServerSettingsPage : Grid
         var top = U.H(8,
             U.Primary("+ Kanał tekstowy", () => EditChannel(null, "text", null), 36).With(b => b.Width = 170),
             U.Ghost("+ Kanał głosowy", () => EditChannel(null, "voice", null), 36),
+            U.Ghost("+ Scena", () => EditChannel(null, "stage", null), 36), // 6.3
             U.Ghost("+ Kategoria", async () =>
             {
                 var name = new TextBox { PlaceholderText = "np. GRY", MaxLength = 100 };
@@ -362,7 +363,7 @@ public sealed partial class ServerSettingsPage : Grid
     async void EditChannel(Channel? c, string type, long? categoryId)
     {
         var srv = Srv!;
-        var voice = type == "voice";
+        var voice = type is "voice" or "stage";
         var name = new TextBox { Text = c?.Name ?? "", PlaceholderText = voice ? "np. Pogaduchy" : "np. ogólny", MaxLength = 100 };
         var topic = new TextBox { Text = c?.Topic ?? "", PlaceholderText = "O czym jest ten kanał (opcjonalnie)", MaxLength = 1024, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 64 };
         var cat = new DropField { HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -389,7 +390,7 @@ public sealed partial class ServerSettingsPage : Grid
         if (!voice) form.Add(U.T("Opis", 12.5, U.Semi, Theme.Mu), topic, U.T("Tryb powolny", 12.5, U.Semi, Theme.Mu), slow, ro);
         else form.Add(limit, U.T("Jakość dźwięku", 12.5, U.Semi, Theme.Mu), bitrate, U.T("Transmisje ekranu", 12.5, U.Semi, Theme.Mu), stream);
         form.Width = 420;
-        var d = Dialog(c is null ? (voice ? "Nowy kanał głosowy" : "Nowy kanał tekstowy") : (voice ? "🔊 " : "#") + c.Name, form, c is null ? "Utwórz" : "Zapisz");
+        var d = Dialog(c is null ? (type == "stage" ? "Nowa scena (mówią tylko osoby na scenie)" : voice ? "Nowy kanał głosowy" : "Nowy kanał tekstowy") : (voice ? "🔊 " : "#") + c.Name, form, c is null ? "Utwórz" : "Zapisz");
         if (await d.ShowAsync() != ContentDialogResult.Primary || name.Text.Trim().Length == 0) return;
         var body = new Dictionary<string, object?>
         {

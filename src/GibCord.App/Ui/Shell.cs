@@ -88,6 +88,9 @@ public sealed class Shell : Grid
         Canvas.SetZIndex(snow, 90);
         this.Add(snow);
         C.SeasonChanged += Winter.Notify;
+        // 6.3: tablica i scena
+        C.Live += ev => { if (ev.Type.StartsWith("board_")) BoardPanel.OnEvent(this, ev); else StageView.OnEvent(this, ev); };
+        BoardPanel.StatusChanged = cid => { if (cid == C.VoiceChannelId) RefreshVoice(); };
 
         _refresh = DispatcherQueue.CreateTimer();
         _refresh.Interval = TimeSpan.FromMilliseconds(60);

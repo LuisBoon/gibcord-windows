@@ -183,6 +183,8 @@ public sealed class Channel
     public List<PermOverride> Overrides { get; set; } = [];
 
     [JsonIgnore] public bool IsVoice => Type == "voice";
+    /// <summary>6.3: scena — kanał głosowy, gdzie mówią tylko osoby na scenie.</summary>
+    [JsonIgnore] public bool IsStage => Type == "voice" && Kind == "stage";
     [JsonIgnore] public bool IsCardChannel => Kind is "announce" or "changelog";
 }
 
@@ -510,6 +512,10 @@ public sealed class VoiceMember
     public bool ServerMuted { get; set; }
     public bool ServerDeafened { get; set; }
     public bool Suppressed { get; set; }
+    /// <summary>6.3 scena: null = zwykły kanał głosowy; true = na scenie, false = na widowni.</summary>
+    public bool? Speaker { get; set; }
+    /// <summary>6.3 scena: kiedy podniesiona ręka (null = opuszczona).</summary>
+    public long? HandAt { get; set; }
 }
 
 public sealed class Friend

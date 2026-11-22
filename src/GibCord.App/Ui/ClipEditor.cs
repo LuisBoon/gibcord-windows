@@ -20,11 +20,15 @@ static class ClipEditor
         var player = new MediaPlayerElement
         {
             Source = MediaSource.CreateFromUri(new Uri(path)), AreTransportControlsEnabled = true, AutoPlay = true,
-            Width = 640, Height = 360, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
+            Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
         };
+        // podgląd tak duży, żeby suwaki i przyciski zmieściły się także w małym oknie
+        var ph = Math.Clamp((sh.ActualHeight > 0 ? sh.ActualHeight : 800) - 360, 150, 360);
+        player.Height = ph; player.Width = Math.Round(ph * 16 / 9);
         var dur = 0.0;
-        var start = new SliderField { Header = U.T("Początek", 12.5, U.Semi), StepFrequency = .1, Format = Time, Width = 300 };
-        var end = new SliderField { Header = U.T("Koniec", 12.5, U.Semi), StepFrequency = .1, Format = Time, Width = 300 };
+        var sw = Math.Max(220, Math.Round(Math.Clamp((sh.ActualHeight > 0 ? sh.ActualHeight : 800) - 360, 150, 360) * 16 / 9 / 2 - 10));
+        var start = new SliderField { Header = U.T("Początek", 12.5, U.Semi), StepFrequency = .1, Format = Time, Width = sw };
+        var end = new SliderField { Header = U.T("Koniec", 12.5, U.Semi), StepFrequency = .1, Format = Time, Width = sw };
         var len = U.T("", 12.5, U.Semi, Theme.Mu);
         void Len() => len.Text = dur <= 0 ? "Wczytywanie…" : $"Długość: {Time(Math.Max(0, end.Value - start.Value))} z {Time(dur)}";
         Len();
@@ -72,7 +76,7 @@ static class ClipEditor
         var trims = U.H(16, start, end);
         var actions = U.H(10, send, save, folder);
         var body = U.V(12, head, new Border { CornerRadius = new CornerRadius(12), Child = player, Background = U.B("#000000") }, trims, len, actions);
-        var card = U.Box(body, Theme.Surface, 18, U.Th(18), Theme.Line, 1).With(b => b.MaxWidth = 700);
+        var card = U.Box(body, Theme.Surface, 18, U.Th(18), Theme.Line, 1).With(b => { b.MaxWidth = 700; b.Margin = U.Th(0, -40, 0, 0); });
         sh.ShowOverlay(card, pop: true);
     }
 

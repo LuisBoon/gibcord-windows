@@ -103,6 +103,8 @@ public sealed class GibCordApi : IDisposable
     public Task<Info> GetInfo(CancellationToken ct = default) => Send<Info>(HttpMethod.Get, "info", ct: ct);
     /// <summary>6.1: podsumowanie roku zalogowanej osoby (403 wrapped_closed przed 1 grudnia; admin widzi „podgląd”).</summary>
     public Task<Wrapped> GetWrapped(int year, CancellationToken ct = default) => Send<Wrapped>(HttpMethod.Get, $"wrapped/{year}", ct: ct);
+    /// <summary>6.3 scena: hand / lower / speak / listen (userId — gdy moderator zmienia komuś).</summary>
+    public Task Stage(long channelId, string action, long? userId = null) => Send(HttpMethod.Post, $"channels/{channelId}/stage", userId is null ? new { action } : new { action, userId }, default);
     /// <summary>6.1: wysyła kartę „Mój GibCord ROK” na kanał albo do rozmowy.</summary>
     public Task<Message> ShareWrapped(int year, long channelId, CancellationToken ct = default) => Send<Message>(HttpMethod.Post, $"wrapped/{year}/share", new { channelId }, ct);
     public Task<LoginResult> Login(string username, string password, CancellationToken ct = default) =>

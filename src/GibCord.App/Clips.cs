@@ -220,19 +220,21 @@ public sealed class ClipRecorder : IDisposable
             List<Segment> segs;
             lock (_lock) segs = _done.Where(s => File.Exists(s.Path)).ToList();
             if (segs.Count == 0) { LastError = "W buforze nie ma jeszcze nagrania — poczekaj kilka sekund."; return null; }
-            var picked = new List<Segment>();
+            // od końca: bierzemy odcinki, aż starczy na żądaną długość (prawdziwa długość pliku, nie nasze szacunki)
+            var clips = new List<MediaClip>();
             double total = 0;
-            for (var i = segs.Count - 1; i >= 0 && total < seconds; i--) { picked.Insert(0, segs[i]); total += segs[i].Duration.TotalSeconds; }
-            var comp = new MediaComposition();
-            foreach (var s in picked)
+            for (var i = segs.Count - 1; i >= 0 && total < seconds; i--)
             {
-                var sf = await StorageFile.GetFileFromPathAsync(s.Path);
-                comp.Clips.Add(await MediaClip.CreateFromFileAsync(sf));
+                var mc = await MediaClip.CreateFromFileAsync(await StorageFile.GetFileFromPathAsync(segs[i].Path));
+                clips.Insert(0, mc);
+                total += mc.OriginalDuration.TotalSeconds;
             }
+            var comp = new MediaComposition();
+            foreach (var mc in clips) comp.Clips.Add(mc);
             if (total > seconds && comp.Clips.Count > 0)
             {
                 var cut = TimeSpan.FromSeconds(total - seconds);
-                if (cut < comp.Clips[0].OriginalDuration) comp.Clips[0].TrimTimeFromStart = cut;
+                if (cut < comp.Clips[0].OriginalDuration - TimeSpan.FromMilliseconds(200)) comp.Clips[0].TrimTimeFromStart = cut;
             }
             outPath ??= NewClipPath(_label);
             Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);

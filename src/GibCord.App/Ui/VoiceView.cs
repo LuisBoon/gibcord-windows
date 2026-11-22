@@ -339,6 +339,9 @@ public sealed class VoiceView : Grid, IDisposable
     readonly Dictionary<string, (Image Img, WriteableBitmap? Bmp, long Seen)> _video = [];
     bool _disposed;
     WatchPanel? _watch;
+    BoardPanel? _board;
+    /// <summary>6.3: na którym kanale głosowym masz otwartą tablicę (0 = żadnym).</summary>
+    public static long BoardOpenFor;
 
     /// <summary>Kompaktowy: bez nagłówka — scena rozmowy nad czatem w rozmowie prywatnej (kamery, transmisje).</summary>
     public VoiceView(Shell sh, long cid, bool compact = false)
@@ -385,6 +388,8 @@ public sealed class VoiceView : Grid, IDisposable
         _tick.Stop();
         _watch?.Dispose();
         _watch = null;
+        _board?.Dispose();
+        _board = null;
     }
 
     public void Refresh()
@@ -396,7 +401,7 @@ public sealed class VoiceView : Grid, IDisposable
         var members = s.Voice.GetValueOrDefault(_cid) ?? [];
 
         var head = new Grid().Cols("auto", "auto", "*", "auto");
-        head.Add(U.I(G.Voice, 17, Theme.Mu).With(i => i.Margin = U.Th(0, 0, 10, 0)).At(0, 0), U.T(ch?.Name ?? "Rozmowa", 15, U.Bold).At(0, 1),
+        head.Add(U.I(ch?.IsStage == true ? "\uE789" : G.Voice, 17, Theme.Mu).With(i => i.Margin = U.Th(0, 0, 10, 0)).At(0, 0), U.T(ch?.Name ?? "Rozmowa", 15, U.Bold).At(0, 1),
             U.T(members.Count == 0 ? "nikogo tu nie ma" : $"{members.Count} {Format.Plural(members.Count, "osoba", "osoby", "osób")}", 12.5, null, Theme.Mu).With(t => t.Margin = U.Th(12, 0, 0, 0)).At(0, 2));
         if (Here)
         {
@@ -414,6 +419,22 @@ public sealed class VoiceView : Grid, IDisposable
         _gridTiles.Clear();
         var watched = Here ? C.Voice.Feeds.FirstOrDefault(f => f.Screen) : null;
         var me = s.Me.Id;
+        if (!Here && BoardOpenFor == _cid) BoardOpenFor = 0;
+        // 6.3: tablica na dużo + kafelki pod spodem
+        var boardShown = Here && BoardOpenFor == _cid;
+        if (boardShown)
+        {
+            if (_board is null) { _board = new BoardPanel(_sh, _cid); if (Options.Demo && Options.View == "board") _board.Demo(GibCord.App.Demo.OlaId); }
+            if (_board.Parent is Panel bp) bp.Children.Remove(_board);
+            _stage.Rows("*", "auto");
+            _stage.Add(_board.At(0));
+            var stripB = U.H(10);
+            stripB.Padding = U.Th(16, 0, 16, 8);
+            foreach (var vm in members) stripB.Add(Tile(vm, srv, 120, 74, vm.UserId == me));
+            _stage.Add(new ScrollViewer { Content = stripB, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollMode = ScrollMode.Disabled }.At(1));
+        }
+        else if (_board is not null) { _board.Dispose(); _board = null; }
+        if (!boardShown) {
         // wspólne oglądanie: odtwarzacz na dużo (jeden na cały czas — bez przeładowania przy odświeżeniu)
         if (Here && s.Watches.ContainsKey(_cid))
         {
@@ -456,6 +477,8 @@ public sealed class VoiceView : Grid, IDisposable
             _stage.Add(U.V(10, U.I(G.Voice, 44, Theme.Mu2), U.T("Na kanale nikogo nie ma. Wejdź pierwszy — reszta usłyszy dzwonek.", 14, null, Theme.Mu, wrap: true))
                 .With(p => { p.HorizontalAlignment = HorizontalAlignment.Center; p.VerticalAlignment = VerticalAlignment.Center; p.MaxWidth = 360; }));
         }
+        else if (ch?.IsStage == true) // 6.3: scena — mówcy, ręce w górze, widownia
+            _stage.Add(StageView.Build(_sh, _cid, members, srv, (vm, tw, th) => Tile(vm, srv, tw, th, vm.UserId == me)));
         else
         {
             var n = members.Count;
@@ -465,6 +488,8 @@ public sealed class VoiceView : Grid, IDisposable
             _stage.Add(U.Scroll(wrap));
             Fit(_stage.ActualWidth, _stage.ActualHeight);
         }
+
+        } // !boardShown
 
         // przyciski na dole
         if (Here)
@@ -490,7 +515,13 @@ public sealed class VoiceView : Grid, IDisposable
             var tv = U.IconButton("\uE8B2", watching ? "Dodaj film do kolejki" : "Oglądajcie razem (YouTube)", () => WatchUi.AskVideo(_sh, watching), 16, 44, watching ? U.B("#ffffff") : null);
             tv.Background = watching ? U.B("#6b2d7c") : U.W(.1); tv.CornerRadius = new CornerRadius(22);
             if (C.Offline) tv.Visibility = Visibility.Collapsed;
-            _controls.Child = U.H(12, mic, deaf, cam, screen, sb, tv, settings, leave).With(p => p.HorizontalAlignment = HorizontalAlignment.Center);
+            // 6.3: tablica (podświetlona, gdy ktoś ją ogląda) i przycisk sceny
+            var bv = BoardPanel.Viewers.GetValueOrDefault(_cid)?.Count ?? 0;
+            var board = U.IconButton("\uEE56", boardShown ? "Zamknij tablicę" : bv > 0 ? $"Tablica — otwarta u {bv} {Format.Plural(bv, "osoby", "osób", "osób")}" : "Tablica — rysujcie razem", () => { BoardOpenFor = boardShown ? 0 : _cid; Refresh(); }, 16, 44, boardShown || bv > 0 ? U.B("#ffffff") : null);
+            board.Background = boardShown ? U.B("#2f7f86") : bv > 0 ? U.B("#24585e") : U.W(.1); board.CornerRadius = new CornerRadius(22);
+            if (C.Offline && !Options.Demo) board.Visibility = Visibility.Collapsed;
+            var stageBtn = ch?.IsStage == true ? StageView.Button(_sh, _cid, members.FirstOrDefault(m => m.UserId == me)) : null;
+            _controls.Child = U.H(12, stageBtn, mic, deaf, cam, screen, sb, tv, board, settings, leave).With(p => p.HorizontalAlignment = HorizontalAlignment.Center);
         }
         else
         {
