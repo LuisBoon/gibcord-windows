@@ -36,7 +36,8 @@ sealed class AppDialog
     /// <summary>Tylko dla zgodności z ContentDialog — okienko zawsze ma barwy motywu GibCorda.</summary>
     public ElementTheme RequestedTheme { get; set; }
     /// <summary>Zgodność: „ContentDialogMaxWidth” / „ContentDialogMaxHeight” ustawiają rozmiar karty.</summary>
-    public ResourceDictionary Resources { get; } = new();
+    /// <remarks>Zwykły słownik — ResourceDictionary podpowiadał domyślne wartości Windows (np. szerokość 548 px).</remarks>
+    public Dictionary<string, object> Resources { get; } = [];
     public double MaxWidth { get; set; } = 560;
     public double MaxHeight { get; set; } = double.PositiveInfinity;
     /// <summary>Czerwony przycisk i ikona ostrzeżenia; null = zgadnij z napisu na przycisku („Usuń”, „Zbanuj”…).</summary>
@@ -134,7 +135,7 @@ sealed class AppDialog
         if (body is TextBlock tb) { tb.FontSize = Math.Min(tb.FontSize, 13.5); if (ReferenceEquals(tb.Foreground, Theme.Fg) || tb.Foreground is null) tb.Foreground = U.W(.74); tb.LineHeight = 20; }
 
         var titleCol = U.V(6);
-        if (Title is { } t) titleCol.Add(Title is UIElement te ? te : U.T(t.ToString() ?? "", 19, U.Bold, wrap: true).With(x => x.Margin = U.Th(0, glyph is null ? 2 : 8, 0, 0)));
+        if (Title is { } t) titleCol.Add(Title is UIElement te ? te : U.T(t.ToString() ?? "", 19, U.Bold, wrap: true).With(x => x.Margin = U.Th(0, glyph is not null && !shortText ? 8 : 1, 0, 0)));
         if (shortText && body is not null) titleCol.Add(body);
 
         var head = new Grid { ColumnSpacing = 14 }.Cols("auto", "*", "auto");
@@ -151,18 +152,18 @@ sealed class AppDialog
         head.Add(titleCol.At(0, 1));
         head.Add(U.IconButton(G.Close, "Zamknij (Esc)", Hide, 13, 30).With(b => b.VerticalAlignment = VerticalAlignment.Top).At(0, 2));
 
-        var grid = new Grid { RowSpacing = 18 }.Rows("auto", "*", "auto");
+        var grid = new Grid().Rows("auto", "*", "auto");
         grid.Add(head.At(0));
         if (!shortText && body is not null)
         {
             var sv = new ScrollViewer
             {
                 Content = body, HorizontalScrollMode = ScrollMode.Disabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = U.Th(0, 0, 4, 0), Margin = U.Th(0, 0, -4, 0),
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = U.Th(0, 0, 4, 0), Margin = U.Th(0, 18, -4, 0),
             };
             grid.Add(sv.At(1));
         }
-        _buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right };
+        _buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right, Margin = U.Th(0, shortText ? 22 : 20, 0, 0) };
         BuildButtons();
         grid.Add(_buttons.At(2));
 

@@ -121,6 +121,12 @@ public static class Theme
         // menu, okienka wysuwane i dymki podpowiedzi
         Set(U.B("#F5" + _s.Surface[1..]), "MenuFlyoutPresenterBackground", "FlyoutPresenterBackground", "ToolTipBackground");
         Set(U.W(.12), "MenuFlyoutPresenterBorderBrush", "FlyoutBorderThemeBrush", "ToolTipBorderBrush");
+        // menu w stylu okienek GibCorda (wariant A): zaokrąglone jak karty, podświetlenie pozycji jak w listach rozwijanych
+        r["OverlayCornerRadius"] = new CornerRadius(12);
+        Set(U.W(.08), "MenuFlyoutItemBackgroundPointerOver", "ToggleMenuFlyoutItemBackgroundPointerOver", "MenuFlyoutSubItemBackgroundPointerOver", "MenuFlyoutSeparatorBackground");
+        Set(U.W(.12), "MenuFlyoutItemBackgroundPressed", "ToggleMenuFlyoutItemBackgroundPressed", "MenuFlyoutSubItemBackgroundPressed", "MenuFlyoutSubItemBackgroundSubMenuOpened");
+        Set(acc, "ToggleMenuFlyoutItemCheckGlyphForeground", "ToggleMenuFlyoutItemCheckGlyphForegroundPointerOver", "ToggleMenuFlyoutItemCheckGlyphForegroundPressed",
+            "RadioMenuFlyoutItemCheckGlyphForeground", "RadioMenuFlyoutItemCheckGlyphForegroundPointerOver", "RadioMenuFlyoutItemCheckGlyphForegroundPressed");
     }
     public static readonly Brush Green = U.B("#6fe3a5");
     public static readonly Brush Red = U.B("#ff6b81");

@@ -27,8 +27,8 @@ static class FieldsDemo
             new SwitchField { Header = "Szkło Windows 11", IsOn = true, OnContent = "Włączone", OffContent = "Wyłączone" },
             radio,
             new SliderField { Header = "Głośność", Minimum = 0, Maximum = 200, StepFrequency = 5, Value = 120, HorizontalAlignment = HorizontalAlignment.Stretch },
-            new Grid { ColumnSpacing = 12 }.Cols("auto", "auto", "*").Add(
-                new NumberField { Header = "Limit osób", Minimum = 0, Maximum = 99, Value = 10 }.At(0, 0), date.At(0, 1), time.At(0, 2)),
+            new Grid { ColumnSpacing = 12 }.Cols("auto", "auto", "*").Add(date.At(0, 0), time.At(0, 1)),
+            new NumberField { Header = "Limit osób", Minimum = 0, Maximum = 99, Value = 10 },
             chips).With(p => p.Width = 420);
         var d = new AppDialog
         {

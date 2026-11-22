@@ -91,7 +91,8 @@ static class TrayMenu
         root.Loaded += (_, _) =>
         {
             // po pierwszym ułożeniu znamy prawdziwą wysokość — dopasuj okno
-            var real = (int)Math.Ceiling(root.ActualHeight * root.XamlRoot.RasterizationScale);
+            items.Measure(new Windows.Foundation.Size(root.ActualWidth - 14, double.PositiveInfinity));
+            var real = (int)Math.Ceiling((items.DesiredSize.Height + 14) * root.XamlRoot.RasterizationScale);
             if (real > 0 && Math.Abs(real - hPx) > 2)
             {
                 var ny = y < cursorY ? cursorY - real - 8 : y;

@@ -87,7 +87,7 @@ static class FileBrowser
         var crumbScroll = new ScrollViewer { Content = crumbs, HorizontalScrollMode = ScrollMode.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
         var up = U.IconButton("", "Folder wyżej (Backspace)", () => { if (Directory.GetParent(folder) is { } p) go(p.FullName); }, 14, 34);
         up.Background = U.W(.08);
-        var search = new TextBox { PlaceholderText = "Szukaj w tym folderze", Width = 200, VerticalAlignment = VerticalAlignment.Center };
+        var search = new TextBox { PlaceholderText = "Szukaj w tym folderze", Width = 170, VerticalAlignment = VerticalAlignment.Center };
         var sort = new Button { Background = U.W(.08), BorderThickness = U.Th(0), CornerRadius = new CornerRadius(10), Height = 34, Padding = U.Th(12, 0) };
         void DrawSort() => sort.Content = U.H(6, U.I(byDate ? "" : "", 13, Theme.Mu), U.T(byDate ? "Najnowsze" : "A–Z", 12.5, U.Semi));
         DrawSort();
@@ -115,7 +115,10 @@ static class FileBrowser
             ? new Grid { ColumnSpacing = 10 }.Cols("auto", "*", "auto").Add(U.T("Nazwa:", 13, U.Semi).At(0, 0), nameBox.At(0, 1), U.T(exts?.FirstOrDefault() ?? "", 13, null, Theme.Mu).At(0, 2))
             : (FrameworkElement)info;
 
-        var body = new Grid { ColumnSpacing = 14, RowSpacing = 10, Width = 780, Height = 470 }.Cols("190", "*").Rows("auto", "*", "auto");
+        // rozmiar dopasowany do okna (karta ma 24 px marginesu z każdej strony); w wąskim oknie bez kolumny miejsc
+        var bodyW = Math.Clamp(root.Size.Width - 32 - 52, 420, 800);
+        var narrow = bodyW < 640;
+        var body = new Grid { ColumnSpacing = narrow ? 0 : 14, RowSpacing = 10, Width = bodyW, Height = Math.Clamp(root.Size.Height - 250, 260, 500) }.Cols(narrow ? "0" : "190", "*").Rows("auto", "*", "auto");
         body.Add(new ScrollViewer { Content = places, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }.At(0, 0, rowSpan: 3));
         body.Add(top.At(0, 1));
         body.Add(listArea.At(1, 1));
@@ -125,7 +128,7 @@ static class FileBrowser
         var dlg = new AppDialog
         {
             Title = title, Content = body, PrimaryButtonText = save ? "Zapisz" : multiple ? "Dodaj" : "Wybierz", CloseButtonText = "Anuluj",
-            DefaultButton = ContentDialogButton.Primary, XamlRoot = root, MaxWidth = 860, Glyph = save ? "" : "", Danger = false,
+            DefaultButton = ContentDialogButton.Primary, XamlRoot = root, MaxWidth = 900, Glyph = save ? "" : "", Danger = false,
             IsPrimaryButtonEnabled = save && nameBox.Text.Trim().Length > 0,
         };
         nameBox.TextChanged += (_, _) => dlg.IsPrimaryButtonEnabled = nameBox.Text.Trim().Length > 0;
