@@ -18,28 +18,28 @@ public sealed class ZagrodaPanel : Grid
     readonly WebView2 _web = new();
     readonly Button _fullBtn;
     bool _started;
-    public bool Full { get; private set; }
+    public bool Full { get; private set; } = true; // wybór 1: osobne miejsce — na start całe okno
 
     public ZagrodaPanel(Shell sh)
     {
         _sh = sh;
         Background = Theme.Members;
         this.Rows("auto", "*");
-        _fullBtn = U.IconButton("", "Na całe okno", () => sh.ZagrodaFull(!Full), 14, 30);
+        _fullBtn = U.IconButton("\uE73F", "Czat obok gry", () => sh.ZagrodaFull(!Full), 14, 30);
         var head = new Grid { Padding = U.Th(12, 6, 6, 6), ColumnSpacing = 4 }.Cols("auto", "*", "auto", "auto");
         head.Add(U.T("", 15, null, Theme.Accent).With(t => t.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")).At(0, 0),
             U.T("Chmurna Zagroda", 14, U.Bold).With(t => t.Margin = U.Th(8, 0, 0, 0)).At(0, 1),
             _fullBtn.At(0, 2),
             U.IconButton("", "Zamknij grę", () => sh.CloseZagroda(), 14, 30).At(0, 3));
         this.Add(head.At(0, 0), _web.At(1, 0));
-        _web.DefaultBackgroundColor = Windows.UI.Color.FromArgb(255, 0x8f, 0xbf, 0xe3);
+        _web.DefaultBackgroundColor = Windows.UI.Color.FromArgb(255, 0x58, 0xb0, 0xef);
     }
 
     public void SetFull(bool on)
     {
         Full = on;
-        if (_fullBtn.Content is TextBlock t) t.Text = on ? "" : "";
-        ToolTipService.SetToolTip(_fullBtn, on ? "Obok czatu" : "Na całe okno");
+        if (_fullBtn.Content is TextBlock t) t.Text = on ? "\uE73F" : "\uE740";
+        ToolTipService.SetToolTip(_fullBtn, on ? "Czat obok gry" : "Gra na całe okno");
     }
 
     static void Open(Uri u) => _ = Launcher.LaunchUriAsync(u);

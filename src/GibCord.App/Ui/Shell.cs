@@ -94,7 +94,7 @@ public sealed class Shell : Grid
         C.Live += ev =>
         {
             if (ev.Type.StartsWith("board_")) BoardPanel.OnEvent(this, ev);
-            else if (ev.Type.StartsWith("zg_")) _zg?.Notify(ev.Type); // 6.3 Chmurna Zagroda
+            else if (ev.Type.StartsWith("zg_")) { _zg?.Notify(ev.Type); if (ev.Type == "zg_note" && ev.Data.Str("text") is { Length: > 0 } zt) Info(zt); } // 6.3 Chmurna Zagroda
             else if (ev.Type == "commands_update") { if (ev.Data.Long("serverId") is long cs) Commands.Invalidate(cs); } // 6.4
             else if (ev.Type == "interaction_reply") Info($"{S.NameOf(ev.Data.Long("botUserId") ?? 0, S.ServerOfChannel(ev.Data.Long("channelId") ?? 0))} (tylko dla Ciebie): {ev.Data.Str("content") ?? ev.Data.Prop("card").Str("title") ?? ""}");
             else StageView.OnEvent(this, ev);
@@ -371,6 +371,7 @@ public sealed class Shell : Grid
     /// <summary>Przejście: serwer (0 = prywatne) i kanał (0 = pierwszy tekstowy / Znajomi).</summary>
     public void Go(long serverId, long channelId, bool record = true)
     {
+        if (ZagrodaOpen && _zg?.Full == true) CloseZagroda(); // 6.3: gra to osobne miejsce — przejście gdzie indziej ją zamyka
         Watchdog.Crumb($"przejście: serwer {serverId}, kanał {channelId}");
         _navigated = true;
         if (serverId > 0)
@@ -534,14 +535,16 @@ public sealed class Shell : Grid
         if (_zg.Full) ZagrodaFull(true);
         Motion.SlideIn(_zgHost, new System.Numerics.Vector3(40, 0, 0));
         _chat?.RefreshHeader();
+        _rail.Refresh();
     }
     public void CloseZagroda()
     {
         if (_zg?.Full == true) { ZagrodaFull(false); _zg.SetFull(true); } // następnym razem otworzy się tak samo
         _zgHost.Visibility = Visibility.Collapsed;
         _chat?.RefreshHeader();
+        _rail.Refresh();
     }
-    public void ToggleZagroda() { if (ZagrodaOpen) CloseZagroda(); else OpenZagroda(); }
+    public void ToggleZagroda() { if (ZagrodaOpen && _zg?.Full == true) CloseZagroda(); else { OpenZagroda(); ZagrodaFull(true); } }
     public void ZagrodaFull(bool on)
     {
         _zg?.SetFull(on);

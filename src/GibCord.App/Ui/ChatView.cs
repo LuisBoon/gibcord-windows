@@ -327,7 +327,6 @@ public sealed partial class ChatView : Grid, IDisposable
                 try { var dm = await Sh.C.Api.CreateGroup([other, .. ids]); S.Apply(new GatewayEvent("dm_create", System.Text.Json.JsonSerializer.SerializeToElement(new { dm }, Json.Options))); Sh.Go(0, dm.Id); }
                 catch (Exception ex) { Sh.Info(GibCordClient.Friendly(ex), true); }
             }, 16, 32) : null,
-            U.IconButton("\uE7FC", Sh.ZagrodaOpen ? "Zamknij Chmurną Zagrodę" : "Chmurna Zagroda — gra", Sh.ToggleZagroda, 16, 32, Sh.ZagrodaOpen ? Theme.Accent : null),
             threads,
             U.IconButton("\uE718", "Przypięte wiadomości", ShowPins, 16, 32),
             search,

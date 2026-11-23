@@ -60,6 +60,8 @@ public sealed class ServerRail : Grid
         var homeLogo = new Image { Source = new BitmapImage(new Uri(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "gibcord.png"))), Width = 44, Height = 44 };
         var pending = s.Friends.Values.Count(f => f.Status == "incoming");
         _list.Add(Item(Winter.Hatted(homeLogo, 44), "Rozmowy prywatne i znajomi", _sh.ServerId == 0, unread: false, mentions: s.DmUnreadTotal() + pending, () => _sh.Go(0, _sh.ServerId == 0 ? _sh.ChannelId : App.Prefs.LastDm), home: true, key: 0));
+        // 6.3 Chmurna Zagroda: gra jako osobne miejsce w pasku serwerów
+        _list.Add(Item(U.T("🏝️", 22).With(t => { t.HorizontalAlignment = HorizontalAlignment.Center; t.FontFamily = new FontFamily("Segoe UI Emoji"); }), "Chmurna Zagroda", _sh.ZagrodaOpen, unread: false, mentions: 0, () => _sh.ToggleZagroda(), bg: U.B("#58b0ef"), key: -63));
         _list.Add(new Rectangle { Width = 28, Height = 1, Fill = U.W(.16), HorizontalAlignment = HorizontalAlignment.Center });
         var ordered = Ordered(s);
         for (var idx = 0; idx < ordered.Count; idx++)
