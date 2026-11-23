@@ -26,6 +26,8 @@ static class Fun
             f.Items.Add(M.Item("⭕  Kółko i krzyżyk", "", () => Opponent(v, "ttt")));
             f.Items.Add(M.Item("✊  Kamień, papier, nożyce", "", () => Opponent(v, "rps")));
         }
+        f.Items.Add(new MenuFlyoutSeparator());
+        f.Items.Add(M.Item("🌾  Chmurna Zagroda", "", () => v.Sh.OpenZagroda())); // 6.3
         return f;
     }
 

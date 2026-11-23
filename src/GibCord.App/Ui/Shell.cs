@@ -52,7 +52,7 @@ public sealed class Shell : Grid
     public Shell(MainWindow w)
     {
         W = w;
-        this.Cols("68", "240", "*", "auto", "auto");
+        this.Cols("68", "240", "*", "auto", "auto", "auto");
         _rail = new ServerRail(this);
         _side = new Sidebar(this);
         _members = new MembersPanel(this);
@@ -60,7 +60,7 @@ public sealed class Shell : Grid
         _connText = U.T("Łączenie z GibCordem…", 12.5, U.Semi, Theme.OnAccent);
         _connBar = new Border { Background = Theme.Yellow, Padding = U.Th(12, 4), Child = _connText, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Top };
         _updateBar = new Border { Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Top };
-        var center = new Grid().Rows("auto", "auto", "auto", "*").Add(_connBar.At(0), _updateBar.At(1), _annBar.At(2), _main.At(3));
+        var center = _center = new Grid().Rows("auto", "auto", "auto", "*").Add(_connBar.At(0), _updateBar.At(1), _annBar.At(2), _main.At(3));
         _threadHost.KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape && !e.Handled) { e.Handled = true; CloseSidePanel(); } };
         // panel wątku: szeroki w dużym oknie, węższy w małym (kanał obok ma zostać czytelny)
         SizeChanged += (_, e) =>
@@ -75,16 +75,16 @@ public sealed class Shell : Grid
             _members.Refresh();
             _chat?.RefreshHeader();
         };
-        this.Add(_rail.At(0, 0), _side.At(0, 1), center.At(0, 2), _threadHost.At(0, 3), _members.At(0, 4));
+        this.Add(_rail.At(0, 0), _side.At(0, 1), center.At(0, 2), _zgHost.At(0, 3), _threadHost.At(0, 4), _members.At(0, 5));
         _overlay.Add(_toasts);
-        _overlay.At(0, 0, colSpan: 5);
+        _overlay.At(0, 0, colSpan: 6);
         _overlay.IsHitTestVisible = true;
         _overlay.Background = null;
         Canvas.SetZIndex(_overlay, 100); // dzwonek, Ctrl+K i komunikaty nad ustawieniami i panelem admina
         this.Add(_overlay);
         // 6.1: zima — śnieg nad wszystkim oprócz okienek (bez klikania)
         var snow = new Snow();
-        snow.At(0, 0, colSpan: 5);
+        snow.At(0, 0, colSpan: 6);
         Canvas.SetZIndex(snow, 90);
         this.Add(snow);
         C.SeasonChanged += Winter.Notify;
@@ -94,6 +94,7 @@ public sealed class Shell : Grid
         C.Live += ev =>
         {
             if (ev.Type.StartsWith("board_")) BoardPanel.OnEvent(this, ev);
+            else if (ev.Type.StartsWith("zg_")) _zg?.Notify(ev.Type); // 6.3 Chmurna Zagroda
             else if (ev.Type == "commands_update") { if (ev.Data.Long("serverId") is long cs) Commands.Invalidate(cs); } // 6.4
             else if (ev.Type == "interaction_reply") Info($"{S.NameOf(ev.Data.Long("botUserId") ?? 0, S.ServerOfChannel(ev.Data.Long("channelId") ?? 0))} (tylko dla Ciebie): {ev.Data.Str("content") ?? ev.Data.Prop("card").Str("title") ?? ""}");
             else StageView.OnEvent(this, ev);
@@ -519,6 +520,40 @@ public sealed class Shell : Grid
     }
     public bool SearchOpen => _search is not null;
 
+    // ───── 6.3 Chmurna Zagroda: panel z grą obok czatu, przełącznik „na całe okno” ─────
+    Grid _center = null!;
+    readonly Border _zgHost = new() { Width = 460, BorderBrush = Theme.Line, BorderThickness = U.Th(1, 0, 0, 0), Visibility = Visibility.Collapsed };
+    ZagrodaPanel? _zg;
+    public bool ZagrodaOpen => _zgHost.Visibility == Visibility.Visible;
+    public void OpenZagroda()
+    {
+        _zg ??= new ZagrodaPanel(this);
+        _zgHost.Child ??= _zg;
+        _zgHost.Visibility = Visibility.Visible;
+        _zg.Start();
+        if (_zg.Full) ZagrodaFull(true);
+        Motion.SlideIn(_zgHost, new System.Numerics.Vector3(40, 0, 0));
+        _chat?.RefreshHeader();
+    }
+    public void CloseZagroda()
+    {
+        if (_zg?.Full == true) { ZagrodaFull(false); _zg.SetFull(true); } // następnym razem otworzy się tak samo
+        _zgHost.Visibility = Visibility.Collapsed;
+        _chat?.RefreshHeader();
+    }
+    public void ToggleZagroda() { if (ZagrodaOpen) CloseZagroda(); else OpenZagroda(); }
+    public void ZagrodaFull(bool on)
+    {
+        _zg?.SetFull(on);
+        ColumnDefinitions[2].Width = on ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        ColumnDefinitions[3].Width = on ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+        _zgHost.Width = on ? double.NaN : Math.Clamp(ActualWidth - 68 - 240 - 420, 380, 560);
+        _center.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        _side.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        if (on) { _threadHost.Visibility = Visibility.Collapsed; _members.Visibility = Visibility.Collapsed; }
+        else { _members.Refresh(); _threadHost.Visibility = _threadHost.Child is null ? Visibility.Collapsed : Visibility.Visible; }
+    }
+
     /// <summary>Skok do wiadomości z wyniku wyszukiwania (albo linku): kanał / rozmowa, a dla wiadomości w wątku — panel wątku.</summary>
     public async void JumpToMessage(long cid, long mid, long? threadId = null)
     {
@@ -754,7 +789,7 @@ public sealed class Shell : Grid
     {
         if (_settings is not null) CloseSettings();
         _settings = new SettingsPage(this, section);
-        _settings.At(0, 0, colSpan: 5);
+        _settings.At(0, 0, colSpan: 6);
         Children.Add(_settings);
         _settings.Loaded += (_, _) => _settings?.Focus(FocusState.Programmatic);
     }
@@ -775,7 +810,7 @@ public sealed class Shell : Grid
         CloseAdmin();
         CloseSettings();
         _admin = new AdminPage(this, section);
-        _admin.At(0, 0, colSpan: 5);
+        _admin.At(0, 0, colSpan: 6);
         Children.Add(_admin);
         _admin.Loaded += (_, _) => _admin?.Focus(FocusState.Programmatic);
     }
@@ -794,7 +829,7 @@ public sealed class Shell : Grid
     {
         CloseServerSettings();
         _srvSettings = new ServerSettingsPage(this, serverId, section, selectRole);
-        _srvSettings.At(0, 0, colSpan: 5);
+        _srvSettings.At(0, 0, colSpan: 6);
         Children.Add(_srvSettings);
         _srvSettings.Loaded += (_, _) =>
         {
