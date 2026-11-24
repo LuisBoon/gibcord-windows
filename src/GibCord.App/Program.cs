@@ -31,6 +31,7 @@ public static class Program
 
             WinRT.ComWrappersSupport.InitializeComWrappers();
             if (!Options.Demo && RedirectToRunningInstance()) return 0;
+            if (Options.Light) return LightMode.Run();
             App.Log("Application.Start");
             Application.Start(p =>
             {
@@ -96,6 +97,10 @@ public static class Options
     /// <summary>„gibcord.luisboon.pl:8443” → „gibcord.luisboon.pl-8443” (do nazw katalogu i instancji).</summary>
     public static string ServerSlug => System.Text.RegularExpressions.Regex.Replace(new Uri(Server).Authority, "[^A-Za-z0-9.-]", "-");
     public static bool Hidden => Program.Args.Contains("--ukryty");
+    /// <summary>--pomiar okno|schowane|zwolnione: CI mierzy pamięć i procesor w danym stanie okna (tryb pokazowy).</summary>
+    public static string? Measure => Arg("--pomiar");
+    /// <summary>--lekki: tryb gry bez okna i bez WinUI — połączenie, głos, nakładka, zasobnik, powiadomienia.</summary>
+    public static bool Light => Program.Args.Contains("--lekki");
 }
 
 static partial class Native

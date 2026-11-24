@@ -19,7 +19,7 @@ public sealed class App : Application, IXamlMetadataProvider
 
     // kopia do próby (--server …) ma osobny katalog: tokeny, pamięć i ustawienia nie mieszają się z prawdziwym GibCordem
     public static string DataDir { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Options.OtherServer ? "GibCord6-dane-" + Options.ServerSlug : "GibCord6-dane");
-    public static Prefs Prefs { get; private set; } = new();
+    public static Prefs Prefs { get; internal set; } = new();
     public static MainWindow? Window { get; private set; }
 
     public App()

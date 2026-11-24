@@ -78,6 +78,7 @@ public sealed class MainWindow : Window
         AppWindow.Changed += (_, e) => { if (e.DidVisibilityChange) { Client?.SetVisible(AppWindow.IsVisible); _shell?.WindowVisible(AppWindow.IsVisible); } };
         AppWindow.Closing += (_, e) =>
         {
+            if (_releasing) return; // tryb gry: okno zamyka się naprawdę, aplikacja żyje dalej
             SaveBounds();
             if (!_quitting && App.Prefs.CloseToTray && !Options.Demo && Tray.Available)
             {
@@ -140,6 +141,7 @@ public sealed class MainWindow : Window
             if (Program.Args.Contains("--clip-test")) { _ = ClipTest(); return; } // 6.2: CI — nagranie ekranu i zapis klipu
             if (Options.View == "clipedit" && Options.Arg("--clip-file") is { } cf && CurrentShell is { } csh) Ui.ClipEditor.Show(csh, Path.GetFullPath(cf));
             if (Options.Screenshot is { } path) _ = Screenshot(path);
+            if (Options.Measure is "schowane" or "zwolnione") _ = MeasurePrep(Options.Measure);
             return;
         }
         // aktualizacja przy starcie (jak w Discordzie): Gibek + „Sprawdzanie aktualizacji…”, przy nowej wersji pobranie i uruchomienie nowej
@@ -607,6 +609,41 @@ public sealed class MainWindow : Window
         if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } op) op.Restore();
         Activate();
         Native.SetForegroundWindow(Hwnd);
+    }
+
+    bool _releasing;
+
+    /// <summary>CI (--pomiar): po 5 s okno chowa się jak przy krzyżyku albo zamyka na dobre — potem skrypt mierzy pamięć i procesor.</summary>
+    async Task MeasurePrep(string mode)
+    {
+        await Task.Delay(5000);
+        if (mode == "schowane")
+        {
+            AppWindow.Hide();
+            Client?.SetWindowActive(false);
+            Client?.SetVisible(false);
+            _shell?.WindowVisible(false);
+            App.Log("Pomiar: okno schowane");
+        }
+        else ReleaseWindow();
+    }
+
+    /// <summary>Tryb gry: okno zamyka się naprawdę i cały wygląd wypada z pamięci, a aplikacja żyje dalej (zasobnik, głos, nakładka).</summary>
+    public void ReleaseWindow()
+    {
+        _releasing = true;
+        Application.Current.DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
+        _shell?.Detach();
+        _shell = null;
+        _host.Children.Clear();
+        Content = null;
+        Close();
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(1500);
+            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+            App.Log("Pomiar: okno zwolnione");
+        });
     }
 
     public void Quit()

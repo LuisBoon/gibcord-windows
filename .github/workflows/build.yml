@@ -107,6 +107,46 @@ jobs:
             Where-Object { $_.ProviderName -in 'Application Error','.NET Runtime','Windows Error Reporting' } | Select-Object -First 6 |
             ForEach-Object { Write-Host "[$($_.ProviderName)] $($_.Message)"; Write-Host '' }
 
+      # tryb gry: ile GibCord zajmuje w różnych stanach okna (runner nie ma karty graficznej — rysowanie okna idzie na procesorze,
+      # więc procent dla widocznego okna jest zawyżony; pamięć i stany bez okna są miarodajne)
+      - name: Pomiar pamięci i procesora (tryb gry)
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force zrzuty | Out-Null
+          $rows = @()
+          $cases = @(
+            @{ n = 'okno: czat'; a = @('--demo','--view','chat','--pomiar','okno') },
+            @{ n = 'okno: rozmowa'; a = @('--demo','--view','voice','--motion','--pomiar','okno') },
+            @{ n = 'schowane: rozmowa'; a = @('--demo','--view','voice','--motion','--pomiar','schowane') },
+            @{ n = 'zwolnione: rozmowa'; a = @('--demo','--view','voice','--motion','--pomiar','zwolnione') },
+            @{ n = 'lekki bez WinUI'; a = @('--demo','--lekki') }
+          )
+          foreach ($c in $cases) {
+            $p = Start-Process -FilePath publish\GibCord.exe -ArgumentList $c.a -PassThru
+            Start-Sleep 20
+            if ($p.HasExited) { Write-Host "::warning::$($c.n): proces zakończył się (kod $($p.ExitCode))"; continue }
+            $p.Refresh(); $cpu0 = $p.TotalProcessorTime.TotalMilliseconds; $t0 = Get-Date
+            Start-Sleep 30
+            $p.Refresh(); $cpu1 = $p.TotalProcessorTime.TotalMilliseconds; $t1 = Get-Date
+            $ms = ($cpu1 - $cpu0) / ($t1 - $t0).TotalSeconds
+            $rows += [pscustomobject]@{
+              Stan = $c.n
+              PamiecPrywatnaMB = [math]::Round($p.PrivateMemorySize64 / 1MB, 1)
+              ZestawRoboczyMB = [math]::Round($p.WorkingSet64 / 1MB, 1)
+              ProcesorMsNaSek = [math]::Round($ms, 1)
+              ProcentJednegoRdzenia = [math]::Round($ms / 10, 2)
+              Watki = $p.Threads.Count
+            }
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep 2
+          }
+          Write-Host "Rdzenie: $([Environment]::ProcessorCount)"
+          $rows | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+          $rows | ConvertTo-Json | Set-Content zrzuty\pomiar.json -Encoding utf8
+          $log = Join-Path $env:LOCALAPPDATA 'GibCord6-dane\dziennik.txt'
+          if (Test-Path $log) { Select-String -Path $log -Pattern 'Pomiar|Tryb lekki|Błąd' | Select-Object -Last 20 | ForEach-Object { $_.Line } }
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
