@@ -23,6 +23,12 @@ public sealed class Avatar : Grid
     long _uid;
     /// <summary>Głośność mówienia osoby 0–1 (ustawia powłoka: z silnika głosu).</summary>
     public static Func<long, double>? LevelOf;
+    // 6.4: ramka wokół awatara (SVG ze strony /dekor/<id>.svg, rysowana na 120% rozmiaru, wyśrodkowana)
+    Microsoft.UI.Xaml.Controls.Image? _deco;
+    string? _decoId;
+    static readonly Dictionary<string, Microsoft.UI.Xaml.Media.Imaging.SvgImageSource> _svg = [];
+    /// <summary>Pokazuj ramkę osoby (tam, gdzie Discord: wiadomości, lista osób, panel „ja”, rozmowy prywatne, głos, karta profilu).</summary>
+    public bool ShowDecor { get; init; }
 
     public Avatar(double size, bool withStatus = false, string? ring = null)
     {
@@ -55,6 +61,40 @@ public sealed class Avatar : Grid
         var u = s.U(uid);
         _uid = uid;
         SetRaw(s.NameOf(uid, srv), Store.ColorOfUser(u), api.Abs(s.AvatarOf(uid, srv)), status ? s.StatusOf(uid) : null);
+        if (ShowDecor) SetDecor(u?.Decor, api);
+        return this;
+    }
+
+    /// <summary>6.4: ramka (id z katalogu albo null). Animacja według katalogu (obrót / oddech / unoszenie), bez niej przy „Mniej ruchu”.</summary>
+    public Avatar SetDecor(string? id, GibCordApi api)
+    {
+        if (id == _decoId) return this;
+        _decoId = id;
+        if (_deco is not null) { Children.Remove(_deco); _deco = null; }
+        if (string.IsNullOrEmpty(id) || api.Abs($"/dekor/{Uri.EscapeDataString(id)}.svg") is not { } uri) return this;
+        var px = (int)Math.Ceiling(_size * 1.2 * 2); // ostro także przy powiększeniu 200%
+        var key = uri.AbsoluteUri + "|" + px;
+        if (!_svg.TryGetValue(key, out var src))
+        {
+            // tryb pokazowy (zrzuty CI): kopie ramek z Assets/Dekor — produkcja może jeszcze nie mieć /dekor/
+            var local = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Dekor", id + ".svg");
+            if (Options.Demo && File.Exists(local))
+            {
+                src = new Microsoft.UI.Xaml.Media.Imaging.SvgImageSource { RasterizePixelWidth = px, RasterizePixelHeight = px };
+                _ = LoadLocalSvg(src, local);
+            }
+            else src = new Microsoft.UI.Xaml.Media.Imaging.SvgImageSource(uri) { RasterizePixelWidth = px, RasterizePixelHeight = px };
+            if (_svg.Count > 200) _svg.Clear();
+            _svg[key] = src;
+        }
+        var d = _size * 1.2;
+        _deco = new Microsoft.UI.Xaml.Controls.Image
+        {
+            Source = src, Width = d, Height = d, Margin = new Thickness(-_size * .1), Stretch = Stretch.Uniform, IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        };
+        Children.Insert(Children.IndexOf(_dotWrap), _deco); // nad zdjęciem, pod kropką dostępności
+        Motion.Decor(_deco, ProfileLook.DecorById(id)?.Anim, d);
         return this;
     }
 
@@ -76,6 +116,16 @@ public sealed class Avatar : Grid
         }
         else _dotWrap.Visibility = Visibility.Collapsed;
         return this;
+    }
+
+    static async Task LoadLocalSvg(Microsoft.UI.Xaml.Media.Imaging.SvgImageSource src, string path)
+    {
+        try
+        {
+            var ms = new MemoryStream(await File.ReadAllBytesAsync(path));
+            await src.SetSourceAsync(System.IO.WindowsRuntimeStreamExtensions.AsRandomAccessStream(ms));
+        }
+        catch { }
     }
 
     /// <summary>Mówi: zielona obwódka, która (gdy jest ruch) jaśnieje i rośnie w rytm głosu.</summary>

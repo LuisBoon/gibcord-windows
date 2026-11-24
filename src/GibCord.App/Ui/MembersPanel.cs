@@ -68,7 +68,7 @@ public sealed class MembersPanel : Grid
         foreach (var id in ids.OrderBy(id => s.NameOf(id, srv), StringComparer.Create(Format.Pl, true)))
         {
             var u = s.U(id);
-            var av = new Avatar(32, true).Set(s, _sh.C.Api, id, srv, true);
+            var av = new Avatar(32, true) { ShowDecor = true }.Set(s, _sh.C.Api, id, srv, true);
             var name = U.H(5, U.T(s.NameOf(id, srv), 13.5, U.Semi, U.B(s.NameColor(id, srv))));
             if (u?.Staff == true) name.Add(U.Box(U.T("GC", 8.5, U.Bold, Theme.OnAccent), U.B("#f2a93b"), 4, U.Th(3, 0)));
             if (srv?.OwnerId == id) name.Add(U.T("👑", 11).With(t => t.Tip("Właściciel serwera")));
@@ -103,7 +103,7 @@ public sealed class MembersPanel : Grid
             : o.Banner is { } bc ? U.B(bc) : Theme.AccentGradient();
         _list.Padding = U.Th(0, 0, 0, 16);
         _list.Children.Add(new Border { Height = 90, Background = bannerBrush });
-        var av = new Avatar(76, true, Theme.RingHex).Set(s, _sh.C.Api, o.Id, null, true);
+        var av = new Avatar(76, true, Theme.RingHex) { ShowDecor = true }.Set(s, _sh.C.Api, o.Id, null, true);
         av.HorizontalAlignment = HorizontalAlignment.Left;
         av.Margin = U.Th(16, -40, 0, 0);
         _list.Children.Add(av);

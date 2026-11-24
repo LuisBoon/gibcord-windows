@@ -258,60 +258,98 @@ public static class ProfileCard
         return U.Box(U.V(4, head, box), U.B("#4D0A0618"), 12, U.Th(12, 8, 12, 6), Theme.AccentA(.35), 1);
     }
 
-    public static FrameworkElement? Build(Shell sh, long uid, Action close)
+    /// <summary>
+    /// Karta profilu. <paramref name="preview"/> — podgląd w ustawieniach (szkic zmian, bez przycisków); <paramref name="fx"/> — odegraj efekt profilu.
+    /// 6.4: ramka wokół awatara, kolory karty (gradient z góry c1 → c2, tekst jasny albo ciemny z jasności), efekt i wizytówka.
+    /// </summary>
+    public static FrameworkElement? Build(Shell sh, long uid, Action close, GibCord.Core.User? preview = null, bool fx = true)
     {
         var s = sh.S;
-        var u = s.U(uid);
+        var u = preview ?? s.U(uid);
         if (u is null) return null;
+        var api = sh.C.Api;
         var srv = sh.ServerId > 0 ? s.ServerById(sh.ServerId) : null;
-        var bannerBrush = u.BannerImage is { } bi && sh.C.Api.Abs(bi) is { } bu
+        var theme = ProfileLook.ValidTheme(u.ProfileTheme) ? u.ProfileTheme! : null;
+        var light = theme is not null && ProfileLook.IsLight(theme[0], theme[1]);
+        Brush fg = light ? U.B("#16121f") : Theme.Fg, mu = light ? U.Alpha("#16121f", .74) : Theme.Mu, mu2 = light ? U.Alpha("#16121f", .6) : Theme.Mu2;
+        Brush boxBg = theme is null ? U.B("#4D0A0618") : light ? U.Alpha("#ffffff", .45) : U.Alpha("#000000", .28);
+        var bannerBrush = u.BannerImage is { } bi && api.Abs(bi) is { } bu
             ? (Brush)new ImageBrush { ImageSource = Images.Get(bu, 680), Stretch = Stretch.UniformToFill }
-            : u.Banner is { } bc ? U.B(bc) : Theme.AccentGradient();
+            : u.Banner is { } bc ? U.B(bc) : theme is not null ? U.B(theme[0]) : Theme.AccentGradient();
         var banner = new Border { Height = 96, Background = bannerBrush, CornerRadius = new CornerRadius(14, 14, 0, 0) };
-        var av = new Avatar(80, true, Theme.RingHex).Set(s, sh.C.Api, uid, srv, true);
+        if (theme is not null && u.BannerImage is null && u.Banner is null) banner.Background = new LinearGradientBrush(new GradientStopCollection { new GradientStop { Color = U.C(theme[0]), Offset = 0 }, new GradientStop { Color = U.C(theme[1]), Offset = 1.6 } }, 90);
+        var av = new Avatar(80, true, theme?[0] ?? Theme.RingHex).Set(s, api, uid, srv, true).SetDecor(u.Decor, api);
         av.HorizontalAlignment = HorizontalAlignment.Left;
         av.Margin = U.Th(16, -44, 0, 0);
         var body = U.V(10);
         body.Padding = U.Th(16, 6, 16, 16);
-        var nameRow = U.H(8, U.T(s.NameOf(uid, srv), 20, U.Bold));
+        var nameRow = U.H(8, U.T(preview is not null ? u.Name : s.NameOf(uid, srv), 20, U.Bold, fg));
         if (u.Staff) nameRow.Add(U.Box(U.T("Właściciel GibCorda", 10, U.Bold, Theme.OnAccent), U.B("#f2a93b"), 6, U.Th(6, 2)));
         body.Add(nameRow);
         var sub = "@" + u.Username + (string.IsNullOrEmpty(u.Pronouns) ? "" : " · " + u.Pronouns);
-        body.Add(U.T(sub, 12.5, null, Theme.Mu).With(t => t.Margin = U.Th(0, -8, 0, 0)));
-        if (!string.IsNullOrEmpty(u.CustomStatus)) body.Add(U.T(u.CustomStatus!, 13, null, Theme.Fg, wrap: true));
+        body.Add(U.T(sub, 12.5, null, mu).With(t => t.Margin = U.Th(0, -8, 0, 0)));
+        if (!string.IsNullOrEmpty(u.CustomStatus)) body.Add(U.T(u.CustomStatus!, 13, null, fg, wrap: true));
 
-        Border Card(string label, UIElement content) => U.Box(U.V(6, U.T(label.ToUpperInvariant(), 10.5, U.Bold, Theme.Mu2), content), U.B("#4D0A0618"), 12, U.Th(12, 10));
+        Border Card(string label, UIElement content) => U.Box(U.V(6, U.T(label.ToUpperInvariant(), 10.5, U.Bold, mu2), content), boxBg, 12, U.Th(12, 10));
         if (u.Activity is { Type: "spotify" } a)
         {
             var art = a.Image is { } img && Uri.TryCreate(img, UriKind.Absolute, out var iu) ? new Image { Source = Images.Get(iu, 112), Width = 52, Height = 52 } : null;
-            body.Add(Card("Słucha Spotify", U.H(10, art, U.V(1, U.T(a.Title ?? "", 13, U.Bold), U.T(a.ArtistText, 12, null, Theme.Mu)))));
+            body.Add(Card("Słucha Spotify", U.H(10, art, U.V(1, U.T(a.Title ?? "", 13, U.Bold, fg), U.T(a.ArtistText, 12, null, mu)))));
         }
-        if (u.GameName is { } game) body.Add(Card("Gra", U.H(8, U.I("", 16, Theme.Green), U.T(game, 13, U.Bold))));
-        if (!string.IsNullOrWhiteSpace(u.Bio)) body.Add(Card("O mnie", U.T(u.Bio!, 13, null, Theme.Fg, wrap: true)));
+        if (u.GameName is { } game) body.Add(Card("Gra", U.H(8, U.I("", 16, Theme.Green), U.T(game, 13, U.Bold, fg))));
+        if (!string.IsNullOrWhiteSpace(u.Bio)) body.Add(Card("O mnie", U.T(u.Bio!, 13, null, fg, wrap: true)));
+        // 6.4: wizytówka — kafelki z GET /api/users/:id (gry z godzinami, klipy tylko z kanałów, które widzę)
+        var showcaseHost = new ContentControl { HorizontalContentAlignment = HorizontalAlignment.Stretch };
+        body.Add(showcaseHost);
+        void FillShowcase(GibCord.Core.User who)
+        {
+            if (who.Showcase is not { Count: > 0 } tiles) { showcaseHost.Content = null; return; }
+            var grid = new Grid { ColumnSpacing = 6, RowSpacing = 6 }.Cols("*", "*");
+            for (var i = 0; i < tiles.Count; i++)
+            {
+                var tile = ShowcaseTileView(sh, who, tiles[i], fg, mu, close, preview is not null);
+                var wide = tiles.Count == 1 || (tiles.Count == 3 && i == 2) || tiles[i].K == "clip";
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                grid.Add(tile.At(grid.RowDefinitions.Count - 1, 0, colSpan: wide ? 2 : 1));
+                if (!wide && i + 1 < tiles.Count && tiles[i + 1].K != "clip" && !(tiles.Count == 3 && i + 1 == 2))
+                {
+                    i++;
+                    grid.Add(ShowcaseTileView(sh, who, tiles[i], fg, mu, close, preview is not null).At(grid.RowDefinitions.Count - 1, 1));
+                }
+            }
+            showcaseHost.Content = Card("Wizytówka", grid);
+        }
+        if (preview is not null || uid == s.Me.Id) FillShowcase(u);
+        if (preview is null && !sh.C.Offline)
+            _ = Task.Run(async () =>
+            {
+                try { var full = await api.GetUser(uid); sh.DispatcherQueue.TryEnqueue(() => FillShowcase(full)); } catch { }
+            });
+        else if (preview is null && sh.C.Offline) FillShowcase(u);
         var roles = s.RolesOf(srv, uid);
         if (roles.Count > 0)
         {
             var wrap = new WrapPanel { Spacing = 6 };
             foreach (var r in roles)
-                wrap.Children.Add(U.Box(U.H(6, new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 9, Height = 9, Fill = U.B(r.Color ?? "#8b8599") }, U.T(r.Name, 12, U.Semi)), U.W(.07), 8, U.Th(8, 3)));
+                wrap.Children.Add(U.Box(U.H(6, new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 9, Height = 9, Fill = U.B(r.Color ?? "#8b8599") }, U.T(r.Name, 12, U.Semi, fg)), light ? U.Alpha("#000000", .07) : U.W(.07), 8, U.Th(8, 3)));
             body.Add(Card("Role", wrap));
         }
         if (u.Birthday is { Length: >= 10 } bd && DateTime.TryParse(bd, out var bday))
-            body.Add(Card("Urodziny", U.T((u.BirthdayToday ? "🎂 Dziś! " : "") + bday.ToString("d MMMM", Format.Pl), 13, u.BirthdayToday ? U.Bold : null)));
+            body.Add(Card("Urodziny", U.T((u.BirthdayToday ? "🎂 Dziś! " : "") + bday.ToString("d MMMM", Format.Pl), 13, u.BirthdayToday ? U.Bold : null, fg)));
         var since = new WrapPanel { Spacing = 16 };
-        since.Children.Add(U.V(2, U.T("NA GIBCORDZIE OD", 10.5, U.Bold, Theme.Mu2), U.T(Format.Local(u.CreatedAt).ToString("d MMM yyyy", Format.Pl), 13)));
-        if (s.MemberOf(srv, uid) is { JoinedAt: > 0 } mem) since.Children.Add(U.V(2, U.T("NA SERWERZE OD", 10.5, U.Bold, Theme.Mu2), U.T(Format.Local(mem.JoinedAt).ToString("d MMM yyyy", Format.Pl), 13)));
-        if (s.Friends.GetValueOrDefault(uid) is { Status: "friends", Since: > 0 } fr) since.Children.Add(U.V(2, U.T("ZNAJOMI OD", 10.5, U.Bold, Theme.Mu2), U.T(Format.Local(fr.Since).ToString("d MMM yyyy", Format.Pl), 13)));
-        body.Add(U.Box(since, U.B("#4D0A0618"), 12, U.Th(12, 10)));
-        if (srv is { Levels: true } && s.MemberOf(srv, uid) is not null && !sh.C.Offline) body.Add(U.Box(Levels.Progress(sh, srv, uid), U.B("#4D0A0618"), 12, U.Th(12, 10)));
+        since.Children.Add(U.V(2, U.T("NA GIBCORDZIE OD", 10.5, U.Bold, mu2), U.T(Format.Local(u.CreatedAt).ToString("d MMM yyyy", Format.Pl), 13, null, fg)));
+        if (s.MemberOf(srv, uid) is { JoinedAt: > 0 } mem) since.Children.Add(U.V(2, U.T("NA SERWERZE OD", 10.5, U.Bold, mu2), U.T(Format.Local(mem.JoinedAt).ToString("d MMM yyyy", Format.Pl), 13, null, fg)));
+        if (s.Friends.GetValueOrDefault(uid) is { Status: "friends", Since: > 0 } fr) since.Children.Add(U.V(2, U.T("ZNAJOMI OD", 10.5, U.Bold, mu2), U.T(Format.Local(fr.Since).ToString("d MMM yyyy", Format.Pl), 13, null, fg)));
+        body.Add(U.Box(since, boxBg, 12, U.Th(12, 10)));
+        if (preview is null && srv is { Levels: true } && s.MemberOf(srv, uid) is not null && !sh.C.Offline) body.Add(U.Box(Levels.Progress(sh, srv, uid), boxBg, 12, U.Th(12, 10)));
         if (u.Badges.Count > 0)
         {
             var badges = new WrapPanel { Spacing = 6 };
-            foreach (var b in u.Badges) badges.Children.Add(U.Box(U.T(BadgeName(b), 11.5, U.Semi), U.W(.08), 8, U.Th(8, 3)));
+            foreach (var b in u.Badges) badges.Children.Add(U.Box(U.T(BadgeName(b), 11.5, U.Semi, fg), light ? U.Alpha("#000000", .08) : U.W(.08), 8, U.Th(8, 3)));
             body.Add(Card("Odznaki", badges));
         }
-        if (uid != s.Me.Id) body.Add(NoteCard(sh, uid));
-        if (uid != s.Me.Id)
+        if (preview is null && uid != s.Me.Id) body.Add(NoteCard(sh, uid));
+        if (preview is null && uid != s.Me.Id)
         {
             var btns = new Grid { ColumnSpacing = 8 }.Cols("*", "*");
             btns.Add(U.Primary("Wiadomość", () => { close(); sh.OpenDmWith(uid); }, 36).At(0, 0));
@@ -332,6 +370,55 @@ public static class ProfileCard
             btns.Add(more.At(0, 2));
             body.Add(btns);
         }
-        return new Grid { Width = 320 }.Rows("auto", "auto", "auto").Add(banner.At(0), av.At(1), body.At(2));
+        var layer = ProfileFx.Layer();
+        var grid = new Grid { Width = 320 }.Rows("auto", "auto", "auto").Add(banner.At(0), av.At(1), body.At(2), layer.At(0, 0, rowSpan: 3));
+        var root = new Border { Child = grid, CornerRadius = new CornerRadius(14) };
+        if (theme is not null)
+            root.Background = new LinearGradientBrush(new GradientStopCollection { new GradientStop { Color = U.C(theme[0]), Offset = 0 }, new GradientStop { Color = U.C(theme[1]), Offset = 1 } }, 90);
+        // efekt profilu: raz, ~4 s po otwarciu karty
+        if (fx && !string.IsNullOrEmpty(u.ProfileFx))
+        {
+            var played = false;
+            grid.SizeChanged += (_, e) => { if (played || e.NewSize.Height < 50) return; played = true; ProfileFx.Play(layer, u.ProfileFx, e.NewSize.Width, e.NewSize.Height); };
+        }
+        return root;
+    }
+
+    /// <summary>6.4: kafelek wizytówki: gra (z godzinami), klip (kliknięcie — wiadomość z filmem), Spotify (teraz słucha), napis.</summary>
+    static FrameworkElement ShowcaseTileView(Shell sh, GibCord.Core.User who, ShowcaseTile t, Brush fg, Brush mu, Action close, bool preview)
+    {
+        FrameworkElement Tile(string icon, Brush iconBg, string title, string? sub) =>
+            new Grid { ColumnSpacing = 8 }.Cols("auto", "*").Add(
+                U.Box(U.T(icon, 15).With(x => { x.HorizontalAlignment = HorizontalAlignment.Center; x.VerticalAlignment = VerticalAlignment.Center; }), iconBg, 8, U.Th(0)).With(b => { b.Width = b.Height = 32; b.VerticalAlignment = VerticalAlignment.Center; }).At(0, 0),
+                U.V(0, U.T(title, 12.5, U.Bold, fg).With(x => x.TextTrimming = TextTrimming.CharacterEllipsis), sub is null ? null : U.T(sub, 11, null, mu)).With(p => p.VerticalAlignment = VerticalAlignment.Center).At(0, 1));
+        switch (t.K)
+        {
+            case "game":
+                return Tile("🎮", U.Alpha("#6fe3a5", .25), t.Name ?? "Gra", t.Hours is > 0 ? $"{t.Hours} h w grze" : "ulubiona gra");
+            case "spotify":
+            {
+                var a = who.Activity is { Type: "spotify" } act ? act : null;
+                return Tile("🎵", U.Alpha("#1db954", .3), a?.Title ?? "Spotify", a is null ? "teraz nic nie gra" : a.ArtistText);
+            }
+            case "text":
+                return U.Box(U.T("„" + (t.T ?? "") + "”", 13, U.Semi, fg, wrap: true), Theme.Transparent, 8, U.Th(4, 2));
+            case "clip":
+            {
+                var w = 288.0; var h = t.Width is > 0 && t.Height is > 0 ? Math.Clamp(w * t.Height.Value / t.Width.Value, 90, 162) : 140;
+                var bg = new Border { Height = h, CornerRadius = new CornerRadius(10), Background = U.B("#1a1426") };
+                if (Images.Blur(t.Preview, w / h) is { } blur) bg.Background = new ImageBrush { ImageSource = blur, Stretch = Stretch.UniformToFill };
+                var play = U.Box(U.I("\uE768", 18, U.B("#ffffff")), U.Alpha("#000000", .5), 22, U.Th(12)).With(b => { b.HorizontalAlignment = HorizontalAlignment.Center; b.VerticalAlignment = VerticalAlignment.Center; });
+                var label = U.Box(U.T("🎬 " + (t.Name ?? "Klip"), 11.5, U.Semi, U.B("#ffffff")).With(x => x.TextTrimming = TextTrimming.CharacterEllipsis), U.Alpha("#000000", .45), 6, U.Th(6, 2))
+                    .With(b => { b.HorizontalAlignment = HorizontalAlignment.Left; b.VerticalAlignment = VerticalAlignment.Bottom; b.Margin = U.Th(6); });
+                var g = new Grid().Add(bg, play, label);
+                if (!preview && t.ChannelId is long cid && t.Mid is long mid)
+                {
+                    g.Tip("Otwórz wiadomość z tym klipem");
+                    g.Tapped += (_, _) => { close(); sh.JumpToMessage(cid, mid); };
+                }
+                return g;
+            }
+        }
+        return new Border();
     }
 }

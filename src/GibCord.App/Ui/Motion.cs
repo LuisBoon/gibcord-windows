@@ -335,6 +335,105 @@ static class Motion
         catch (Exception ex) { Fail(ex); }
     }
 
+    /// <summary>
+    /// 6.4: ruch ramki wokół awatara — „spin” (obrót całej ramki, 12 s), „pulse” (oddech: skala 1→1,04 i przezroczystość, 2,4 s),
+    /// „float” (góra-dół 3 px, 3 s). Przy „Mniej ruchu” ramka stoi.
+    /// </summary>
+    public static void Decor(UIElement e, string? anim, double size)
+    {
+        if (!On || anim is null or "none" or "") return;
+        try
+        {
+            var c = Comp(e);
+            e.CenterPoint = new Vector3((float)size / 2, (float)size / 2, 0);
+            switch (anim)
+            {
+                case "spin":
+                {
+                    var a = c.CreateScalarKeyFrameAnimation();
+                    a.Target = "Rotation";
+                    a.InsertKeyFrame(0f, 0f);
+                    a.InsertKeyFrame(1f, 360f, c.CreateLinearEasingFunction());
+                    a.Duration = TimeSpan.FromSeconds(12);
+                    a.IterationBehavior = AnimationIterationBehavior.Forever;
+                    Start(e, a);
+                    break;
+                }
+                case "pulse":
+                {
+                    var a = c.CreateVector3KeyFrameAnimation();
+                    a.Target = "Scale";
+                    a.InsertKeyFrame(0f, Vector3.One);
+                    a.InsertKeyFrame(.5f, new Vector3(1.04f, 1.04f, 1));
+                    a.InsertKeyFrame(1f, Vector3.One);
+                    a.Duration = TimeSpan.FromMilliseconds(2400);
+                    a.IterationBehavior = AnimationIterationBehavior.Forever;
+                    Start(e, a);
+                    var o = c.CreateScalarKeyFrameAnimation();
+                    o.Target = "Opacity";
+                    o.InsertKeyFrame(0f, 1f);
+                    o.InsertKeyFrame(.5f, .8f);
+                    o.InsertKeyFrame(1f, 1f);
+                    o.Duration = TimeSpan.FromMilliseconds(2400);
+                    o.IterationBehavior = AnimationIterationBehavior.Forever;
+                    Start(e, o);
+                    break;
+                }
+                case "float":
+                {
+                    var a = c.CreateVector3KeyFrameAnimation();
+                    a.Target = "Translation";
+                    a.InsertKeyFrame(0f, Vector3.Zero);
+                    a.InsertKeyFrame(.5f, new Vector3(0, -3, 0));
+                    a.InsertKeyFrame(1f, Vector3.Zero);
+                    a.Duration = TimeSpan.FromSeconds(3);
+                    a.IterationBehavior = AnimationIterationBehavior.Forever;
+                    Start(e, a);
+                    break;
+                }
+            }
+        }
+        catch (Exception ex) { Fail(ex); }
+    }
+
+    /// <summary>6.4: jednorazowy lot cząsteczki efektu profilu (przesunięcie + obrót + zanikanie).</summary>
+    public static void Particle(UIElement e, Vector3 from, Vector3 to, float spin, double ms, double delayMs, float fadeAt = .7f)
+    {
+        try
+        {
+            var c = Comp(e);
+            var t = c.CreateVector3KeyFrameAnimation();
+            t.Target = "Translation";
+            t.InsertKeyFrame(0f, from);
+            t.InsertKeyFrame(1f, to, c.CreateCubicBezierEasingFunction(new Vector2(.25f, .1f), new Vector2(.4f, 1f)));
+            t.Duration = TimeSpan.FromMilliseconds(ms);
+            t.DelayTime = TimeSpan.FromMilliseconds(delayMs);
+            t.DelayBehavior = AnimationDelayBehavior.SetInitialValueBeforeDelay;
+            Start(e, t);
+            var o = c.CreateScalarKeyFrameAnimation();
+            o.Target = "Opacity";
+            o.InsertKeyFrame(0f, 0f);
+            o.InsertKeyFrame(.08f, 1f);
+            o.InsertKeyFrame(fadeAt, 1f);
+            o.InsertKeyFrame(1f, 0f);
+            o.Duration = TimeSpan.FromMilliseconds(ms);
+            o.DelayTime = TimeSpan.FromMilliseconds(delayMs);
+            o.DelayBehavior = AnimationDelayBehavior.SetInitialValueBeforeDelay;
+            Start(e, o);
+            if (spin != 0)
+            {
+                var r = c.CreateScalarKeyFrameAnimation();
+                r.Target = "Rotation";
+                r.InsertKeyFrame(0f, 0f);
+                r.InsertKeyFrame(1f, spin, c.CreateLinearEasingFunction());
+                r.Duration = TimeSpan.FromMilliseconds(ms);
+                r.DelayTime = TimeSpan.FromMilliseconds(delayMs);
+                Start(e, r);
+            }
+        }
+        catch (Exception ex) { Fail(ex); }
+    }
+
     /// <summary>Bez końca: skala klatkami (oddychanie logo, mrugnięcie powiek). Klatki: (postęp, skala X, skala Y).</summary>
     public static void Loop(UIElement e, Vector3 center, double ms, params (float At, float X, float Y)[] frames)
     {

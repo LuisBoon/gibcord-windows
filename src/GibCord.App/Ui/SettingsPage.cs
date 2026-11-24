@@ -13,7 +13,7 @@ namespace GibCord.App.Ui;
 /// Ustawienia na całe okno (jak na Discordzie): profil, konto, bezpieczeństwo (2FA, urządzenia), prywatność,
 /// powiadomienia, głos, aplikacja. Esc albo ✕ zamyka.
 /// </summary>
-public sealed class SettingsPage : Grid
+public sealed partial class SettingsPage : Grid
 {
     readonly Shell _sh;
     readonly StackPanel _nav = new() { Spacing = 2, Padding = U.Th(12, 24, 12, 24) };
@@ -389,6 +389,16 @@ public sealed class SettingsPage : Grid
         DateTimeOffset? bday = DateTime.TryParse(me.Birthday, out var bd) ? new DateTimeOffset(bd) : null;
         var birthday = new DateField { Date = bday, PlaceholderText = "Wybierz datę", MinDate = new DateTimeOffset(1930, 1, 1, 0, 0, 0, TimeSpan.Zero), MaxDate = DateTimeOffset.Now };
         var showAge = new CheckField { Content = "Pokazuj mój wiek", IsChecked = me.BirthdayShowAge };
+        // 6.4: wygląd profilu (ramka, efekt, kolory, wizytówka) — szkic do zapisu razem z resztą
+        var lookHead = U.T("WYGLĄD PROFILU", 12, U.Bold, Theme.Accent).With(t => t.Margin = U.Th(0, 10, 0, 0));
+        var look = new LookDraft { Decor = me.Decor, Fx = me.ProfileFx, Theme = ProfileLook.ValidTheme(me.ProfileTheme) ? [.. me.ProfileTheme!] : null, Showcase = me.Showcase?.ToList() ?? [] };
+        var previewHost = _sh.ActualWidth > 1150 || Options.Demo ? new ContentControl() : null; // podgląd obok tylko w szerokim oknie — w wąskim formularz ma całe miejsce
+        void RefreshPreview(bool fx)
+        {
+            if (previewHost is not null)
+                previewHost.Content = ProfileCard.Build(_sh, me.Id, () => { }, PreviewUser(me, look, display.Text.Trim(), pronouns.Text.Trim(), bio.Text.Trim(), banner), fx);
+        }
+        RefreshPreview(false);
         var save = U.Primary("Zapisz zmiany", async () =>
         {
             try
@@ -399,6 +409,11 @@ public sealed class SettingsPage : Grid
                     ["color"] = color, ["banner"] = banner,
                     ["birthday"] = birthday.Date is { } d ? d.ToString("yyyy-MM-dd") : null, ["birthdayShowAge"] = showAge.IsChecked == true,
                 };
+                if (_sh.C.Info?.Has("profile2") != false)
+                {
+                    body["decor"] = look.Decor; body["profileFx"] = look.Fx; body["profileTheme"] = look.Theme;
+                    body["showcase"] = look.Showcase.Select(t => t.ToPatch()).ToList();
+                }
                 var u = await Api.PatchMe(body);
                 S.Apply(new GatewayEvent("user_update", System.Text.Json.JsonSerializer.SerializeToElement(new { user = u }, Json.Options)));
                 Ok("Profil zapisany");
@@ -421,12 +436,24 @@ public sealed class SettingsPage : Grid
                     catch (Exception ex) { Err(ex); }
                 }, 34) : null)),
             Card(Label("Urodziny"), birthday, showAge, U.T("W dniu urodzin przy nicku pojawi się 🎂, a znajomi dostaną przypomnienie.", 11.5, null, Theme.Mu2, wrap: true)),
+            // 6.4: tylko gdy serwer zna nowe pola profilu (features.profile2); starszy serwer by je pominął
+            _sh.C.Info?.Has("profile2") == false && !_sh.C.Offline ? null : lookHead,
+            _sh.C.Info?.Has("profile2") == false && !_sh.C.Offline ? null : LookCards(look, me, RefreshPreview),
             save);
-        // podgląd obok tylko w szerokim oknie — w wąskim formularz ma całe miejsce
-        var preview = _sh.ActualWidth > 1150 ? ProfileCard.Build(_sh, me.Id, () => { }) : null;
+        display.TextChanged += (_, _) => RefreshPreview(false);
+        if (DemoScrollLook)
+        {
+            // zrzut CI: od razu przewinięte do wyglądu profilu
+            var t = DispatcherQueue.CreateTimer();
+            t.Interval = TimeSpan.FromMilliseconds(700);
+            t.IsRepeating = false;
+            t.Tick += (_, _) => { try { var pt = lookHead.TransformToVisual(_body).TransformPoint(new Windows.Foundation.Point(0, 0)); _sv.ChangeView(null, Math.Max(0, pt.Y - 16), null, true); } catch { } };
+            t.Start();
+        }
+        bio.LostFocus += (_, _) => RefreshPreview(false);
         var grid = new Grid { ColumnSpacing = 24 }.Cols("*", "auto").Add(form.At(0, 0));
-        if (preview is not null)
-            grid.Add(U.V(8, Label("Podgląd"), new Border { Child = preview, Background = Theme.Surface, CornerRadius = new CornerRadius(14) }).With(p => p.VerticalAlignment = VerticalAlignment.Top).At(0, 1));
+        if (previewHost is not null)
+            grid.Add(U.V(8, Label("Podgląd"), new Border { Child = previewHost, Background = Theme.Surface, CornerRadius = new CornerRadius(14) }).With(p => p.VerticalAlignment = VerticalAlignment.Top).At(0, 1));
         _body.MaxWidth = 1100;
         _body.Add(grid);
     }
