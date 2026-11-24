@@ -64,7 +64,8 @@ static class VoiceUi
         }
         Ping();
         var line2 = U.HG(0, spark, ms, where);
-        var text = U.V(0, state, line2);
+        var lockIcon = E2eeUi.Icon(sh, c.VoiceChannelId); // 6.4: szyfrowana rozmowa prywatna
+        var text = U.V(0, lockIcon is null ? state : U.HG(0, lockIcon, state), line2);
         var go = new Border { Child = new Grid().Cols("auto", "*").Add(U.I(G.Signal, 16, StateBrush(c)).With(i => i.Margin = U.Th(2, 0, 8, 0)).At(0, 0), text.At(0, 1)), Background = Theme.Transparent, CornerRadius = new CornerRadius(8), Padding = U.Th(4, 4) };
         go.Tip("Przejdź do rozmowy (prawy przycisk: stan połączenia i wykres pingu)");
         go.RightTapped += (_, e) => { e.Handled = true; ShowStats(sh, go); };
@@ -268,7 +269,7 @@ sealed class VoiceTile : Grid
     {
         Uid = vm.UserId;
         Width = w; Height = h;
-        Av = new Avatar(80).Set(sh.S, sh.C.Api, vm.UserId, srv);
+        Av = new Avatar(80) { ShowDecor = true }.Set(sh.S, sh.C.Api, vm.UserId, srv);
         // awatar skaluje się razem z kafelkiem (kafelki dopasowują się do szerokości okna)
         var avBox = new Viewbox { Child = Av, Stretch = Stretch.Uniform, Height = Math.Min(80, h * .45), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         SizeChanged += (_, e) => avBox.Height = Math.Max(28, Math.Min(80, e.NewSize.Height * .45));
@@ -624,11 +625,14 @@ public sealed class CallBar : Grid
         var avs = U.H(4);
         foreach (var m in members.Take(8))
         {
-            var av = new Avatar(40, ring: Theme.RingHex).Set(_sh.S, c.Api, m.UserId, null);
+            var av = new Avatar(40, ring: Theme.RingHex) { ShowDecor = true }.Set(_sh.S, c.Api, m.UserId, null);
             _avs.Add((m.UserId, av));
             avs.Add(new Border { Child = av, CornerRadius = new CornerRadius(22), BorderBrush = U.B(Theme.RingHex), BorderThickness = U.Th(2) });
         }
-        var text = here ? U.T(VoiceUi.StateText(c), 13, U.Bold, VoiceUi.StateBrush(c)) : U.T("Rozmowa trwa — możesz dołączyć", 13, U.Bold);
+        var stateText = here ? U.T(VoiceUi.StateText(c), 13, U.Bold, VoiceUi.StateBrush(c)) : U.T("Rozmowa trwa — możesz dołączyć", 13, U.Bold);
+        // 6.4: kłódka „Szyfrowane od końca do końca” (klik — kod bezpieczeństwa)
+        var text = E2eeUi.Badge(_sh, _cid) is { } lk ? (FrameworkElement)U.V(2, stateText, lk.With(x => x.Margin = U.Th(-4, 0, 0, 0))) : stateText;
+        text.VerticalAlignment = VerticalAlignment.Center;
         var right = U.H(8);
         if (here)
         {

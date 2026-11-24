@@ -107,3 +107,40 @@ public sealed class DpapiTokenStore(string path) : ITokenStore
         catch (Exception ex) { App.Log("Zapis tokenu: " + ex.Message); }
     }
 }
+
+/// <summary>
+/// 6.4: klucz prywatny urządzenia do szyfrowanych rozmów (P-256, PKCS#8) — osobno dla każdego konta, w pliku e2ee-ID.bin
+/// zaszyfrowanym DPAPI (tylko ten użytkownik Windows go odczyta). Strona trzyma swój jako niewyeksportowywalny klucz WebCrypto.
+/// </summary>
+public sealed class DpapiE2eeKeyStore(string dir) : GibCord.Core.IE2eeKeyStore
+{
+    static readonly byte[] Entropy = Encoding.UTF8.GetBytes("GibCord6-e2ee");
+
+    string PathOf(long uid) => Path.Combine(dir, $"e2ee-{uid}.bin");
+
+    public (string Dev, byte[] Key)? Load(long userId)
+    {
+        try
+        {
+            var p = PathOf(userId);
+            if (!File.Exists(p)) return null;
+            var raw = ProtectedData.Unprotect(File.ReadAllBytes(p), Entropy, DataProtectionScope.CurrentUser);
+            // format: 16 znaków identyfikatora urządzenia + PKCS#8
+            if (raw.Length < 17) return null;
+            return (Encoding.ASCII.GetString(raw, 0, 16), raw[16..]);
+        }
+        catch (Exception ex) { App.Log("Klucz szyfrowania: " + ex.Message); return null; }
+    }
+
+    public void Save(long userId, string dev, byte[] key)
+    {
+        var raw = new byte[16 + key.Length];
+        Encoding.ASCII.GetBytes(dev, 0, 16, raw, 0);
+        key.CopyTo(raw, 16);
+        Directory.CreateDirectory(dir);
+        var p = PathOf(userId);
+        File.WriteAllBytes(p + ".tmp", ProtectedData.Protect(raw, Entropy, DataProtectionScope.CurrentUser));
+        File.Move(p + ".tmp", p, true);
+        System.Security.Cryptography.CryptographicOperations.ZeroMemory(raw);
+    }
+}

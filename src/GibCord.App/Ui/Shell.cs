@@ -311,7 +311,7 @@ public sealed class Shell : Grid
                 Dirty(side: true, voice: true);
                 return;
             case ChangeKind.Voice:
-                Dirty(side: S.ServerOfChannel(c.Id)?.Id == ServerId || c.Id == C.VoiceChannelId, voice: c.Id == ChannelId);
+                Dirty(side: S.ServerOfChannel(c.Id)?.Id == ServerId || c.Id == C.VoiceChannelId || (ServerId == 0 && S.DmById(c.Id) is not null), voice: c.Id == ChannelId); // 6.4: „Szyfrowana rozmowa trwa” na liście rozmów
                 return;
             case ChangeKind.Notify or ChangeKind.Blocked:
                 Dirty(rail: true, side: true, main: c.Kind == ChangeKind.Blocked, members: c.Kind == ChangeKind.Blocked);

@@ -333,7 +333,7 @@ public sealed class Sidebar : Grid
 
     FrameworkElement VoiceMemberRow(VoiceMember vm, Server srv)
     {
-        var av = new Avatar(22).Set(S, _sh.C.Api, vm.UserId, srv);
+        var av = new Avatar(22) { ShowDecor = true }.Set(S, _sh.C.Api, vm.UserId, srv);
         _talk.Add((vm.UserId, av));
         var icons = U.H(4);
         if (_sh.C.SoundLabels.TryGetValue(vm.UserId, out var sl) && sl.Until > Environment.TickCount64) icons.Add(U.Box(U.T(sl.Label, 10, U.Bold, Theme.OnAccent), Theme.Accent, 4, U.Th(4, 0)));
@@ -394,9 +394,10 @@ public sealed class Sidebar : Grid
         else
         {
             var other = S.DmOther(d);
-            av = new Avatar(32, withStatus: true).Set(S, _sh.C.Api, other?.Id ?? 0, null, status: true);
+            av = new Avatar(32, withStatus: true) { ShowDecor = true }.Set(S, _sh.C.Api, other?.Id ?? 0, null, status: true);
             sub = other?.GameName is { } game ? "Gra w " + game : other?.Activity is { Type: "spotify" } ? "Słucha Spotify" : other?.CustomStatus ?? "";
         }
+        if (S.Voice.GetValueOrDefault(d.Id) is { Count: > 0 }) sub = (_sh.C.CallEncrypted(d.Id) ? "🔒 Szyfrowana rozmowa trwa" : "Rozmowa trwa"); // 6.4
         var name = U.T(S.DmTitle(d), 14, unread ? U.Bold : U.Semi, sel || unread ? Theme.Fg : Theme.Mu);
         var text = string.IsNullOrEmpty(sub) ? (UIElement)name : U.V(0, name, U.T(sub, 11.5, null, Theme.Mu2));
         async void CloseDm()
@@ -444,7 +445,7 @@ public sealed class Sidebar : Grid
         _me.ColumnDefinitions.Clear();
         _me.Cols("auto", "*", "auto");
         var me = S.Me;
-        var av = new Avatar(34, withStatus: true, ring: Theme.RingHex).Set(S, _sh.C.Api, me.Id, null, status: true);
+        var av = new Avatar(34, withStatus: true, ring: Theme.RingHex) { ShowDecor = true }.Set(S, _sh.C.Api, me.Id, null, status: true);
         var status = S.StatusOf(me.Id);
         var sub = !string.IsNullOrEmpty(me.CustomStatus) ? me.CustomStatus! : Format.StatusPl.GetValueOrDefault(me.Status == "invisible" ? "invisible" : status, "Dostępny");
         var who = U.V(0, U.T(me.Name, 12.5, U.Bold).With(t => t.TextTrimming = TextTrimming.CharacterEllipsis), U.T(sub, 11, null, Theme.Mu).With(t => t.TextTrimming = TextTrimming.CharacterEllipsis));
