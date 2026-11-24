@@ -137,6 +137,8 @@ static partial class Saver
         SetMemoryPriority(asleep ? MEMORY_PRIORITY_BELOW_NORMAL : MEMORY_PRIORITY_NORMAL);
         if (asleep) { _trim?.Stop(); _trim?.Start(); }
         else _trim?.Stop();
+        // animacje bez końca (ramki awatarów, szkielety, „pisze…”) — kompozytor przestaje rysować klatki
+        try { Ui.Motion.SleepLoops(asleep); } catch (Exception ex) { App.Log("Oszczędzanie (ruch): " + ex.Message); }
         // obraz z kamer i transmisji: nie pobieramy, gdy nikt go nie ogląda (okienko transmisji obok = oglądasz)
         try { _w?.Client?.Voice.SetVideoPaused(asleep && !Ui.PipWindow.IsOpen); } catch { }
     }

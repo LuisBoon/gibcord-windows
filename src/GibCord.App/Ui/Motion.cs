@@ -69,6 +69,43 @@ static class Motion
         list.Add(a);
     }
 
+    // 6.4.2: animacje bez końca (szkielety, „pisze…”, ramki awatarów, logo) — stoją, gdy okna nie widać (Saver),
+    // bo inaczej kompozytor rysuje klatkę co 1/60 s także pod grą na pełnym ekranie albo w schowanym oknie
+    static readonly List<(WeakReference<UIElement> E, CompositionAnimation A)> Loops = [];
+    static bool _loopsAsleep;
+
+    static void StartLoop(UIElement e, CompositionAnimation a)
+    {
+        if (Loops.Count > 256) Loops.RemoveAll(x => !x.E.TryGetTarget(out _));
+        Loops.Add((new(e), a));
+        if (!_loopsAsleep) Start(e, a);
+    }
+
+    /// <summary>Saver: wstrzymanie / wznowienie wszystkich animacji bez końca.</summary>
+    public static void SleepLoops(bool asleep)
+    {
+        if (_loopsAsleep == asleep) return;
+        _loopsAsleep = asleep;
+        Loops.RemoveAll(x => !x.E.TryGetTarget(out _));
+        foreach (var (w, a) in Loops)
+        {
+            if (!w.TryGetTarget(out var e)) continue;
+            try
+            {
+                if (asleep) e.StopAnimation(a);
+                else if (e.XamlRoot is not null) e.StartAnimation(a);
+                else if (e is FrameworkElement fe)
+                {
+                    // element chwilowo poza oknem (np. zapamiętany widok) — ruszy, gdy wróci na ekran
+                    RoutedEventHandler? h = null;
+                    h = (_, _) => { fe.Loaded -= h; try { fe.StartAnimation(a); } catch { } };
+                    fe.Loaded += h;
+                }
+            }
+            catch { }
+        }
+    }
+
     static SpringVector3NaturalMotionAnimation Spring(Compositor c, string target, Vector3 from, Vector3 to, double delayMs = 0, float damping = .72f, double periodMs = 45)
     {
         var a = c.CreateSpringVector3Animation();
@@ -299,7 +336,7 @@ static class Motion
             a.Duration = TimeSpan.FromMilliseconds(1400);
             a.IterationBehavior = AnimationIterationBehavior.Forever;
             if (delayMs > 0) { a.DelayTime = TimeSpan.FromMilliseconds(delayMs); a.DelayBehavior = AnimationDelayBehavior.SetInitialValueBeforeDelay; }
-            Start(e, a);
+            StartLoop(e, a);
         }
         catch (Exception ex) { Fail(ex); }
     }
@@ -320,7 +357,7 @@ static class Motion
             a.Duration = TimeSpan.FromMilliseconds(1100);
             a.IterationBehavior = AnimationIterationBehavior.Forever;
             a.DelayTime = TimeSpan.FromMilliseconds(delayMs);
-            Start(e, a);
+            StartLoop(e, a);
             var o = c.CreateScalarKeyFrameAnimation();
             o.Target = "Opacity";
             o.InsertKeyFrame(0f, .45f);
@@ -330,7 +367,7 @@ static class Motion
             o.Duration = TimeSpan.FromMilliseconds(1100);
             o.IterationBehavior = AnimationIterationBehavior.Forever;
             o.DelayTime = TimeSpan.FromMilliseconds(delayMs);
-            Start(e, o);
+            StartLoop(e, o);
         }
         catch (Exception ex) { Fail(ex); }
     }
@@ -356,7 +393,7 @@ static class Motion
                     a.InsertKeyFrame(1f, 360f, c.CreateLinearEasingFunction());
                     a.Duration = TimeSpan.FromSeconds(12);
                     a.IterationBehavior = AnimationIterationBehavior.Forever;
-                    Start(e, a);
+                    StartLoop(e, a);
                     break;
                 }
                 case "pulse":
@@ -368,7 +405,7 @@ static class Motion
                     a.InsertKeyFrame(1f, Vector3.One);
                     a.Duration = TimeSpan.FromMilliseconds(2400);
                     a.IterationBehavior = AnimationIterationBehavior.Forever;
-                    Start(e, a);
+                    StartLoop(e, a);
                     var o = c.CreateScalarKeyFrameAnimation();
                     o.Target = "Opacity";
                     o.InsertKeyFrame(0f, 1f);
@@ -376,7 +413,7 @@ static class Motion
                     o.InsertKeyFrame(1f, 1f);
                     o.Duration = TimeSpan.FromMilliseconds(2400);
                     o.IterationBehavior = AnimationIterationBehavior.Forever;
-                    Start(e, o);
+                    StartLoop(e, o);
                     break;
                 }
                 case "float":
@@ -388,7 +425,7 @@ static class Motion
                     a.InsertKeyFrame(1f, Vector3.Zero);
                     a.Duration = TimeSpan.FromSeconds(3);
                     a.IterationBehavior = AnimationIterationBehavior.Forever;
-                    Start(e, a);
+                    StartLoop(e, a);
                     break;
                 }
             }
@@ -447,7 +484,7 @@ static class Motion
             foreach (var (at, x, y) in frames) a.InsertKeyFrame(at, new Vector3(x, y, 1));
             a.Duration = TimeSpan.FromMilliseconds(ms);
             a.IterationBehavior = AnimationIterationBehavior.Forever;
-            Start(e, a);
+            StartLoop(e, a);
         }
         catch (Exception ex) { Fail(ex); }
     }

@@ -150,7 +150,7 @@ jobs:
           $rows | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
           $rows | ConvertTo-Json | Set-Content zrzuty\pomiar.json -Encoding utf8
           $log = Join-Path $env:LOCALAPPDATA 'GibCord6-dane\dziennik.txt'
-          if (Test-Path $log) { Select-String -Path $log -Pattern 'Pomiar|Oszczędzanie|Błąd' | Select-Object -Last 30 | ForEach-Object { $_.Line } }
+          if (Test-Path $log) { Get-Content $log -Encoding utf8 -Tail 150 | Where-Object { $_ -match 'Start --demo|Pomiar|Oszczędzanie|Błąd' } }
 
       - uses: actions/upload-artifact@v4
         if: always()
