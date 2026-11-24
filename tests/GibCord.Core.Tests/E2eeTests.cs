@@ -90,7 +90,8 @@ public class E2eeCryptoTests
     static JsonElement RunNode(object input)
     {
         var script = Path.Combine(AppContext.BaseDirectory, "e2ee-node.mjs");
-        var psi = new ProcessStartInfo(Node()!, $"\"{script}\"") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        var psi = new ProcessStartInfo(Node()!, $"\"{script}\"") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false,
+            StandardInputEncoding = new System.Text.UTF8Encoding(false), StandardOutputEncoding = System.Text.Encoding.UTF8, StandardErrorEncoding = System.Text.Encoding.UTF8 }; // Windows: bez tego „·” z Node przychodzi w stronie kodowej konsoli
         using var p = Process.Start(psi)!;
         p.StandardInput.Write(JsonSerializer.Serialize(input));
         p.StandardInput.Close();
