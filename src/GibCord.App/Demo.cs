@@ -10,7 +10,7 @@ namespace GibCord.App;
 /// </summary>
 public static class Demo
 {
-    public const long MeId = 1, OlaId = 2, KubaId = 3, BonkusId = 4, MajaId = 5, BartekId = 6;
+    public const long MeId = 1, OlaId = 2, KubaId = 3, BonkusId = 4, MajaId = 5, BartekId = 6, DiscordId = 60;
     const long Eg = 10, Gc = 11, Sz = 12, Mc = 13;
     const long Ogolne = 100, Memy = 101, Granie = 102, Nauka = 103, Pogaduchy = 104, GranieV = 105, DmOla = 200;
 
@@ -30,6 +30,7 @@ public static class Demo
         var now = Format.NowMs();
         c.Store.SetWindow(Ogolne, Options.WheelTest ? [.. LongHistory(now), .. Messages(now)] : Messages(now), hasOlder: false);
         c.Store.SetWindow(DmOla, DmMessages(now), hasOlder: false);
+        c.Store.SetWindow(Granie, BridgeMessages(now), hasOlder: false); // 6.4: most z Discordem
         c.Store.Mentions[Memy] = 3;
         // wątek „Sobotni turniej” pod zrzutem z bazy (widok --view thread)
         c.Store.MergeThread(new ThreadInfo { Id = 1, ChannelId = Ogolne, ServerId = Eg, MessageId = 1010, Name = "Sobotni turniej", CreatorId = BonkusId, Count = 4,
@@ -117,6 +118,33 @@ public static class Demo
                 if (Theme.Name != "forest") sh.W.ApplyTheme("forest"); // przebudowa okna — nowe okno wróci tutaj i przejdzie na kanał
                 else sh.Go(Eg, Ogolne);
                 break;
+            // ── 6.4 ──
+            case "most": sh.Go(Eg, Granie); break; // kanał połączony z Discordem: wiadomości z Discorda + znaczek w nagłówku
+            case "srvmost": // ustawienia serwera → Integracje → Most z Discordem (lista, kroki łączenia)
+                ServerSettingsPage.DemoBridges = new BridgesInfo
+                {
+                    Enabled = true, Status = "ready", InviteUrl = "https://discord.com/oauth2/authorize",
+                    Items = [new BridgeItem { Id = 1, ChannelId = Granie, Guild = "Ekipa z Discorda", Channel = "general", CreatedAt = Format.NowMs() - 3 * 86400000L }],
+                };
+                sh.Go(Eg, Ogolne); sh.ShowServerSettings(Eg, "integrations");
+                break;
+            case "e2ee" or "e2eekod": // szyfrowana rozmowa prywatna: kłódka na pasku rozmowy (e2eekod: okienko z kodem bezpieczeństwa)
+                sh.C.DemoE2ee = Core.E2ee.E2eeStatus.Active;
+                sh.C.Store.Voice[DmOla] = [new VoiceMember { UserId = OlaId }];
+                sh.C.Store.VoiceE2ee.Add(DmOla);
+                sh.C.DemoSpeaker = OlaId;
+                sh.Go(0, DmOla);
+                sh.StartCall(DmOla);
+                break;
+            case "setprofil": // ustawienia → Mój profil → wygląd profilu (ramka, efekt, kolory, wizytówka)
+                SettingsPage.DemoShowcase = new ShowcaseOptions
+                {
+                    Games = [new ShowcaseGame { Name = "Minecraft", Hours = 38 }, new ShowcaseGame { Name = "Rocket League", Hours = 7 }],
+                    Clips = [new ShowcaseClip { Mid = 1010, Name = "baza-timelapse.mp4", ChannelId = Ogolne, At = Format.NowMs() - 86400000 }],
+                };
+                SettingsPage.DemoScrollLook = true;
+                sh.Go(Eg, Ogolne); sh.ShowSettings("profile");
+                break;
             case "dmcall":
                 sh.C.Store.Voice[DmOla] = [new VoiceMember { UserId = OlaId, Video = true }];
                 sh.C.DemoSpeaker = OlaId;
@@ -153,16 +181,31 @@ public static class Demo
     {
         var me = Usr(MeId, "luisboon", "#ffb98f", "online");
         me.Staff = true; me.IsAdmin = true;
+        // 6.4: profil jak z Nitro — ramki, kolory karty, efekt, wizytówka
+        me.Decor = "sluchawki";
+        me.ProfileTheme = ["#3fc1d9", "#1d3f8f"];
+        me.ProfileFx = "babelki";
+        me.Showcase = [new ShowcaseTile { K = "game", Name = "Minecraft", Hours = 38 }, new ShowcaseTile { K = "text", T = "robię GibCorda 🛠️" }];
         var ola = Usr(OlaId, "Ola", "#9fe3d5", "online");
         ola.Activity = new Activity { Type = "spotify", Title = "Dziś późno pójdę spać", Artists = J(new[] { "Kwiat Jabłoni" }), DurationMs = 208000, ProgressMs = 102000, IsPlaying = true, At = Format.NowMs() };
         ola.Bio = "rysuję, gram, śpię. w tej kolejności";
         ola.Pronouns = "ona/jej";
+        ola.Decor = "zorza";
+        ola.ProfileTheme = ["#ff9a62", "#8f3a8a"];
+        ola.ProfileFx = "konfetti";
+        ola.Showcase =
+        [
+            new ShowcaseTile { K = "game", Name = "Stardew Valley", Hours = 112 }, new ShowcaseTile { K = "spotify" },
+            new ShowcaseTile { K = "clip", Mid = 1010, Name = "moja-wyspa.mp4", ChannelId = Ogolne, Width = 1280, Height = 720, Preview = "LZD8eGtR0}R-o}buayjZ0}Wp=xoJ" },
+        ];
         var kuba = Usr(KubaId, "Kuba", "#c7b3ff", "online");
         kuba.Game = J(new { name = "Minecraft", since = Format.NowMs() - 25 * 60000 });
+        kuba.Decor = "korona";
         var users = new Dictionary<long, User>
         {
             [MeId] = me, [OlaId] = ola, [KubaId] = kuba,
-            [BonkusId] = Usr(BonkusId, "bonkus", "#ffd27a", "idle"),
+            [BonkusId] = Usr(BonkusId, "bonkus", "#ffd27a", "idle").With(u => u.Decor = "neon"),
+            [DiscordId] = Usr(DiscordId, "Discord", "#5865f2", "offline", false).With(u => u.Bot = "webhook"), // 6.4: konto systemowe mostu
             [MajaId] = Usr(MajaId, "Maja", "#f4a3b8", "offline", false),
             [BartekId] = Usr(BartekId, "Bartek", "#a3c9f4", "offline", false),
         };
@@ -177,7 +220,7 @@ public static class Demo
             Channels =
             [
                 Ch(Ogolne, Eg, "ogólne", 1, 0, last: 1020, topic: "Wszystko, co nie pasuje gdzie indziej"),
-                Ch(Memy, Eg, "memy", 1, 1, last: 2000), Ch(Granie, Eg, "granie", 1, 2, last: 500), Ch(Nauka, Eg, "nauka", 1, 3, last: 400),
+                Ch(Memy, Eg, "memy", 1, 1, last: 2000), Ch(Granie, Eg, "granie", 1, 2, last: 6010, topic: "Wspólny kanał z serwerem na Discordzie").With(c => c.Bridge = new ChannelBridge { Guild = "Ekipa z Discorda", Channel = "general" }), Ch(Nauka, Eg, "nauka", 1, 3, last: 400),
                 Ch(Pogaduchy, Eg, "Pogaduchy", 2, 4, "voice"), Ch(GranieV, Eg, "Granie", 2, 5, "voice"),
             ],
             Members = [Mem(MeId, 1), Mem(OlaId, 1), Mem(KubaId, 2), Mem(BonkusId, 2), Mem(MajaId), Mem(BartekId)],
@@ -190,7 +233,7 @@ public static class Demo
         {
             Me = me, Users = users, Servers = [eg, gc, sz, mc],
             Dms = [new Dm { Id = DmOla, UserIds = [MeId, OlaId], LastMessageId = 3007 }, new Dm { Id = 201, UserIds = [MeId, KubaId], LastMessageId = 3100 }, new Dm { Id = 202, Type = "group", Name = "Sobota 🎮", UserIds = [MeId, OlaId, KubaId, BonkusId], LastMessageId = 2500 }],
-            Reads = new() { [Ogolne] = 1007, [Memy] = 1990, [Granie] = 500, [Nauka] = 400, [300] = 9, [301] = 5, [302] = 40, [DmOla] = 3007, [201] = 3000, [202] = 2500 },
+            Reads = new() { [Ogolne] = 1007, [Memy] = 1990, [Granie] = 6010, [Nauka] = 400, [300] = 9, [301] = 5, [302] = 40, [DmOla] = 3007, [201] = 3000, [202] = 2500 },
             Voice = new()
             {
                 [Pogaduchy] = [new VoiceMember { UserId = MeId }, new VoiceMember { UserId = OlaId }, new VoiceMember { UserId = KubaId, Muted = true }],
@@ -302,6 +345,23 @@ public static class Demo
             T(4002, OlaId, "ja się piszę! drużyny po 2?", now - 3 * 60000),
             T(4003, KubaId, "biorę <@2> do drużyny 😎", now - 2 * 60000 - 30000),
             T(4004, OlaId, "deal. start 18:00?", now - 2 * 60000),
+        ];
+    }
+
+    /// <summary>6.4: kanał z mostem — wiadomości z Discorda (autor: konto „Discord”, nazwa i awatar w ext) przeplatane z GibCordem.</summary>
+    static List<Message> BridgeMessages(long now)
+    {
+        Message Dc(long id, string name, string content, long at) { var m = Msg(id, Granie, DiscordId, content, at); m.Ext = new MessageExt { Src = "discord", Name = name }; return m; }
+        return
+        [
+            Msg(6000, Granie, DiscordId, "Most z Discordem połączony: #granie ⇄ #general (Ekipa z Discorda).", now - 50 * 60000),
+            Dc(6001, "Kasia_PL", "siema z discorda! 👋 widzicie mnie?", now - 20 * 60000),
+            Dc(6002, "Kasia_PL", "bo u nas na #general wszystko przychodzi", now - 20 * 60000 + 8000),
+            Msg(6003, Granie, OlaId, "widzimy! i to z Twoim nickiem 😄", now - 19 * 60000),
+            Dc(6004, "Tomek", "to gramy dziś w rocket league? ja mogę od 19", now - 12 * 60000),
+            Dc(6005, "Kasia_PL", "ja też 🙋‍♀️", now - 11 * 60000).With(m => m.Reactions = [new Reaction { Emoji = "👍", UserIds = [OlaId, KubaId] }]),
+            Msg(6006, Granie, KubaId, "wbijam, zakładam pokój o 19:05", now - 9 * 60000).With(m => m.ReplyTo = new ReplyRef { Id = 6004, AuthorId = DiscordId, Content = "to gramy dziś w rocket league? ja mogę od 19" }),
+            Msg(6010, Granie, MeId, "super, w końcu obie ekipy w jednym miejscu 🎉", now - 2 * 60000),
         ];
     }
 

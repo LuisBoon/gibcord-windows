@@ -193,6 +193,8 @@ public sealed class MainWindow : Window
         Toasts.OpenClip = path => Dq.TryEnqueue(() => { BringToFront(); if (CurrentShell is { } sh) Ui.ClipEditor.Show(sh, path); });
         Toasts.OpenAccount = (acc, cid) => Dq.TryEnqueue(async () => { BringToFront(); await SwitchAccount(acc); if (cid != 0) OpenFromNotification(cid); });
         Client.Voice.Options = App.Prefs.Voice;
+        Client.E2eeKeys = new DpapiE2eeKeyStore(App.DataDir); // 6.4: klucz urządzenia do szyfrowanych rozmów — zaszyfrowany kluczem konta Windows
+        Client.Diag += msg => App.Log(msg);
         Screen = new ScreenShare(Client);
         Cam = new Camera(Client);
         Voice = new VoiceHost(Client, Dq, Screen, Cam);
@@ -797,7 +799,7 @@ public sealed class MainWindow : Window
     {
         try
         {
-            await Task.Delay(Options.View is "switcher" or "profile" or "emoji" or "overlay" or "adminmail" or "imgedit" ? 3500 : 2500);
+            await Task.Delay(Options.View is "switcher" or "profile" or "profil64" or "emoji" or "overlay" or "adminmail" or "imgedit" or "setprofil" ? 3500 : 2500);
             if (Options.WheelTest && _shell?.CurrentChat is { } wch)
             {
                 var smooth = await WheelProbe(wch);
@@ -822,7 +824,8 @@ public sealed class MainWindow : Window
                 App.Log($"Ruch: wystartowało animacji: {Ui.Motion.Started}");
             }
             if (Options.View == "switcher") _shell?.OpenSwitcher();
-            if (Options.View == "profile") _shell?.ShowProfileDemo();
+            if (Options.View is "profile" or "profil64") _shell?.ShowProfileDemo();
+            if (Options.View == "e2eekod" && _shell is { } esh) Ui.E2eeUi.ShowInfo(esh, esh.ChannelId); // 6.4: okienko z kodem bezpieczeństwa
             if (Options.View == "emoji") _shell?.ShowPickerDemo();
             if (Options.View == "menu") _shell?.DemoMenu();
             if (Options.View == "confirm") _shell?.DemoConfirm();
@@ -834,7 +837,7 @@ public sealed class MainWindow : Window
                 ov.Notify("Ola · #ogólne · Ekipa Gibka", "wbijacie dziś na Minecrafta? 🎮");
                 ov.Notify("Kuba", "zaraz będę, robię herbatę");
             }
-            if (Options.View is "switcher" or "profile" or "emoji" or "overlay" or "menu" or "confirm" or "screenpick" or "fields" or "dropdown" or "calendar" or "timepick" or "files") await Task.Delay(2500);
+            if (Options.View is "switcher" or "profile" or "profil64" or "e2eekod" or "emoji" or "overlay" or "menu" or "confirm" or "screenpick" or "fields" or "dropdown" or "calendar" or "timepick" or "files") await Task.Delay(2500);
             if (Options.View == "tray") { Tray.DemoMenu(this); await Task.Delay(1500); }
             // własne okienka leżą w samym oknie (wchodzą na zrzut z przyciemnieniem); menu i listy rozwijane — w warstwie wyskakujących
             UIElement target = _root;
