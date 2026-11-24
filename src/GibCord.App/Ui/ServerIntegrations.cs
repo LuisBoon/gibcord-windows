@@ -4,13 +4,17 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace GibCord.App.Ui;
 
-/// <summary>6.4: ustawienia serwera → Integracje: boty na serwerze (usuwanie) i webhooki kanałów (adres do wklejenia w inny program).</summary>
+/// <summary>6.4: ustawienia serwera → Integracje: most z Discordem (Bridge.cs), boty na serwerze (usuwanie) i webhooki kanałów (adres do wklejenia w inny program).</summary>
 public sealed partial class ServerSettingsPage
 {
     async void Integrations()
     {
         var srv = Srv!;
-        Title("Integracje", "Boty i webhooki tego serwera. Webhook to adres, pod który inny program (np. panel serwera, sklep, alarm) wysyła wiadomości na kanał.");
+        Title("Integracje", "Most z Discordem, boty i webhooki tego serwera. Webhook to adres, pod który inny program (np. panel serwera, sklep, alarm) wysyła wiadomości na kanał.");
+        // 6.4: most z Discordem (na górze — wczytuje się z serwera, miejsce rezerwujemy od razu)
+        var bridgeHost = new ContentControl { HorizontalContentAlignment = HorizontalAlignment.Stretch };
+        _body.Add(bridgeHost);
+        bridgeHost.Content = await BridgeCard(srv);
         // boty
         var bots = srv.Members.Where(m => S.U(m.UserId)?.Bot == "bot").ToList();
         var bl = new StackPanel { Spacing = 8 };
@@ -53,7 +57,7 @@ public sealed partial class ServerSettingsPage
         wl.Add(hooks);
         _body.Add(Card(U.T("WEBHOOKI", 11, U.Bold, Theme.Mu2), wl,
             U.T("Przykład: curl -X POST -H \"Content-Type: application/json\" -d '{\"content\":\"Kopia gotowa\"}' ADRES_WEBHOOKA", 11.5, null, Theme.Mu2, wrap: true).With(t => t.FontFamily = Theme.Mono)));
-        foreach (var c in texts)
+        foreach (var c in _sh.C.Offline ? new List<Channel>() : texts) // tryb pokazowy: bez zapytań do serwera
         {
             List<WebhookInfo> list;
             try { list = await Api.GetWebhooks(c.Id); } catch { continue; }

@@ -50,6 +50,7 @@ public sealed partial class ServerSettingsPage : Grid
     void OnChange(StoreChange c)
     {
         if (c.Kind is ChangeKind.Servers && Srv is null) { _sh.CloseServerSettings(); return; }
+        OnBridgeChange(c); // 6.4: kanał połączył się z Discordem
         // zmiany serwera z innych miejsc (albo potwierdzenie naszej) — przerysuj listy, ale nie formularze w trakcie pisania
         // edytor roli z niezapisanymi zmianami nie przerysowuje się sam (zapis i tak odświeża widok)
         if (_section == "roles" && _role is not null) return;

@@ -289,7 +289,8 @@ public sealed partial class ChatView : Grid, IDisposable
         var g = new Grid().Cols("auto", "auto", "*", "auto");
         if (Ch is { } c)
         {
-            g.Add(U.T("#", 20, U.Semi, Theme.Mu).With(t => t.Margin = U.Th(0, 0, 8, 2)).At(0, 0), U.T(c.Name, 15, U.Bold).With(t => { t.MaxWidth = 300; t.Tip(c.Name); }).At(0, 1));
+            var title = U.H(0, U.T(c.Name, 15, U.Bold).With(t => { t.MaxWidth = 300; t.Tip(c.Name); }), BridgeUi.HeaderChip(c)); // 6.4: „⇄ Discord · #general”
+            g.Add(U.T("#", 20, U.Semi, Theme.Mu).With(t => t.Margin = U.Th(0, 0, 8, 2)).At(0, 0), title.At(0, 1));
             if (!string.IsNullOrWhiteSpace(c.Topic))
             {
                 var topic = U.T(c.Topic!.Replace('\n', ' '), 12.5, null, Theme.Mu);
@@ -390,7 +391,7 @@ public sealed partial class ChatView : Grid, IDisposable
     }
 
     static bool Groups(Message? prev, Message m, bool daySep) =>
-        prev is not null && !daySep && !prev.IsSystem && !m.IsSystem && prev.AuthorId == m.AuthorId && m.ReplyTo is null
+        prev is not null && !daySep && !prev.IsSystem && !m.IsSystem && prev.SameSender(m) && m.ReplyTo is null
         && m.CreatedAt - prev.CreatedAt < 7 * 60_000 && !m.HasCard && !prev.HasCard;
 
     /// <summary>Pełne odświeżenie (albo dopisanie starszych na górze bez skakania).</summary>

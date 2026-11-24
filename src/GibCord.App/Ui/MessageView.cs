@@ -204,24 +204,26 @@ public sealed partial class MessageView : Grid
         }
         if (!row.Grouped)
         {
+            var dc = m.FromDiscord ? m.Ext! : null; // 6.4: wiadomość z Discorda (most) — nazwa i awatar z Discorda
             if (!compact)
             {
-                var av = new Avatar(40).Set(S, Api, m.AuthorId, Srv);
+                var av = dc is not null ? new Avatar(40).SetRaw(dc.Name ?? "Discord", BridgeUi.Blurple, Api.Abs(dc.Avatar), null) : new Avatar(40) { ShowDecor = true }.Set(S, Api, m.AuthorId, Srv);
                 av.VerticalAlignment = VerticalAlignment.Top;
                 av.Margin = U.Th(0, 2, 0, 0);
-                av.Tapped += (_, e) => { e.Handled = true; _v.Sh.ShowProfile(m.AuthorId, av); };
-                av.RightTapped += (_, e) => { e.Handled = true; UserMenu.Build(_v.Sh, m.AuthorId, Srv, _v, av).ShowAt(av, e.GetPosition(av)); };
+                av.Tapped += (_, e) => { e.Handled = true; if (dc is not null) BridgeUi.ShowAuthor(_v.Sh, dc, _v.Ch, av); else _v.Sh.ShowProfile(m.AuthorId, av); };
+                av.RightTapped += (_, e) => { e.Handled = true; if (dc is null) UserMenu.Build(_v.Sh, m.AuthorId, Srv, _v, av).ShowAt(av, e.GetPosition(av)); };
                 grid.Add(av.At(r, 0));
             }
-            var name = U.T(S.NameOf(m.AuthorId, Srv), 14.5, U.Bold, U.B(S.NameColor(m.AuthorId, Srv)));
-            name.Tapped += (_, e) => { e.Handled = true; _v.Sh.ShowProfile(m.AuthorId, name); };
-            name.RightTapped += (_, e) => { e.Handled = true; UserMenu.Build(_v.Sh, m.AuthorId, Srv, _v, name).ShowAt(name, e.GetPosition(name)); };
+            var name = U.T(dc is not null ? dc.Name ?? "Discord" : S.NameOf(m.AuthorId, Srv), 14.5, U.Bold, dc is not null ? U.B("#c9cdfb") : U.B(S.NameColor(m.AuthorId, Srv)));
+            name.Tapped += (_, e) => { e.Handled = true; if (dc is not null) BridgeUi.ShowAuthor(_v.Sh, dc, _v.Ch, name); else _v.Sh.ShowProfile(m.AuthorId, name); };
+            name.RightTapped += (_, e) => { e.Handled = true; if (dc is null) UserMenu.Build(_v.Sh, m.AuthorId, Srv, _v, name).ShowAt(name, e.GetPosition(name)); };
             var head = U.H(8, name);
-            if (S.U(m.AuthorId) is { Staff: true }) head.Add(U.Box(U.T("GC", 9, U.Bold, Theme.OnAccent), U.B("#f2a93b"), 5, U.Th(4, 1)).With(b => b.Tip("Właściciel GibCorda")));
-            if (S.U(m.AuthorId)?.Bot is { } botKind) head.Add(U.Box(U.T(botKind == "webhook" ? "WEBHOOK" : "BOT", 9, U.Bold, U.B("#1b1531")), U.B("#7cc7ff"), 5, U.Th(4, 1)).With(b => b.Tip(botKind == "webhook" ? "Wiadomość z innego programu (webhook)" : "Bot — konto sterowane programem"))); // 6.4
-            if (S.RolesOf(Srv, m.AuthorId).FirstOrDefault(x => !string.IsNullOrEmpty(x.Icon) && !x.Icon!.StartsWith('/') && !x.Icon.StartsWith("http")) is { } ri)
+            if (dc is not null) head.Add(BridgeUi.Tag());
+            if (dc is null && S.U(m.AuthorId) is { Staff: true }) head.Add(U.Box(U.T("GC", 9, U.Bold, Theme.OnAccent), U.B("#f2a93b"), 5, U.Th(4, 1)).With(b => b.Tip("Właściciel GibCorda")));
+            if (dc is null && S.U(m.AuthorId)?.Bot is { } botKind) head.Add(U.Box(U.T(botKind == "webhook" ? "WEBHOOK" : "BOT", 9, U.Bold, U.B("#1b1531")), U.B("#7cc7ff"), 5, U.Th(4, 1)).With(b => b.Tip(botKind == "webhook" ? "Wiadomość z innego programu (webhook)" : "Bot — konto sterowane programem"))); // 6.4
+            if (dc is null && S.RolesOf(Srv, m.AuthorId).FirstOrDefault(x => !string.IsNullOrEmpty(x.Icon) && !x.Icon!.StartsWith('/') && !x.Icon.StartsWith("http")) is { } ri)
                 head.Add(U.T(ri.Icon!, 13).With(t => t.Tip(ri.Name)));
-            if (S.U(m.AuthorId) is { BirthdayToday: true }) head.Add(U.T("🎂", 12).With(t => t.Tip("Dziś ma urodziny!")));
+            if (dc is null && S.U(m.AuthorId) is { BirthdayToday: true }) head.Add(U.T("🎂", 12).With(t => t.Tip("Dziś ma urodziny!")));
             if (m.PinnedAt is not null) head.Add(U.I("\uE718", 11, Theme.Mu2).With(i => i.Tip("Przypięta")));
             if (!compact)
             {
