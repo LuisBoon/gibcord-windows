@@ -411,8 +411,13 @@ public sealed partial class SettingsPage : Grid
                 };
                 if (_sh.C.Info?.Has("profile2") != false)
                 {
-                    body["decor"] = look.Decor; body["profileFx"] = look.Fx; body["profileTheme"] = look.Theme;
-                    body["showcase"] = look.Showcase.Select(t => t.ToPatch()).ToList();
+                    // tylko to, co się zmieniło — błąd w jednym polu (np. klip, którego już nie ma) nie blokuje zapisu reszty profilu
+                    var cur = S.Me;
+                    if (look.Decor != cur.Decor) body["decor"] = look.Decor;
+                    if (look.Fx != cur.ProfileFx) body["profileFx"] = look.Fx;
+                    if (!SameList(look.Theme, ProfileLook.ValidTheme(cur.ProfileTheme) ? cur.ProfileTheme : null)) body["profileTheme"] = look.Theme;
+                    var sc = look.Showcase.Select(t => Json.Serialize(t.ToPatch())).ToList();
+                    if (!sc.SequenceEqual((cur.Showcase ?? []).Select(t => Json.Serialize(t.ToPatch())))) body["showcase"] = look.Showcase.Select(t => t.ToPatch()).ToList();
                 }
                 var u = await Api.PatchMe(body);
                 S.Apply(new GatewayEvent("user_update", System.Text.Json.JsonSerializer.SerializeToElement(new { user = u }, Json.Options)));
@@ -457,6 +462,8 @@ public sealed partial class SettingsPage : Grid
         _body.MaxWidth = 1100;
         _body.Add(grid);
     }
+
+    static bool SameList(List<string>? a, List<string>? b) => a is null ? b is null : b is not null && a.SequenceEqual(b, StringComparer.OrdinalIgnoreCase);
 
     // ───────────────────────── Konto ─────────────────────────
 

@@ -171,6 +171,7 @@ public sealed class Shell : Grid
         _talk.Stop();
         _refresh.Stop();
         _soundTimer?.Stop();
+        _zgUnload?.Stop(); _zg?.Close(); _zg = null; // gra (WebView2 z kluczem sesji) nie może przeżyć wylogowania / zmiany konta
         _voice?.Dispose(); _voice = null;
         _chat?.Dispose(); _chat = null;
         _thread?.Dispose(); _thread = null;
@@ -525,12 +526,15 @@ public sealed class Shell : Grid
     Grid _center = null!;
     readonly Border _zgHost = new() { Width = 460, BorderBrush = Theme.Line, BorderThickness = U.Th(1, 0, 0, 0), Visibility = Visibility.Collapsed };
     ZagrodaPanel? _zg;
+    Microsoft.UI.Dispatching.DispatcherQueueTimer? _zgUnload;
     public bool ZagrodaOpen => _zgHost.Visibility == Visibility.Visible;
     public void OpenZagroda()
     {
+        _zgUnload?.Stop();
         _zg ??= new ZagrodaPanel(this);
         _zgHost.Child ??= _zg;
         _zgHost.Visibility = Visibility.Visible;
+        _zg.Show();
         _zg.Start();
         if (_zg.Full) ZagrodaFull(true);
         Motion.SlideIn(_zgHost, new System.Numerics.Vector3(40, 0, 0));
@@ -541,8 +545,34 @@ public sealed class Shell : Grid
     {
         if (_zg?.Full == true) { ZagrodaFull(false); _zg.SetFull(true); } // następnym razem otworzy się tak samo
         _zgHost.Visibility = Visibility.Collapsed;
+        // ukryta gra nie chodzi w tle: od razu uśpiona, po minucie zamknięta całkiem (ponowne otwarcie wczyta ją od nowa)
+        if (_zg is not null)
+        {
+            _zg.Hide();
+            if (_zgUnload is null)
+            {
+                _zgUnload = DispatcherQueue.CreateTimer();
+                _zgUnload.Interval = TimeSpan.FromMinutes(1);
+                _zgUnload.IsRepeating = false;
+                _zgUnload.Tick += (_, _) =>
+                {
+                    if (ZagrodaOpen || _zg is null) return;
+                    _zgHost.Child = null;
+                    _zg.Close();
+                    _zg = null;
+                    App.Log("Zagroda: panel zamknięty po minucie w ukryciu");
+                };
+            }
+            _zgUnload.Start();
+        }
         _chat?.RefreshHeader();
         _rail.Refresh();
+    }
+    /// <summary>Okno schowane do zasobnika / pokazane: otwarta gra śpi razem z oknem (radio gra dalej — ma własny WebView2).</summary>
+    public void WindowVisible(bool visible)
+    {
+        if (_zg is null || !ZagrodaOpen) return;
+        if (visible) _zg.Show(); else _zg.Hide();
     }
     public void ToggleZagroda() { if (ZagrodaOpen && _zg?.Full == true) CloseZagroda(); else { OpenZagroda(); ZagrodaFull(true); } }
     public void ZagrodaFull(bool on)

@@ -75,7 +75,7 @@ public sealed class MainWindow : Window
             TitleBar.SetActive(active);
             if (active && Client is not null && Client.ActiveChannelId != 0) Toasts.ClearFor(Client.ActiveChannelId);
         };
-        AppWindow.Changed += (_, e) => { if (e.DidVisibilityChange) Client?.SetVisible(AppWindow.IsVisible); };
+        AppWindow.Changed += (_, e) => { if (e.DidVisibilityChange) { Client?.SetVisible(AppWindow.IsVisible); _shell?.WindowVisible(AppWindow.IsVisible); } };
         AppWindow.Closing += (_, e) =>
         {
             SaveBounds();
@@ -85,6 +85,7 @@ public sealed class MainWindow : Window
                 AppWindow.Hide();
                 Client?.SetWindowActive(false);
                 Client?.SetVisible(false);
+                _shell?.WindowVisible(false); // 6.4 szlif: gra w ukrytym oknie też śpi
                 return;
             }
             Quit();

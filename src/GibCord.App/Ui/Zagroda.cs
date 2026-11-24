@@ -81,6 +81,32 @@ public sealed class ZagrodaPanel : Grid
         }
     }
 
+    /// <summary>
+    /// Panel zamknięty: ukryta gra nie może dalej chodzić w tle (na produkcji ukryty panel wysyłał ~1 zapytanie/s przez cały dzień).
+    /// Ukrycie samego WebView2 daje stronie „visibilitychange → hidden”, a TrySuspendAsync zamraża jej skrypty i liczniki.
+    /// Po minucie w ukryciu powłoka zamyka panel całkiem (<see cref="Close"/>). Radio ma własny WebView2 — gra dalej.
+    /// </summary>
+    public async void Hide()
+    {
+        _web.Visibility = Visibility.Collapsed;
+        try { if (_web.CoreWebView2 is { } core) await core.TrySuspendAsync(); }
+        catch (Exception ex) { App.Log("Zagroda: uśpienie: " + ex.Message); }
+    }
+
+    /// <summary>Ponowne otwarcie w ciągu minuty: gra budzi się tam, gdzie była.</summary>
+    public void Show()
+    {
+        _web.Visibility = Visibility.Visible;
+        try { _web.CoreWebView2?.Resume(); } catch { }
+    }
+
+    /// <summary>Koniec: zamyka WebView2 (proces strony gry znika z pamięci).</summary>
+    public void Close()
+    {
+        _started = false;
+        try { _web.Close(); } catch (Exception ex) { App.Log("Zagroda: zamknięcie: " + ex.Message); }
+    }
+
     /// <summary>Zdarzenie z serwera dla gry (zg_*): gra pobierze świeży stan.</summary>
     public void Notify(string type)
     {
