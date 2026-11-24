@@ -142,9 +142,14 @@ public sealed record E2eeBox(string Iv, string Ct);
 /// <summary>Klucz rozmowy z numerem (0–255, w kółko) — numer mówi LiveKit, którym kluczem zaszyfrowano ramkę.</summary>
 public sealed record E2eeKey(string Key, int Index)
 {
-    /// <summary>Miejsce w pierścieniu kluczy LiveKit (16 miejsc, tak samo jak na stronie: indeks % 16).</summary>
+    /// <summary>
+    /// Miejsce w pierścieniu kluczy LiveKit = numer klucza (strona: keyringSize 256, miejsce = numer). LiveKit w .NET (rdzeń w Rust)
+    /// ma najwyżej 255 miejsc (0–254), więc numer 255 nie ma tu swojego miejsca — sami po 254 wracamy do 0 (<see cref="Next"/>).
+    /// </summary>
     public int Slot => Index % RingSize;
-    public const int RingSize = 16;
+    public const int RingSize = 255;
+    /// <summary>Następny numer przy wymianie klucza: 0…254 w kółko (strona uzna 0 po 254 za nowszy — różnica 2 w arytmetyce mod 256).</summary>
+    public static int Next(int index) => (index + 1) % RingSize;
     /// <summary>Bajty podawane do LiveKit: tekst klucza w UTF-8 (strona: ExternalE2EEKeyProvider.setKey(tekst)).</summary>
     public byte[] Material => Encoding.UTF8.GetBytes(Key);
 }

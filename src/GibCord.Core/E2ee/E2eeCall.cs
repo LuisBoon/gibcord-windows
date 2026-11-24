@@ -48,6 +48,8 @@ public sealed class E2eeCall : IDisposable
     public bool IsGroup { get; }
     public E2eeDevice Device { get; }
     public E2eeKey? Key { get; private set; }
+    /// <summary>Kto dał (albo wylosował) obecny klucz — przy sporze o ten sam numer wygrywa mniejsze uid źródła (jak na stronie).</summary>
+    public long KeySource { get; private set; }
     public E2eeStatus Status { get; private set; } = E2eeStatus.Waiting;
     public string? Error { get; private set; }
 
@@ -83,7 +85,7 @@ public sealed class E2eeCall : IDisposable
             _lastRoom = othersAtJoin.Where(u => u != MyUid).ToHashSet();
             if (_lastRoom.Count == 0)
             {
-                SetKey(new E2eeKey(E2eeCrypto.NewCallKey(), 0), switchNow: true);
+                SetKey(new E2eeKey(E2eeCrypto.NewCallKey(), 0), MyUid, switchNow: true);
                 return;
             }
             foreach (var u in _lastRoom) await SendFrame(new { t = "e2ee_send", call = CallId, to = u, fromDev = Device.Dev, kind = "hi" }).ConfigureAwait(false);
@@ -109,16 +111,17 @@ public sealed class E2eeCall : IDisposable
             {
                 // wszyscy wyszli, zanim przyszedł klucz — zaczynamy od nowa sami
                 Note("pokój pusty — własny klucz");
-                SetKey(new E2eeKey(E2eeCrypto.NewCallKey(), 0), switchNow: true);
+                SetKey(new E2eeKey(E2eeCrypto.NewCallKey(), 0), MyUid, switchNow: true);
                 return;
             }
-            // bezpiecznik: nikt w pokoju nie ma klucza (wszyscy o niego prosili) — losuje najmniejsze uid
+            // bezpiecznik: nikt w pokoju nie ma klucza (wszyscy o niego prosili) — losuje najmniejsze uid;
+            // tak samo po 3 prośbach bez odpowiedzi (np. klucz miała osoba, która wyszła) — ta sama zasada co na stronie
             var now = NowMs;
             var allWaiting = others.All(u => _waitingSince.TryGetValue(u, out var t) && now - t < WaitingFor.TotalMilliseconds * 2);
-            if (allWaiting && MyUid < others.Min())
+            if ((allWaiting || _reqTries >= 3) && MyUid < others.Min())
             {
-                Note("wszyscy czekają — losuję klucz");
-                SetKey(new E2eeKey(E2eeCrypto.NewCallKey(), 0), switchNow: true);
+                Note("nikt nie ma klucza — losuję");
+                SetKey(new E2eeKey(E2eeCrypto.NewCallKey(), 0), MyUid, switchNow: true);
                 foreach (var u in others) await SendKeyTo(u, _peerDev.GetValueOrDefault(u)).ConfigureAwait(false);
                 return;
             }
@@ -159,15 +162,21 @@ public sealed class E2eeCall : IDisposable
             if (_disposed || d.Long("call") != CallId || d.Long("from") is not long from || from == MyUid) return;
             var fromDev = d.Str("fromDev") ?? "";
             if (fromDev.Length != 16) return;
+            if (d.Str("dev") is { Length: > 0 } toDev && toDev != Device.Dev) return; // do innego mojego urządzenia
             var kind = d.Str("kind");
             if (kind is "hi" or "req")
             {
+                var known = _peerDev.GetValueOrDefault(from) == fromDev;
                 _peerDev[from] = fromDev;
-                _waitingSince[from] = NowMs;
                 _lastRoom.Add(from); // jest w pokoju (voice_state mogło jeszcze nie dojść)
-                var asks = _asks[from] = _asks.GetValueOrDefault(from) + 1;
-                if (Key is null) return;
-                if (IAmLeader() || (kind == "req" && asks >= 2)) await SendKeyTo(from, fromDev).ConfigureAwait(false);
+                // „hi” zaadresowane do mnie = odpowiedź „jestem, to moje urządzenie” (osoba ma klucz) — nie prośba
+                var direct = kind == "hi" && d.Str("dev") is { Length: > 0 };
+                if (!direct) _waitingSince[from] = NowMs;
+                var asks = _asks[from] = kind == "req" ? _asks.GetValueOrDefault(from) + 1 : 0;
+                if (Key is not null && (IAmLeader() || asks >= 2)) { if (!direct || !known) await SendKeyTo(from, fromDev).ConfigureAwait(false); }
+                else if (kind == "hi" && !direct && !known)
+                    // nie jestem liderem: odpowiadam „hi” na urządzenie nadawcy — każdy zna urządzenia wszystkich (kod bezpieczeństwa)
+                    await SendFrame(new { t = "e2ee_send", call = CallId, to = from, dev = fromDev, fromDev = Device.Dev, kind = "hi" }).ConfigureAwait(false);
                 return;
             }
             if (kind != "key" || d.Str("dev") != Device.Dev) return;
@@ -183,11 +192,11 @@ public sealed class E2eeCall : IDisposable
             _waitingSince.Remove(from);
             _asks.Remove(from);
             var nk = new E2eeKey(k.Key, k.Index);
-            if (Key is null) { SetKey(nk, switchNow: true); return; }
+            if (Key is null) { SetKey(nk, from, switchNow: true); return; }
             if (Key.Key == nk.Key && Key.Index == nk.Index) return;
             var ahead = (nk.Index - Key.Index + 256) % 256;
-            // nowszy klucz (po wymianie) — albo spór o ten sam numer: wygrywa klucz od osoby z mniejszym uid
-            if ((ahead is > 0 and < 128) || (ahead == 0 && from < MyUid)) SetKey(nk, switchNow: true);
+            // nowszy klucz (po wymianie) — albo spór o ten sam numer: wygrywa klucz od osoby z mniejszym uid (jak na stronie)
+            if ((ahead is > 0 and < 128) || (ahead == 0 && from < KeySource)) SetKey(nk, from, switchNow: true);
         }
         catch (Exception ex) { Note("wiadomość: " + ex.Message); }
         finally { _gate.Release(); }
@@ -204,11 +213,18 @@ public sealed class E2eeCall : IDisposable
             var left = _lastRoom.Where(u => !now.Contains(u)).ToList();
             _lastRoom = now;
             foreach (var u in left) { _waitingSince.Remove(u); _asks.Remove(u); _peerDev.Remove(u); }
+            if (Key is null && now.Count == 0 && left.Count > 0)
+            {
+                Note("wszyscy wyszli — własny klucz");
+                SetKey(new E2eeKey(E2eeCrypto.NewCallKey(), 0), MyUid, switchNow: true);
+                return;
+            }
             if (left.Count == 0 || !IsGroup || Key is null || now.Count == 0 || !IAmLeader()) return;
-            var next = new E2eeKey(E2eeCrypto.NewCallKey(), (Key.Index + 1) % 256);
+            var next = new E2eeKey(E2eeCrypto.NewCallKey(), E2eeKey.Next(Key.Index));
             Note($"wymiana klucza po wyjściu {string.Join(",", left)} → {next.Index}");
             // nowy klucz: od razu do odszyfrowania, szyfrować nim zaczynam dopiero, gdy reszta go dostanie
             Key = next;
+            KeySource = MyUid;
             KeyReady?.Invoke(next, false);
             foreach (var u in now) await SendKeyTo(u, _peerDev.GetValueOrDefault(u)).ConfigureAwait(false);
             _switchTimer?.Dispose();
@@ -228,9 +244,10 @@ public sealed class E2eeCall : IDisposable
         return keyed.All(u => u > MyUid);
     }
 
-    void SetKey(E2eeKey k, bool switchNow)
+    void SetKey(E2eeKey k, long source, bool switchNow)
     {
         Key = k;
+        KeySource = source;
         Status = E2eeStatus.Active;
         Error = null;
         _reqTimer?.Dispose(); _reqTimer = null;

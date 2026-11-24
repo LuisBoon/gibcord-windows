@@ -69,7 +69,9 @@ public class E2eeCryptoTests
         Assert.Equal(4, raw[0]);
         using var back = E2eeCrypto.ImportPrivate(E2eeCrypto.ExportPrivate(key));
         Assert.Equal(E2eeCrypto.PublicRaw(key), E2eeCrypto.PublicRaw(back));
-        Assert.Equal(3, new E2eeKey(k, 19).Slot);
+        Assert.Equal(19, new E2eeKey(k, 19).Slot); // miejsce = numer (strona: keyringSize 256)
+        Assert.Equal(0, E2eeKey.Next(254));        // 255 nie mieści się w pierścieniu LiveKit .NET — po 254 wracamy do 0
+        Assert.Equal(4, E2eeKey.Next(3));
         Assert.Equal(System.Text.Encoding.UTF8.GetBytes(k), new E2eeKey(k, 0).Material);
     }
 
@@ -200,6 +202,7 @@ public class E2eeProtocolTests
         await h.RoomChanged();
         await c.Start([5, 3]);
         Assert.True(await Until(() => c.Key == a.Key), "C dostaje ten sam klucz");
+        Assert.True(await Until(() => c.PeerDevice(5) == a.Device.Dev && c.PeerDevice(3) == b.Device.Dev), "C zna urządzenia obu osób (odpowiedź „hi” od nie-lidera)");
         var oldKey = a.Key!;
         Assert.Equal(await a.SafetyCode(), await b.SafetyCode());
         Assert.Equal(await a.SafetyCode(), await c.SafetyCode());
