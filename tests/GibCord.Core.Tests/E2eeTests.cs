@@ -69,9 +69,13 @@ public class E2eeCryptoTests
         Assert.Equal(4, raw[0]);
         using var back = E2eeCrypto.ImportPrivate(E2eeCrypto.ExportPrivate(key));
         Assert.Equal(E2eeCrypto.PublicRaw(key), E2eeCrypto.PublicRaw(back));
-        Assert.Equal(19, new E2eeKey(k, 19).Slot); // miejsce = numer (strona: keyringSize 256)
-        Assert.Equal(0, E2eeKey.Next(254));        // 255 nie mieści się w pierścieniu LiveKit .NET — po 254 wracamy do 0
+        Assert.Equal(7, new E2eeKey(k, 7).Slot); // miejsce w pierścieniu = numer (jak na stronie)
+        Assert.Equal(0, E2eeKey.Next(15));      // umowa 24.11: numery 0–15 w kółko
         Assert.Equal(4, E2eeKey.Next(3));
+        Assert.True(E2eeKey.Newer(0, 15));      // po 15 jest 0
+        Assert.True(E2eeKey.Newer(5, 3));
+        Assert.False(E2eeKey.Newer(3, 5));
+        Assert.False(E2eeKey.Newer(4, 4));
         Assert.Equal(System.Text.Encoding.UTF8.GetBytes(k), new E2eeKey(k, 0).Material);
     }
 
@@ -342,8 +346,8 @@ public sealed class E2eeLiveTests
         await using var b = New();
         var tag = Guid.NewGuid().ToString("N")[..6];
         const string pass = "Haslo-testowe-1234";
-        Assert.NotNull((await a.Register("wa" + tag, pass, "Aplikacja A", $"wa{tag}@example.com")).Token);
-        Assert.NotNull((await b.Register("wb" + tag, pass, "Aplikacja B", $"wb{tag}@example.com")).Token);
+        await LiveUser.Register(a, "wa" + tag, "Aplikacja A");
+        await LiveUser.Register(b, "wb" + tag, "Aplikacja B");
         await a.Start(); await b.Start();
         async Task Until(Func<bool> ok, string what, int ms = 10000)
         {
@@ -352,6 +356,9 @@ public sealed class E2eeLiveTests
             Assert.Fail("Nie doczekano się: " + what);
         }
         await Until(() => a.Store.Loaded && b.Store.Loaded && a.Status == GatewayStatus.Connected && b.Status == GatewayStatus.Connected, "połączenie");
+        // wspólny serwer — do obcych osób nie da się pisać prywatnie
+        var srv = await a.Api.CreateServer("E2EE " + tag);
+        await b.Api.JoinInvite(await a.Api.CreateInvite(srv.Id));
         var (dm, err) = await a.OpenDm(b.Store.Me.Id);
         Assert.Null(err);
         await Until(() => b.Store.DmById(dm) is not null, "rozmowa u B");
@@ -415,7 +422,7 @@ public sealed class BridgeLiveTests
         var l = new object();
         await using var a = new GibCordClient(new Uri(url), new MemoryTokenStore(), null, x => { lock (l) x(); });
         var tag = Guid.NewGuid().ToString("N")[..6];
-        Assert.NotNull((await a.Register("mw" + tag, "Haslo-testowe-1234", "Most Windows", $"mw{tag}@example.com")).Token);
+        await LiveUser.Register(a, "mw" + tag, "Most Windows");
         await a.Start();
         async Task Until(Func<bool> ok, string what, int ms = 8000)
         {
@@ -473,5 +480,86 @@ public sealed class BridgeLiveTests
         await a.Api.DeleteBridge(items[0].Id);
         await Until(() => a.Store.ChannelById(chan.Id) is { Bridge: null }, "rozłączony most");
         Assert.Empty((await a.Api.GetBridges(srv.Id)).Items);
+    }
+}
+
+/// <summary>Nowe konto na kopii testowej: bez e-maila (nie wlicza się do limitu 5 kont z adresem na godzinę), a gdy serwer wymaga adresu — z adresem.</summary>
+static class LiveUser
+{
+    public static async Task Register(GibCordClient c, string name, string display)
+    {
+        LoginResult r;
+        try { r = await c.Register(name, "Haslo-testowe-1234", display, null); }
+        catch (ApiException ex) when (ex.Status == 400 && ex.Message.Contains("e-mail")) { r = await c.Register(name, "Haslo-testowe-1234", display, name + "@example.com"); }
+        Assert.NotNull(r.Token);
+    }
+}
+
+/// <summary>
+/// 6.4 zgodność ze stroną na żywo: strona (dc-next w headless Chromium) i aplikacja w jednej
+/// szyfrowanej rozmowie prywatnej — raz strona jest liderem, raz aplikacja. Skrypt strony: tools/e2ee-strona/strona-aplikacja.mjs (opis uruchomienia tam);
+/// GC_TEST_INTEROP = katalog wymiany plików, GC_TEST_URL = kopia serwera.
+/// </summary>
+public sealed class WebInteropTests
+{
+    [Fact]
+    public async Task SzyfrowanaRozmowaZeStrona()
+    {
+        var dir = Environment.GetEnvironmentVariable("GC_TEST_INTEROP");
+        var url = Environment.GetEnvironmentVariable("GC_TEST_URL");
+        if (string.IsNullOrEmpty(dir) || string.IsNullOrEmpty(url)) return;
+        static async Task<bool> Until(Func<bool> ok, int ms) { var end = Environment.TickCount64 + ms; while (Environment.TickCount64 < end) { if (ok()) return true; await Task.Delay(100); } return ok(); }
+        Assert.True(await Until(() => File.Exists(Path.Combine(dir, "ready.json")), 60000), "brak ready.json");
+        var ready = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "ready.json"))).RootElement;
+        long dm = ready.GetProperty("dm").GetInt64(), web = ready.GetProperty("web").GetInt64();
+        var l = new object();
+        await using var a = new GibCordClient(new Uri(url), new MemoryTokenStore(), null, x => { lock (l) x(); });
+        var diag = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        a.Diag += m => diag.Enqueue($"{DateTime.Now:HH:mm:ss.fff} {m}");
+        Assert.NotNull((await a.Login(ready.GetProperty("user").GetString()!, ready.GetProperty("pass").GetString()!)).Token);
+        await a.Start();
+        Assert.True(await Until(() => { lock (l) return a.Store.Loaded && a.Status == GatewayStatus.Connected && a.Store.DmById(dm) is not null; }, 15000), "połączenie aplikacji");
+        var o = a.Voice.Options;
+        o.NoiseSuppression = false; o.AutoGain = false; o.EchoCancellation = false; o.AutoSens = false; o.Sens = -60; o.Muted = false; o.Deafened = false;
+        foreach (var phase in new[] { 1, 2 })
+        {
+            if (phase == 1) Assert.True(await Until(() => File.Exists(Path.Combine(dir, "web-in-1.json")), 60000), "strona nie weszła do rozmowy");
+            await a.JoinVoice(dm);
+            Assert.True(await Until(() => a.Voice.State == Voice.VoiceState.Connected && a.Voice.Encrypted && a.E2ee?.Key is not null, 30000),
+                $"faza {phase}: aplikacja bez klucza / połączenia (stan {a.E2ee?.Status}, {a.E2ee?.Error})\n{string.Join("\n", diag)}");
+            if (phase == 1) Assert.True(a.E2ee!.KeySource == web, $"klucz nie od strony (od {a.E2ee.KeySource})\n{string.Join("\n", diag)}"); // klucz od strony (lider)
+            if (phase == 2) File.WriteAllText(Path.Combine(dir, "app-in-2.json"), "{}");
+            using var cts = new CancellationTokenSource();
+            double peak = 0; var heard = false;
+            var speak = Task.Run(async () =>
+            {
+                var buf = new float[480]; long n = 0, frames = 0; var t0 = Environment.TickCount64;
+                while (!cts.IsCancellationRequested)
+                {
+                    for (var i = 0; i < buf.Length; i++, n++) buf[i] = 0.3f * MathF.Sin(2 * MathF.PI * 330 * n / 48000f);
+                    a.Voice.PushMic(buf); frames++;
+                    var due = t0 + frames * 10 - Environment.TickCount64; if (due > 0) await Task.Delay((int)due);
+                }
+            });
+            var listen = Task.Run(async () =>
+            {
+                var buf = new float[480]; long frames = 0; var t0 = Environment.TickCount64;
+                while (!cts.IsCancellationRequested)
+                {
+                    a.Voice.ReadOutput(buf); foreach (var s in buf) peak = Math.Max(peak, Math.Abs(s));
+                    if (peak > 0.02 && a.IsSpeaking(web)) heard = true;
+                    frames++;
+                    var due = t0 + frames * 10 - Environment.TickCount64; if (due > 0) await Task.Delay((int)due);
+                }
+            });
+            // mówimy, aż strona potwierdzi, że nas słyszy (zapisze kod bezpieczeństwa), i słuchamy jej sztucznego mikrofonu
+            await Until(() => heard && File.Exists(Path.Combine(dir, $"web-code-{phase}.json")), 40000);
+            cts.Cancel(); await Task.WhenAll(speak, listen);
+            var code = await a.SafetyCode();
+            File.WriteAllText(Path.Combine(dir, $"app-done-{phase}.json"), JsonSerializer.Serialize(new { key = a.E2ee!.Key!.Key, idx = a.E2ee.Key.Index, heard, peak = Math.Round(peak, 3), code, dbg = a.Voice.E2eeDebug() }));
+            Assert.True(heard, $"faza {phase}: aplikacja nie słyszy strony (szczyt {peak:0.000}; {a.Voice.E2eeDebug()})");
+            await a.LeaveVoice();
+            await Task.Delay(2500);
+        }
     }
 }

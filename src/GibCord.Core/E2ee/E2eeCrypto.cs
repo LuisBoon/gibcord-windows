@@ -139,17 +139,18 @@ public static class E2eeCrypto
 /// <summary>Zaszyfrowane pudełko: {"iv": base64, "ct": base64 (szyfrogram‖tag)}.</summary>
 public sealed record E2eeBox(string Iv, string Ct);
 
-/// <summary>Klucz rozmowy z numerem (0–255, w kółko) — numer mówi LiveKit, którym kluczem zaszyfrowano ramkę.</summary>
+/// <summary>Klucz rozmowy z numerem (umowa 24.11: 0–15 w kółko) — numer mówi LiveKit, którym kluczem zaszyfrowano ramkę.</summary>
 public sealed record E2eeKey(string Key, int Index)
 {
-    /// <summary>
-    /// Miejsce w pierścieniu kluczy LiveKit = numer klucza (strona: keyringSize 256, miejsce = numer). LiveKit w .NET (rdzeń w Rust)
-    /// ma najwyżej 255 miejsc (0–254), więc numer 255 nie ma tu swojego miejsca — sami po 254 wracamy do 0 (<see cref="Next"/>).
-    /// </summary>
+    /// <summary>Miejsce w pierścieniu kluczy LiveKit = numer klucza (pierścień 16 miejsc, jak na stronie: keyringSize 16).</summary>
     public int Slot => Index % RingSize;
-    public const int RingSize = 255;
-    /// <summary>Następny numer przy wymianie klucza: 0…254 w kółko (strona uzna 0 po 254 za nowszy — różnica 2 w arytmetyce mod 256).</summary>
-    public static int Next(int index) => (index + 1) % RingSize;
+    public const int RingSize = 16;
+    /// <summary>Numery kluczy: 0–15 w kółko (umowa 24.11).</summary>
+    public const int Cycle = RingSize;
+    /// <summary>Następny numer przy wymianie klucza: (i+1) % 16.</summary>
+    public static int Next(int index) => (index + 1) % Cycle;
+    /// <summary>Czy numer <paramref name="i"/> jest nowszy niż <paramref name="cur"/> (w kółko: o 1–7 do przodu) — jak e2Newer na stronie.</summary>
+    public static bool Newer(int i, int cur) { var d = ((i - cur) % Cycle + Cycle) % Cycle; return d is > 0 and < Cycle / 2; }
     /// <summary>Bajty podawane do LiveKit: tekst klucza w UTF-8 (strona: ExternalE2EEKeyProvider.setKey(tekst)).</summary>
     public byte[] Material => Encoding.UTF8.GetBytes(Key);
 }

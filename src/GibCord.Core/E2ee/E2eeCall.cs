@@ -76,8 +76,11 @@ public sealed class E2eeCall : IDisposable
 
     static long NowMs => Environment.TickCount64;
 
-    /// <summary>Start po wejściu do szyfrowanego pokoju. <paramref name="othersAtJoin"/> — kto był w pokoju w chwili wejścia (zrzut z voice_state).</summary>
-    public async Task Start(IReadOnlyCollection<long> othersAtJoin)
+    /// <summary>
+    /// Start po wejściu do szyfrowanego pokoju. <paramref name="othersAtJoin"/> — kto był w pokoju w chwili wejścia (zrzut z voice_state);
+    /// <paramref name="members"/> — członkowie rozmowy (do nich idzie rozgłoszone „hi”, jak na stronie; null = osoby w pokoju).
+    /// </summary>
+    public async Task Start(IReadOnlyCollection<long> othersAtJoin, IReadOnlyCollection<long>? members = null)
     {
         await _gate.WaitAsync().ConfigureAwait(false);
         try
@@ -85,10 +88,13 @@ public sealed class E2eeCall : IDisposable
             _lastRoom = othersAtJoin.Where(u => u != MyUid).ToHashSet();
             if (_lastRoom.Count == 0)
             {
+                Note("sam w pokoju — losuję klucz");
                 SetKey(new E2eeKey(E2eeCrypto.NewCallKey(), 0), MyUid, switchNow: true);
                 return;
             }
-            foreach (var u in _lastRoom) await SendFrame(new { t = "e2ee_send", call = CallId, to = u, fromDev = Device.Dev, kind = "hi" }).ConfigureAwait(false);
+            Note($"w pokoju: {string.Join(",", _lastRoom)} — „hi”, czekam na klucz");
+            foreach (var u in _lastRoom.Union(members ?? []).Where(u => u != MyUid).Distinct())
+                await SendFrame(new { t = "e2ee_send", call = CallId, to = u, fromDev = Device.Dev, kind = "hi" }).ConfigureAwait(false);
             ArmReq();
         }
         finally { _gate.Release(); }
@@ -114,11 +120,11 @@ public sealed class E2eeCall : IDisposable
                 SetKey(new E2eeKey(E2eeCrypto.NewCallKey(), 0), MyUid, switchNow: true);
                 return;
             }
-            // bezpiecznik: nikt w pokoju nie ma klucza (wszyscy o niego prosili) — losuje najmniejsze uid;
-            // tak samo po 3 prośbach bez odpowiedzi (np. klucz miała osoba, która wyszła) — ta sama zasada co na stronie
+            // zapas (umowa 24.11): nikt nie odpowiedział na 2 prośby „req” (~12 s) — klucz losuje najmniejsze uid w pokoju (indeks 0);
+            // szybciej, gdy widać, że nikt w pokoju klucza nie ma (wszyscy sami o niego prosili)
             var now = NowMs;
             var allWaiting = others.All(u => _waitingSince.TryGetValue(u, out var t) && now - t < WaitingFor.TotalMilliseconds * 2);
-            if ((allWaiting || _reqTries >= 3) && MyUid < others.Min())
+            if ((allWaiting || _reqTries >= 2) && MyUid < others.Min())
             {
                 Note("nikt nie ma klucza — losuję");
                 SetKey(new E2eeKey(E2eeCrypto.NewCallKey(), 0), MyUid, switchNow: true);
@@ -132,6 +138,7 @@ public sealed class E2eeCall : IDisposable
                 Raise();
                 return;
             }
+            Note($"brak klucza — „req” nr {_reqTries} do {string.Join(",", others)}");
             foreach (var u in others) await SendFrame(new { t = "e2ee_send", call = CallId, to = u, fromDev = Device.Dev, kind = "req" }).ConfigureAwait(false);
             ArmReq();
         }
@@ -164,6 +171,7 @@ public sealed class E2eeCall : IDisposable
             if (fromDev.Length != 16) return;
             if (d.Str("dev") is { Length: > 0 } toDev && toDev != Device.Dev) return; // do innego mojego urządzenia
             var kind = d.Str("kind");
+            Note($"od {from}:{fromDev}: {kind}{(d.Str("dev") is { Length: > 0 } ? " (do mnie)" : "")}");
             if (kind is "hi" or "req")
             {
                 var known = _peerDev.GetValueOrDefault(from) == fromDev;
@@ -187,16 +195,15 @@ public sealed class E2eeCall : IDisposable
             (string Key, int Index)? got;
             try { got = E2eeCrypto.ParseKeyPayload(E2eeCrypto.Open(Device.Key, pub, E2eeCrypto.Info(CallId, from, fromDev, MyUid, Device.Dev), new E2eeBox(iv, ct))); }
             catch (Exception ex) { Note($"nie otwiera się pudełko od {from}: {ex.Message}"); return; }
-            if (got is not { } k) return;
+            if (got is not { } k || k.Index >= E2eeKey.Cycle) return; // numery 0–15 (jak strona)
             _peerDev[from] = fromDev;
             _waitingSince.Remove(from);
             _asks.Remove(from);
             var nk = new E2eeKey(k.Key, k.Index);
             if (Key is null) { SetKey(nk, from, switchNow: true); return; }
             if (Key.Key == nk.Key && Key.Index == nk.Index) return;
-            var ahead = (nk.Index - Key.Index + 256) % 256;
-            // nowszy klucz (po wymianie) — albo spór o ten sam numer: wygrywa klucz od osoby z mniejszym uid (jak na stronie)
-            if ((ahead is > 0 and < 128) || (ahead == 0 && from < KeySource)) SetKey(nk, from, switchNow: true);
+            // nowszy klucz (po wymianie; numery 0–15 w kółko) — albo spór o ten sam numer: wygrywa klucz od osoby z mniejszym uid (jak na stronie)
+            if (E2eeKey.Newer(nk.Index, Key.Index) || (nk.Index == Key.Index && from < KeySource)) SetKey(nk, from, switchNow: true);
         }
         catch (Exception ex) { Note("wiadomość: " + ex.Message); }
         finally { _gate.Release(); }

@@ -98,7 +98,7 @@ public sealed partial class GibCordClient
         call.Log += s => Diag?.Invoke(s);
         _e2ee = call;
         VoiceChanged?.Invoke();
-        await call.Start(others);
+        await call.Start(others, Store.DmById(cid)?.UserIds); // rozgłoszone „hi” do członków rozmowy (jak strona)
         var early = _e2eeEarly.ToList();
         _e2eeEarly.Clear();
         foreach (var d in early) await call.OnMessage(d);
