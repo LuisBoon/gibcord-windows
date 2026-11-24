@@ -41,6 +41,8 @@ public sealed class Store
     public List<Dm> Dms { get; } = [];
     public Dictionary<long, long> Reads { get; } = [];
     public Dictionary<long, List<VoiceMember>> Voice { get; } = [];
+    /// <summary>6.4: rozmowy prywatne / grupy, w których trwa szyfrowana rozmowa (kłódka).</summary>
+    public HashSet<long> VoiceE2ee { get; } = [];
     public Dictionary<long, Friend> Friends { get; } = [];
     public HashSet<long> Blocked { get; } = [];
     public NotifyState Notify { get; private set; } = new();
@@ -85,6 +87,7 @@ public sealed class Store
         Dms.Clear(); Dms.AddRange(st.Dms);
         Reads.Clear(); foreach (var (k, v) in st.Reads) Reads[k] = v;
         Voice.Clear(); foreach (var (k, v) in st.Voice) Voice[k] = v;
+        VoiceE2ee.Clear(); VoiceE2ee.UnionWith(st.VoiceE2ee);
         Friends.Clear(); foreach (var f in st.Friends) Friends[f.UserId] = f;
         Blocked.Clear(); Blocked.UnionWith(st.Blocked);
         Notify = st.Notify ?? new();
@@ -108,7 +111,7 @@ public sealed class Store
     public void Reset()
     {
         Me = new();
-        Users.Clear(); Servers.Clear(); Dms.Clear(); Reads.Clear(); Voice.Clear(); Friends.Clear(); Blocked.Clear();
+        Users.Clear(); Servers.Clear(); Dms.Clear(); Reads.Clear(); Voice.Clear(); VoiceE2ee.Clear(); Friends.Clear(); Blocked.Clear();
         Mentions.Clear(); Windows.Clear(); Threads.Clear(); Watches.Clear(); Scheduled.Clear(); Notes.Clear();
         _threadMentions.Clear(); _typing.Clear(); _chan.Clear(); _counted.Clear();
         Notify = new();
@@ -735,7 +738,14 @@ public sealed class Store
                 if (e.Long("dmId") is long dr) { Dms.RemoveAll(x => x.Id == dr); Windows.Remove(dr); Raise(ChangeKind.Dms, dr); }
                 break;
             case "voice_state":
-                if (e.Long("channelId") is long vc) { Voice[vc] = e.Prop("members").To<List<VoiceMember>>() ?? []; Raise(ChangeKind.Voice, vc, vc); }
+                if (e.Long("channelId") is long vc)
+                {
+                    Voice[vc] = e.Prop("members").To<List<VoiceMember>>() ?? [];
+                    // 6.4: kłódka przy rozmowie prywatnej (pusty pokój = koniec rozmowy, tryb ustali następna osoba)
+                    if (e.Bool("e2ee") == true && Voice[vc].Count > 0) VoiceE2ee.Add(vc);
+                    else if (e.Bool("e2ee") == false || Voice[vc].Count == 0) VoiceE2ee.Remove(vc);
+                    Raise(ChangeKind.Voice, vc, vc);
+                }
                 break;
             case "notify_update":
             {

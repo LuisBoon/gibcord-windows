@@ -46,6 +46,6 @@ public static class VoiceMediaJson
         var url = e.Str("url"); var token = e.Str("token");
         if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(token)) return null;
         var cid = e.Long("channelId") ?? 0;
-        return new VoiceMedia(cid, url, token, e.Str("room") ?? $"gc-{cid}", e.Str("identity") ?? "");
+        return new VoiceMedia(cid, url, token, e.Str("room") ?? $"gc-{cid}", e.Str("identity") ?? "", e.Bool("e2ee") == true);
     }
 }

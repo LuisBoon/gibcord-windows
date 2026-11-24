@@ -31,6 +31,7 @@ public sealed partial class GibCordClient
         var v = new VoiceEngine();
         v.Changed += () => _ui(() => VoiceChanged?.Invoke());
         v.Dropped += (text, final) => _ui(() => OnVoiceDropped(text, final));
+        v.DecryptTrouble += uid => _ui(() => OnDecryptTrouble(uid)); // 6.4
         return v;
     }
 
@@ -60,11 +61,12 @@ public sealed partial class GibCordClient
         }
         if (_gw is null || Status != GatewayStatus.Connected) { VoiceInfo?.Invoke("Brak połączenia z GibCordem — spróbuj za chwilę", true); return; }
         if (VoiceChannelId == channelId && Voice.State != VoiceState.Idle) return;
-        if (VoiceChannelId != 0 && VoiceChannelId != channelId) await Voice.DisconnectAsync();
+        if (VoiceChannelId != 0 && VoiceChannelId != channelId) { DropE2ee(); await Voice.DisconnectAsync(); }
         VoiceChannelId = channelId;
         _voiceAttempts = 0;
         _voiceJoinAt = Environment.TickCount64;
-        await _gw.Send(new { t = "voice_join", channelId, muted = o.Muted || o.Deafened, deafened = o.Deafened });
+        // 6.4: e2ee:true — umiemy szyfrować; pierwsza osoba w pustej rozmowie prywatnej ustala, że pokój jest szyfrowany
+        await _gw.Send(new { t = "voice_join", channelId, muted = o.Muted || o.Deafened, deafened = o.Deafened, e2ee = WantsE2ee(channelId) });
         if (Fx is not null) // 6.2: efekt zostaje przy przejściu na inny kanał — chyba że tam są wyłączone
         {
             if (FxAllowed(channelId)) await _gw.Send(new { t = "voice_fx", fx = Fx });
@@ -90,6 +92,7 @@ public sealed partial class GibCordClient
     {
         var had = VoiceChannelId;
         VoiceChannelId = 0;
+        DropE2ee();
         if (Offline)
         {
             if (had != 0 && Store.Voice.TryGetValue(had, out var l)) { l.RemoveAll(m => m.UserId == Store.Me.Id); Store.Apply(new GatewayEvent("voice_state", JsonSerializer.SerializeToElement(new { channelId = had, members = l }, Json.Options))); }
@@ -220,13 +223,14 @@ public sealed partial class GibCordClient
     void OnVoiceEvent(GatewayEvent ev)
     {
         var d = ev.Data;
+        OnE2eeEvent(ev); // 6.4
         switch (ev.Type)
         {
             case "voice_media":
             {
                 var m = VoiceMediaJson.Parse(d);
                 if (m is null || m.ChannelId != VoiceChannelId || VoiceChannelId == 0) return;
-                _ = ConnectMedia(m);
+                _ = OnMedia(m); // 6.4: szyfrowany pokój — najpierw klucz rozmowy
                 return;
             }
             case "voice_disconnect":
@@ -234,6 +238,7 @@ public sealed partial class GibCordClient
                 if (VoiceChannelId == 0) return;
                 var reason = d.Str("reason");
                 VoiceChannelId = 0;
+                DropE2ee();
                 _ = Voice.DisconnectAsync();
                 VoiceInfo?.Invoke(reason == "moved" ? "Dołączono do rozmowy na innym urządzeniu" : "Rozłączono z kanału głosowego", false);
                 VoiceChanged?.Invoke();
@@ -263,7 +268,9 @@ public sealed partial class GibCordClient
             case "error" when d.Str("op") is "voice_join" or "voice_stream" or "voice_video":
             {
                 var msg = d.Str("error") ?? "Nie udało się";
-                if (d.Str("op") == "voice_join" && Voice.State == VoiceState.Idle) { VoiceChannelId = 0; VoiceChanged?.Invoke(); }
+                // 6.4: 426 — do szyfrowanej rozmowy wchodzi tylko klient, który umie szyfrować
+                if (d.Str("code") == "e2ee_required") msg = "Ta rozmowa jest szyfrowana od końca do końca, a ta wersja GibCorda nie może do niej dołączyć. Zaktualizuj GibCorda i spróbuj jeszcze raz.";
+                if (d.Str("op") == "voice_join" && Voice.State == VoiceState.Idle) { VoiceChannelId = 0; DropE2ee(); VoiceChanged?.Invoke(); }
                 if (d.Str("op") == "voice_stream" && Voice.ScreenSharing) _ = Voice.StopScreenShare();
                 VoiceInfo?.Invoke(msg, true);
                 return;
@@ -285,12 +292,12 @@ public sealed partial class GibCordClient
         }
     }
 
-    async Task ConnectMedia(VoiceMedia m)
+    async Task ConnectMedia(VoiceMedia m, E2ee.E2eeKey? key)
     {
         var o = Voice.Options;
         try
         {
-            await Voice.ConnectAsync(m, BitrateOf(m.ChannelId), o.Muted || o.Deafened, o.Deafened);
+            await Voice.ConnectAsync(m, BitrateOf(m.ChannelId), o.Muted || o.Deafened, o.Deafened, default, key);
             _voiceAttempts = 0;
         }
         catch (Exception ex)
@@ -312,7 +319,7 @@ public sealed partial class GibCordClient
         if (VoiceChannelId != channelId || Voice.State != VoiceState.Idle) return;
         try
         {
-            if (await Api.VoiceToken(channelId) is { } m && VoiceChannelId == channelId) { await ConnectMedia(m with { ChannelId = channelId }); return; }
+            if (await Api.VoiceToken(channelId) is { } m && VoiceChannelId == channelId) { await OnMedia(m with { ChannelId = channelId }); return; }
         }
         catch (ApiException) { }
         catch
@@ -328,7 +335,7 @@ public sealed partial class GibCordClient
             return;
         }
         var o = Voice.Options;
-        if (VoiceChannelId == channelId && _gw is not null) await _gw.Send(new { t = "voice_join", channelId, muted = o.Muted || o.Deafened, deafened = o.Deafened });
+        if (VoiceChannelId == channelId && _gw is not null) await _gw.Send(new { t = "voice_join", channelId, muted = o.Muted || o.Deafened, deafened = o.Deafened, e2ee = WantsE2ee(channelId) });
     }
 
     void OnVoiceDropped(string text, bool final)
@@ -349,6 +356,6 @@ public sealed partial class GibCordClient
     {
         if (VoiceChannelId == 0 || _gw is null) return;
         var o = Voice.Options;
-        _ = _gw.Send(new { t = "voice_join", channelId = VoiceChannelId, muted = o.Muted || o.Deafened, deafened = o.Deafened });
+        _ = _gw.Send(new { t = "voice_join", channelId = VoiceChannelId, muted = o.Muted || o.Deafened, deafened = o.Deafened, e2ee = WantsE2ee(VoiceChannelId) });
     }
 }

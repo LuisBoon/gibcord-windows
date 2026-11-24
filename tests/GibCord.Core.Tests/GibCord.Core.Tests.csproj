@@ -14,4 +14,8 @@
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- 6.4: zgodność szyfrowania z WebCrypto (uruchamiane tylko, gdy jest Node) -->
+    <None Include="e2ee-node.mjs" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -98,6 +98,73 @@ public sealed class VoiceTests
         Assert.True(heard, $"B nie słyszy A (słyszalni: {string.Join(",", b.AudibleUsers)}, mówi: {b.IsSpeaking(1)}, szczyt {heardPeak:0.000}, A nadaje: {aTx})");
     }
 
+    /// <summary>A mówi sinusem; zwraca największą głośność, jaką słyszą podani słuchacze (po kolei w tablicy).</summary>
+    /// <param name="warmupMs">Najpierw tyle mówi bez liczenia: pierwsze ramki po subskrypcji mogą przejść, zanim LiveKit podłączy odszyfrowanie
+    /// (wtedy słychać krótki szum z zaszyfrowanych danych — nie treść).</param>
+    static async Task<double[]> SpeakAndListen(VoiceEngine speaker, VoiceEngine[] listeners, Func<double[], bool> done, int ms, int warmupMs = 0)
+    {
+        using var cts = new CancellationTokenSource();
+        var peaks = new double[listeners.Length];
+        var speak = Task.Run(async () =>
+        {
+            var buf = new float[480]; long n = 0, frames = 0; var t0 = Environment.TickCount64;
+            while (!cts.IsCancellationRequested)
+            {
+                for (var i = 0; i < buf.Length; i++, n++) buf[i] = 0.3f * MathF.Sin(2 * MathF.PI * 440 * n / 48000f);
+                speaker.PushMic(buf); frames++;
+                var due = t0 + frames * 10 - Environment.TickCount64; if (due > 0) await Task.Delay((int)due);
+            }
+        });
+        var listen = Task.Run(async () =>
+        {
+            var buf = new float[480]; long frames = 0; var t0 = Environment.TickCount64;
+            while (!cts.IsCancellationRequested)
+            {
+                for (var l = 0; l < listeners.Length; l++) { listeners[l].ReadOutput(buf); foreach (var s in buf) peaks[l] = Math.Max(peaks[l], Math.Abs(s)); }
+                frames++;
+                var due = t0 + frames * 10 - Environment.TickCount64; if (due > 0) await Task.Delay((int)due);
+            }
+        });
+        if (warmupMs > 0) { await Task.Delay(warmupMs); for (var l = 0; l < peaks.Length; l++) peaks[l] = 0; }
+        await Until(() => done(peaks), ms);
+        if (warmupMs > 0) await Task.Delay(1500); // jeszcze chwila słuchania, żeby złapać przeciek do osoby z innym kluczem
+        cts.Cancel();
+        await Task.WhenAll(speak, listen);
+        return peaks;
+    }
+
+    /// <summary>6.4: szyfrowanie od końca do końca w LiveKit — słyszy tylko osoba z tym samym kluczem rozmowy (także po wymianie klucza na nr 1).</summary>
+    [VoiceFact]
+    public async Task SzyfrowanaRozmowaSlyszyTylkoTenSamKlucz()
+    {
+        var cid = Random.Shared.NextInt64(100000, 999999);
+        var k3 = new GibCord.Core.E2ee.E2eeKey(GibCord.Core.E2ee.E2eeCrypto.NewCallKey(), 3); // numer ≠ 0: klucz trafia na swoje miejsce w pierścieniu
+        await using var a = new VoiceEngine();
+        await using var b = new VoiceEngine();
+        await using var c = new VoiceEngine();
+        a.Options.NoiseSuppression = false; a.Options.AutoGain = false; a.Options.EchoCancellation = false; a.Options.AutoSens = false; a.Options.Sens = -60;
+        await a.ConnectAsync(Media(cid, "21"), 64, false, false, default, k3);
+        await b.ConnectAsync(Media(cid, "22"), 64, false, false, default, k3);
+        await c.ConnectAsync(Media(cid, "23"), 64, false, false, default, new GibCord.Core.E2ee.E2eeKey(GibCord.Core.E2ee.E2eeCrypto.NewCallKey(), 3));
+        Assert.True(a.Encrypted && b.Encrypted && c.Encrypted);
+        var p = await SpeakAndListen(a, [b, c], x => x[0] > 0.05 && b.IsSpeaking(21), 15000, warmupMs: 2500);
+        var dbg = $"\nA: {a.E2eeDebug()}\nB: {b.E2eeDebug()}\nC: {c.E2eeDebug()}";
+        Assert.True(p[0] > 0.05, $"B (ten sam klucz) nie słyszy A: szczyt {p[0]:0.000}, stan {b.CryptStateOf(21)}{dbg}");
+        Assert.True(p[1] < 0.01, $"C (inny klucz) słyszy A: szczyt {p[1]:0.000}{dbg}");
+        Assert.NotEqual(LiveKit.Proto.EncryptionState.Ok, c.CryptStateOf(21));
+        Assert.Equal(LiveKit.Proto.EncryptionState.Ok, b.CryptStateOf(21) ?? LiveKit.Proto.EncryptionState.Ok);
+
+        // wymiana klucza (jak po wyjściu kogoś z grupy): B dostaje nr 4 i od razu nim szyfruje, A przełącza się po chwili
+        var k4 = new GibCord.Core.E2ee.E2eeKey(GibCord.Core.E2ee.E2eeCrypto.NewCallKey(), 4);
+        a.SetE2eeKey(k4, false);
+        b.SetE2eeKey(k4, true);
+        await Task.Delay(300);
+        a.UseE2eeKey(k4);
+        var p2 = await SpeakAndListen(a, [b, c], x => x[0] > 0.05, 10000, warmupMs: 500);
+        Assert.True(p2[1] < 0.01, $"Po wymianie klucza C słyszy A (szczyt {p2[1]:0.000})");
+        Assert.True(p2[0] > 0.05, $"Po wymianie klucza B nie słyszy A (szczyt {p2[0]:0.000}, stan {b.CryptStateOf(21)})");
+    }
+
     /// <summary>Bez prawa mówienia (token bez mikrofonu) — rozmowa działa, ale mikrofon nie jest publikowany.</summary>
     [VoiceFact]
     public async Task BezPrawaMowieniaTylkoSluchamy()

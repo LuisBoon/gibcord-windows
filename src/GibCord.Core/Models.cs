@@ -81,6 +81,14 @@ public sealed class User
     public bool BirthdayToday { get; set; }
     public Activity? Activity { get; set; }
     public JsonElement Game { get; set; }
+    /// <summary>6.4: ramka wokół awatara (id z katalogu, SVG z /dekor/&lt;id&gt;.svg) albo null.</summary>
+    public string? Decor { get; set; }
+    /// <summary>6.4: efekt przy otwarciu karty profilu (konfetti, snieg, iskry, serca, babelki) albo null.</summary>
+    public string? ProfileFx { get; set; }
+    /// <summary>6.4: kolory karty profilu [góra, dół] (#rrggbb) albo null.</summary>
+    public List<string>? ProfileTheme { get; set; }
+    /// <summary>6.4: wizytówka (do 3 kafelków) — tylko w GET /api/users/:id i „me”.</summary>
+    public List<ShowcaseTile>? Showcase { get; set; }
 
     // tylko w „me”
     public bool IsAdmin { get; set; }
@@ -185,6 +193,8 @@ public sealed class Channel
     /// <summary>6.2: moderator wyłączył efekty głosu na tym kanale.</summary>
     public bool FxOff { get; set; }
     public List<PermOverride> Overrides { get; set; } = [];
+    /// <summary>6.4: kanał połączony z kanałem na Discordzie (most).</summary>
+    public ChannelBridge? Bridge { get; set; }
 
     [JsonIgnore] public bool IsVoice => Type == "voice";
     /// <summary>6.3: scena — kanał głosowy, gdzie mówią tylko osoby na scenie.</summary>
@@ -473,6 +483,8 @@ public sealed class Message
     public JsonElement Interaction { get; set; }
     /// <summary>Karta automoderacji (wiadomość typu „automod” na kanale powiadomień).</summary>
     public JsonElement Automod { get; set; }
+    /// <summary>6.4: wiadomość z mostu — nazwa i awatar osoby z Discorda (autor to konto systemowe „Discord”).</summary>
+    public MessageExt? Ext { get; set; }
     public string? Nonce { get; set; }
     public string Type { get; set; } = "default";
 
@@ -486,6 +498,10 @@ public sealed class Message
     [JsonIgnore] public long Key => ThreadId is long t ? -t : ChannelId;
     [JsonIgnore] public long? RefIdLong => RefId.ValueKind == JsonValueKind.Number && RefId.TryGetInt64(out var l) ? l : RefId.ValueKind == JsonValueKind.String && long.TryParse(RefId.GetString(), out var p) ? p : null;
     [JsonIgnore] public bool HasCard => Card.ValueKind == JsonValueKind.Object && Card.Str("title") is { Length: > 0 };
+    /// <summary>6.4: wiadomość przyszła z Discorda przez most.</summary>
+    [JsonIgnore] public bool FromDiscord => Ext?.Discord == true;
+    /// <summary>Ta sama osoba co w <paramref name="o"/> (do sklejania kolejnych wiadomości) — przy moście także ta sama nazwa z Discorda.</summary>
+    public bool SameSender(Message o) => AuthorId == o.AuthorId && FromDiscord == o.FromDiscord && (!FromDiscord || Ext!.Name == o.Ext!.Name);
 }
 
 public enum SendState { Sent, Pending, Failed, Queued }
@@ -574,6 +590,8 @@ public sealed class StateResponse
     public List<long> Blocked { get; set; } = [];
     public Announcement? Announcement { get; set; }
     public Dictionary<long, WatchState?> Watch { get; set; } = [];
+    /// <summary>6.4: trwające rozmowy prywatne, które są szyfrowane (kłódka).</summary>
+    public List<long> VoiceE2ee { get; set; } = [];
     /// <summary>API v2: numer ostatniego zdarzenia zawartego w stanie (zdarzenia z s ≤ Seq są już w nim).</summary>
     public long? Seq { get; set; }
     public string? Session { get; set; }

@@ -204,6 +204,7 @@ public sealed partial class GibCordClient : IAsyncDisposable
         _session++;
         var wasInVoice = VoiceChannelId != 0;
         VoiceChannelId = 0;
+        DropE2ee();
         if (_voice is not null) await _voice.DisconnectAsync();
         // silnik w stanie „Łączenie…” nie zgłasza zmiany — bez tego mikrofon zostałby otwarty
         if (wasInVoice) _ui(() => VoiceChanged?.Invoke());

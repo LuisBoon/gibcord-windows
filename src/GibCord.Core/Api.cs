@@ -150,6 +150,21 @@ public sealed class GibCordApi : IDisposable
         (await Send(HttpMethod.Patch, "me", changes, ct).ConfigureAwait(false)).Prop("me").To<User>()!;
     public Task<User> GetUser(long id, CancellationToken ct = default) => Send<User>(HttpMethod.Get, $"users/{id}", ct: ct);
 
+    // ── 6.4: profil (ramki, efekty, kolory, wizytówka) ──
+    public Task<ProfileCatalog> GetProfileCatalog(CancellationToken ct = default) => Send<ProfileCatalog>(HttpMethod.Get, "profile/catalog", ct: ct);
+    public Task<ShowcaseOptions> GetShowcaseOptions(CancellationToken ct = default) => Send<ShowcaseOptions>(HttpMethod.Get, "me/showcase-options", ct: ct);
+
+    // ── 6.4: szyfrowane rozmowy ──
+    public Task PutE2eeDevice(string dev, string pub, CancellationToken ct = default) => Send(HttpMethod.Put, "e2ee/device", new { dev, pub }, ct);
+    public async Task<Dictionary<long, List<E2ee.E2eeDeviceInfo>>> GetE2eeDevices(IEnumerable<long> userIds, CancellationToken ct = default) =>
+        (await Send(HttpMethod.Get, "e2ee/devices?ids=" + string.Join(",", userIds.Distinct()), ct: ct).ConfigureAwait(false)).To<Dictionary<long, List<E2ee.E2eeDeviceInfo>>>() ?? [];
+
+    // ── 6.4: most z Discordem ──
+    public Task<BridgesInfo> GetBridges(long serverId, CancellationToken ct = default) => Send<BridgesInfo>(HttpMethod.Get, $"servers/{serverId}/bridges", ct: ct);
+    public Task<BridgeCodeInfo> BridgeCode(long channelId, CancellationToken ct = default) => Send<BridgeCodeInfo>(HttpMethod.Post, $"channels/{channelId}/bridge-code", ct: ct);
+    public Task<BridgeItem> PatchBridge(long id, bool paused, CancellationToken ct = default) => Send<BridgeItem>(HttpMethod.Patch, $"bridges/{id}", new { paused }, ct);
+    public Task DeleteBridge(long id, CancellationToken ct = default) => Send(HttpMethod.Delete, $"bridges/{id}", ct: ct);
+
     // ── zaplanowane wiadomości i notatki (serwer C#: features.scheduled / features.notes) ──
     public async Task<List<ScheduledMessage>> GetScheduled(CancellationToken ct = default) =>
         (await Send(HttpMethod.Get, "scheduled", ct: ct).ConfigureAwait(false)).Prop("scheduled").To<List<ScheduledMessage>>() ?? [];
