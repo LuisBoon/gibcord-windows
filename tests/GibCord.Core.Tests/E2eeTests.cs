@@ -399,3 +399,79 @@ public sealed class E2eeLiveTests
         await a.LeaveVoice();
     }
 }
+
+/// <summary>
+/// 6.4 na żywo: most z Discordem z punktu widzenia aplikacji — kopia serwera z udawanym Discordem
+/// (GC_TEST_BRIDGE_URL = serwer, GC_FAKE_DISCORD = tools/udawany-discord.mjs). Ustawienia mostu, kod, połączenie, wiadomość z Discorda, wstrzymanie, rozłączenie.
+/// </summary>
+public sealed class BridgeLiveTests
+{
+    [Fact]
+    public async Task MostZDiscordemWAplikacji()
+    {
+        var url = Environment.GetEnvironmentVariable("GC_TEST_BRIDGE_URL");
+        var fake = Environment.GetEnvironmentVariable("GC_FAKE_DISCORD");
+        if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(fake)) return;
+        var l = new object();
+        await using var a = new GibCordClient(new Uri(url), new MemoryTokenStore(), null, x => { lock (l) x(); });
+        var tag = Guid.NewGuid().ToString("N")[..6];
+        Assert.NotNull((await a.Register("mw" + tag, "Haslo-testowe-1234", "Most Windows", $"mw{tag}@example.com")).Token);
+        await a.Start();
+        async Task Until(Func<bool> ok, string what, int ms = 8000)
+        {
+            var end = Environment.TickCount64 + ms;
+            while (Environment.TickCount64 < end) { lock (l) if (ok()) return; await Task.Delay(50); }
+            Assert.Fail("Nie doczekano się: " + what);
+        }
+        await Until(() => a.Store.Loaded && a.Status == GatewayStatus.Connected, "połączenie");
+        var srv = await a.Api.CreateServer("Mostowy " + tag);
+        await Until(() => a.Store.ServerById(srv.Id) is not null, "serwer w stanie");
+        var chan = a.Store.ServerById(srv.Id)!.Channels.First(c => c.Type == "text");
+        await a.OpenChannel(chan.Id);
+
+        var info = await a.Api.GetBridges(srv.Id);
+        Assert.True(info.Enabled);
+        Assert.Equal("ready", info.Status);
+        Assert.Contains("client_id=", info.InviteUrl);
+        Assert.Empty(info.Items);
+        var code = await a.Api.BridgeCode(chan.Id);
+        Assert.Matches("^GC-[A-Z2-9]{4}-[A-Z2-9]{4}$", code.Code);
+        Assert.Contains(code.Code, code.Command);
+
+        using var http = new HttpClient();
+        var dcChan = "9" + Random.Shared.Next(100000, 999999); // nowy kanał „Discorda” w każdym przebiegu (jeden kanał = jeden most)
+        async Task Dispatch(string t, object d) =>
+            (await http.PostAsync(fake + "/_test/dispatch", new StringContent(JsonSerializer.Serialize(new { t, d }), System.Text.Encoding.UTF8, "application/json"))).EnsureSuccessStatusCode();
+        // na „Discordzie” ktoś z prawem „Zarządzanie kanałami” wpisuje /gibcord polacz kod:…
+        await Dispatch("INTERACTION_CREATE", new
+        {
+            id = "i" + tag, token = "itok", type = 2, guild_id = "777", channel_id = dcChan, channel = new { id = dcChan, name = "general", type = 0 },
+            member = new { permissions = "16", user = new { id = "55", username = "kasia" } },
+            data = new { name = "gibcord", options = new[] { new { type = 1, name = "polacz", options = new[] { new { name = "kod", type = 3, value = code.Code } } } } },
+        });
+        await Until(() => a.Store.ChannelById(chan.Id)?.Bridge is { Guild: "Ekipa z Discorda", Channel: "general", Paused: false }, "znaczek mostu na kanale (channel_update)");
+        var items = (await a.Api.GetBridges(srv.Id)).Items;
+        Assert.Single(items);
+        Assert.Equal(chan.Id, items[0].ChannelId);
+
+        // wiadomość z Discorda: autor = konto „Discord”, nazwa i awatar w ext; dwie osoby z Discorda się nie sklejają
+        await Dispatch("MESSAGE_CREATE", new { id = "5001" + tag, channel_id = dcChan, guild_id = "777", type = 0, content = "siema z discorda", author = new { id = "55", username = "kasia", global_name = "Kasia", avatar = (string?)null }, member = new { nick = "Kasia z DC" }, mentions = Array.Empty<object>(), attachments = Array.Empty<object>() });
+        await Dispatch("MESSAGE_CREATE", new { id = "5002" + tag, channel_id = dcChan, guild_id = "777", type = 0, content = "ja też", author = new { id = "56", username = "tomek", avatar = (string?)null }, member = new { }, mentions = Array.Empty<object>(), attachments = Array.Empty<object>() });
+        await Until(() => a.Store.Window(chan.Id).Items.Count(m => m.FromDiscord) >= 2, "wiadomości z Discorda w oknie kanału");
+        Message k, t;
+        lock (l) { k = a.Store.Window(chan.Id).Items.First(m => m.Content == "siema z discorda"); t = a.Store.Window(chan.Id).Items.First(m => m.Content == "ja też"); }
+        Assert.Equal("Kasia z DC", k.Ext!.Name);
+        Assert.Equal("discord", k.Ext.Src);
+        Assert.Equal("webhook", a.Store.U(k.AuthorId)?.Bot);
+        Assert.Equal(k.AuthorId, t.AuthorId);
+        Assert.False(k.SameSender(t));
+
+        // wstrzymanie i rozłączenie widać na żywo
+        var patched = await a.Api.PatchBridge(items[0].Id, true);
+        Assert.True(patched.Paused);
+        await Until(() => a.Store.ChannelById(chan.Id)?.Bridge is { Paused: true }, "wstrzymany most");
+        await a.Api.DeleteBridge(items[0].Id);
+        await Until(() => a.Store.ChannelById(chan.Id) is { Bridge: null }, "rozłączony most");
+        Assert.Empty((await a.Api.GetBridges(srv.Id)).Items);
+    }
+}

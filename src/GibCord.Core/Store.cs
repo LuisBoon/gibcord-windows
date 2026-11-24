@@ -548,6 +548,9 @@ public sealed class Store
             {
                 var m = e.Prop("message").To<Message>();
                 if (m is null) break;
+                // autorzy spoza znanych osób (np. konto „Discord” mostu, webhooki) przychodzą w „users” — dopisz brakujących
+                if (e.Prop("users") is { ValueKind: JsonValueKind.Object } mu)
+                    foreach (var p in mu.EnumerateObject()) if (long.TryParse(p.Name, out var nid) && nid != Me.Id && !Users.ContainsKey(nid) && p.Value.To<User>() is { } author) Users[nid] = author;
                 StopTyping(m.ChannelId, m.AuthorId);
                 if (m.ThreadId is long mt)
                 {
