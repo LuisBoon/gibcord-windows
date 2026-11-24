@@ -25,43 +25,6 @@ public sealed record VoiceMedia(long ChannelId, string Url, string Token, string
 
 public enum VoiceState { Idle, Connecting, Connected, Reconnecting }
 
-/// <summary>Obraz od jednej osoby (kamera albo udostępniony ekran) — ostatnia klatka do narysowania.</summary>
-public sealed class VideoFeed
-{
-    readonly object _lock = new();
-    byte[] _buf = [];
-    int _w, _h;
-    long _seq;
-
-    public long UserId { get; init; }
-    public bool Screen { get; init; }
-    public string TrackSid { get; init; } = "";
-    public int Width { get { lock (_lock) return _w; } }
-    public int Height { get { lock (_lock) return _h; } }
-    public long Sequence => Interlocked.Read(ref _seq);
-
-    internal void Put(ReadOnlySpan<byte> bgra, int w, int h)
-    {
-        lock (_lock)
-        {
-            if (_buf.Length != bgra.Length) _buf = new byte[bgra.Length];
-            bgra.CopyTo(_buf);
-            _w = w; _h = h;
-        }
-        Interlocked.Increment(ref _seq);
-    }
-
-    /// <summary>Kopiuje najnowszą klatkę (BGRA), jeśli jest nowsza niż <paramref name="seen"/>.</summary>
-    public bool TryCopy(ref long seen, Action<ReadOnlySpan<byte>, int, int> copy)
-    {
-        var s = Sequence;
-        if (s == seen || s == 0) return false;
-        lock (_lock) copy(_buf, _w, _h);
-        seen = s;
-        return true;
-    }
-}
-
 /// <summary>
 /// Rozmowa głosowa przez serwer LiveKit (dźwięk idzie: ja → serwer → reszta osób, bez połączeń „każdy z każdym”).
 /// Okno podaje próbki z mikrofonu (<see cref="PushMic"/>) i pobiera zmiksowany dźwięk do głośników (<see cref="ReadOutput"/>);
@@ -479,14 +442,14 @@ public sealed class VoiceEngine : IAsyncDisposable
             {
                 try
                 {
-                    using var vs = new VideoStream(track, VideoBufferType.Bgra, 2);
+                    // 6.4.2: bez przeliczania do BGRA w bibliotece (postać z dekodera, ok. 2,7× mniej danych na klatkę) — patrz VideoFeed
+                    using var vs = new VideoStream(track, null, 1);
                     var open = false;
                     await foreach (var ev in vs.WithCancellation(ct).ConfigureAwait(false))
                     {
                         if (!_feeds.ContainsKey(pub.Sid)) break;
                         if (!open && !(open = Decrypted(uid, since))) continue; // 6.4: bez obrazu z nieodszyfrowanych ramek
-                        var f = ev.Frame;
-                        feed.Put(f.Data, f.Width, f.Height);
+                        feed.Put(ev.Frame);
                     }
                 }
                 catch { }

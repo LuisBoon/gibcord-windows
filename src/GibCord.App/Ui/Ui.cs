@@ -207,6 +207,19 @@ public static class U
 {
     static readonly Dictionary<string, SolidColorBrush> _brushes = [];
 
+    /// <summary>
+    /// 6.4.2: ile pikseli ekranu zajmuje miejsce na obraz (rodzic obrazka × skala ekranu) — obraz z kamery / transmisji
+    /// przeliczamy od razu w tym rozmiarze, a nie w pełnym 1080p. (0, 0) = jeszcze nie ułożone, bez ograniczenia.
+    /// </summary>
+    public static (int W, int H) PixelSize(FrameworkElement img)
+    {
+        var host = img.Parent as FrameworkElement ?? img;
+        var w = Math.Max(img.ActualWidth, host.ActualWidth);
+        var h = Math.Max(img.ActualHeight, host.ActualHeight);
+        var k = img.XamlRoot?.RasterizationScale ?? 1;
+        return w < 8 || h < 8 ? (0, 0) : ((int)(w * k), (int)(h * k));
+    }
+
     public static Color C(string hex)
     {
         var h = hex.TrimStart('#');

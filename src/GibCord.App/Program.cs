@@ -15,6 +15,8 @@ public static class Program
     static int Main(string[] args)
     {
         Args = args;
+        // 6.4.2: komunikator głosowy — sprzątanie pamięci bez długich przestojów wszystkich wątków (dźwięk liczy też C#)
+        System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.SustainedLowLatency;
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {
             App.Log("Błąd (AppDomain): " + e.ExceptionObject);

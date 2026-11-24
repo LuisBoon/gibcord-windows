@@ -599,13 +599,14 @@ public sealed class VoiceView : Grid, IDisposable
     {
         var (img, bmp, seen) = _video[key];
         var b = bmp;
+        var (mw, mh) = U.PixelSize(img);
         feed.TryCopy(ref seen, (px, w, h) =>
         {
             if (w <= 0 || h <= 0) return;
             if (b is null || b.PixelWidth != w || b.PixelHeight != h) { b = new WriteableBitmap(w, h); img.Source = b; }
             using (var st = b.PixelBuffer.AsStream()) st.Write(px[..Math.Min(px.Length, w * h * 4)]);
             b.Invalidate();
-        });
+        }, mw, mh);
         _video[key] = (img, b, seen);
     }
 }

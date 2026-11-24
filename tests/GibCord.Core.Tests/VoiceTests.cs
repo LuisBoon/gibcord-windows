@@ -199,11 +199,17 @@ public sealed class VoiceTests
         Assert.DoesNotContain(b.Feeds, f => f.Screen);
         b.Watch(11);
         var got = await Until(() => b.Feeds.Any(f => f.Screen && f.UserId == 11 && f.Width > 0), 15000);
+        // 6.4.2: klatka z dekodera → BGRA w rozmiarze kafelka (320×180 = co drugi piksel)
+        var feed = b.Feeds.First(f => f.Screen && f.UserId == 11);
+        long seen = 0; var size = (0, 0);
+        var drawn = await Until(() => feed.TryCopy(ref seen, (px, w, h) => size = (w, h), 320, 180), 5000);
         b.Unwatch(11);
         var gone = await Until(() => !b.Feeds.Any(f => f.Screen), 8000);
         cts.Cancel();
         await frames;
         Assert.True(got, "B nie dostał obrazu ekranu po Watch()");
+        Assert.True(drawn, "Klatki nie dało się narysować");
+        Assert.Equal((320, 180), size);
         Assert.True(gone, "Obraz ekranu powinien zniknąć po Unwatch()");
     }
 }

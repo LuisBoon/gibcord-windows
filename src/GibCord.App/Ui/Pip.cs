@@ -119,13 +119,14 @@ public sealed class PipWindow : Window
         }
         _missingSince = 0;
         var b = _bmp;
+        var (mw, mh) = U.PixelSize(_img);
         feed.TryCopy(ref _seen, (px, w, h) =>
         {
             if (w <= 0 || h <= 0) return;
             if (b is null || b.PixelWidth != w || b.PixelHeight != h) { b = new WriteableBitmap(w, h); _img.Source = b; }
             using (var st = b.PixelBuffer.AsStream()) st.Write(px[..Math.Min(px.Length, w * h * 4)]);
             b.Invalidate();
-        });
+        }, mw, mh);
         _bmp = b;
     }
 }
