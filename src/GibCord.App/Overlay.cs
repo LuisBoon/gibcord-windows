@@ -136,6 +136,9 @@ public sealed class GameOverlay : IDisposable
         if (_notes.RemoveAll(n => n.Until <= now) > 0) _last = "";
         var inCall = mode != "off" && room != 0 && !_c.Offline && (mode == "always" || InGame);
         var want = inCall || (_notes.Count > 0 && mode != "off");
+        // 6.4.2: nic do pokazania — sprawdzamy raz na sekundę zamiast 5 razy (dymki wiadomości i tak rysują się od razu)
+        var iv = TimeSpan.FromMilliseconds(want ? 200 : 1000);
+        if (_timer.Interval != iv) _timer.Interval = iv;
         SyncHotkey(mode != "off" && room != 0 && !_c.Offline);
         if (want) EnsureWindow();
         if (!want || _hidden) { if (_shown) { ShowWindow(_hwnd, SW_HIDE); _shown = false; } return; }

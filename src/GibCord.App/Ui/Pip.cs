@@ -28,6 +28,7 @@ public sealed class PipWindow : Window
     bool _closed;
 
     public static bool IsOpenFor(long uid) => _open is { } o && o._uid == uid;
+    public static bool IsOpen => _open is not null;
 
     /// <summary>Otwiera okienko dla transmisji tej osoby (drugie kliknięcie zamyka).</summary>
     public static void Toggle(Shell sh, long uid)

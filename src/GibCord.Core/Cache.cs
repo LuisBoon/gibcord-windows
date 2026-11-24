@@ -166,6 +166,8 @@ public sealed class Prefs
     public List<long> ServerOrder { get; set; } = [];
     public bool MembersPanel { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
+    /// <summary>6.4.2: oszczędzanie, gdy okna nie widać (schowane, zminimalizowane, zasłonięte grą) — głos i nakładka działają dalej.</summary>
+    public bool SaveInBackground { get; set; } = true;
     public int[]? Window { get; set; }   // x, y, szer., wys., zmaksymalizowane (0/1)
     /// <summary>Ustawienia głosu: urządzenia, czułość, „naciśnij, aby mówić”, głośność osób.</summary>
     public Voice.VoiceOptions Voice { get; set; } = new();

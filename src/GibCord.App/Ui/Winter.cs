@@ -94,8 +94,18 @@ sealed class Snow : Canvas
         _debounce.IsRepeating = false;
         _debounce.Tick += (_, _) => Build();
         SizeChanged += (_, e) => { if (Math.Abs(e.NewSize.Width - _built.Width) > 40 || Math.Abs(e.NewSize.Height - _built.Height) > 40) { _debounce.Stop(); _debounce.Start(); } };
-        Loaded += (_, _) => { Winter.Changed -= Build; Winter.Changed += Build; Build(); };
-        Unloaded += (_, _) => Winter.Changed -= Build;
+        Loaded += (_, _) => { Winter.Changed -= Build; Winter.Changed += Build; Saver.Changed -= OnSaver; Saver.Changed += OnSaver; _quiet = Saver.Quiet; Build(); };
+        Unloaded += (_, _) => { Winter.Changed -= Build; Saver.Changed -= OnSaver; };
+    }
+
+    bool _quiet;
+    /// <summary>6.4.2: w grze płatki stoją (bez animacji), a gdy okna nie widać — nie ma ich wcale.</summary>
+    void OnSaver()
+    {
+        if (Saver.Asleep) { Children.Clear(); return; }
+        if (Children.Count > 0 && _quiet == Saver.Quiet) return;
+        _quiet = Saver.Quiet;
+        Build();
     }
 
     void Build()
@@ -103,8 +113,8 @@ sealed class Snow : Canvas
         Children.Clear();
         var w = ActualWidth; var h = ActualHeight;
         _built = new Size(w, h);
-        if (!Winter.Active || w < 50 || h < 50) return;
-        var still = !Motion.On;
+        if (!Winter.Active || w < 50 || h < 50 || Saver.Asleep) return;
+        var still = !Motion.On || Saver.Quiet;
         var n = (int)Math.Clamp(w * h / 22000, 24, 72);
         Compositor? comp = null;
         try { comp = CompositionTarget.GetCompositorForCurrentThread(); } catch { still = true; }

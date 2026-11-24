@@ -360,6 +360,16 @@ public sealed class VoiceView : Grid, IDisposable
         _tick.Start();
         _stage.SizeChanged += (_, e) => Fit(e.NewSize.Width, e.NewSize.Height);
         Refresh();
+        Saver.Changed += OnSaver;
+        OnSaver();
+    }
+
+    /// <summary>6.4.2: okna nie widać — kafelki (mówienie, obraz z kamer) nie odświeżają się.</summary>
+    void OnSaver()
+    {
+        if (_disposed) return;
+        if (Saver.Asleep) _tick.Stop();
+        else if (!_tick.IsRunning) _tick.Start();
     }
 
     /// <summary>Kafelki tak duże, jak się da, żeby wszystkie zmieściły się na ekranie (jak w makiecie).</summary>
@@ -388,6 +398,7 @@ public sealed class VoiceView : Grid, IDisposable
     public void Dispose()
     {
         _disposed = true;
+        Saver.Changed -= OnSaver;
         _tick.Stop();
         _watch?.Dispose();
         _watch = null;

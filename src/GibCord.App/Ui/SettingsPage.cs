@@ -803,6 +803,7 @@ public sealed partial class SettingsPage : Grid
             U.T("Zmiana działa od razu w otwartej rozmowie.", 11.5, null, Theme.Mu2)));
         _body.Add(Card(Label("Okno"),
             Toggle("Zamykanie do zasobnika (obok zegara)", p.CloseToTray, v => { p.CloseToTray = v; p.Save(); }),
+            Toggle("Oszczędzanie, gdy okna nie widać (gra, zasobnik) — głos i nakładka działają dalej", p.SaveInBackground, v => { p.SaveInBackground = v; p.Save(); Saver.Update(); }),
             Toggle("Uruchamiaj razem z Windowsem", AutoStart.Enabled, AutoStart.Set),
             Toggle("Lista osób po prawej", p.MembersPanel, _ => _sh.ToggleMembers())));
         var mode = new RadioField { Header = U.T("Kiedy pokazywać", 13.5, U.Semi) };

@@ -93,6 +93,7 @@ public sealed class VoiceEngine : IAsyncDisposable
     VoiceMedia? _media;
     int _bitrate = 64;
     bool _camerasVisible = true;
+    bool _videoPaused;
     bool _clientLeaving;
     double _noiseFloor = -60, _micDb = -100;
     long _micLoudAt, _lastOpenAt, _pttUpAt;
@@ -422,8 +423,9 @@ public sealed class VoiceEngine : IAsyncDisposable
             want = pub.Source switch
             {
                 TrackSource.SourceMicrophone => true,
-                TrackSource.SourceCamera => _camerasVisible,
-                TrackSource.SourceScreenshare or TrackSource.SourceScreenshareAudio => _watching.Contains(uid),
+                TrackSource.SourceCamera => _camerasVisible && !_videoPaused,
+                TrackSource.SourceScreenshare => _watching.Contains(uid) && !_videoPaused,
+                TrackSource.SourceScreenshareAudio => _watching.Contains(uid),
                 _ => false,
             };
         try { if (pub.IsSubscribed != want) pub.SetSubscribed(want); } catch { }
@@ -440,6 +442,16 @@ public sealed class VoiceEngine : IAsyncDisposable
     public void Watch(long uid) { lock (_gate) _watching.Add(uid); Resubscribe(uid); Raise(); }
     public void Unwatch(long uid) { lock (_gate) _watching.Remove(uid); Resubscribe(uid); Raise(); }
     public bool IsWatching(long uid) { lock (_gate) return _watching.Contains(uid); }
+
+    /// <summary>
+    /// 6.4.2: okna nie widać (schowane, zasłonięte grą) — obrazu z kamer i transmisji nie pobieramy ani nie dekodujemy.
+    /// Dźwięk transmisji gra dalej; po pokazaniu okna obraz wraca sam (po ok. sekundzie).
+    /// </summary>
+    public void SetVideoPaused(bool on)
+    {
+        lock (_gate) { if (_videoPaused == on) return; _videoPaused = on; }
+        if (_room is { } room) foreach (var p in room.RemoteParticipants.Values) ApplySubscriptions(p);
+    }
 
     /// <summary>Kamery pobieramy tylko, gdy widok kanału jest na ekranie.</summary>
     public void SetCamerasVisible(bool on)

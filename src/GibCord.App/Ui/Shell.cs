@@ -120,11 +120,13 @@ public sealed class Shell : Grid
         _talk.Tick += (_, _) =>
         {
             _side.TickTalk(); _chat?.TickTalk();
-            // w rozmowie obwódki pulsują w rytm głosu — częściej (ok. 16 razy na sekundę)
-            var want = TimeSpan.FromMilliseconds(C.VoiceChannelId != 0 && Motion.On ? 60 : 150);
+            // w rozmowie obwódki pulsują w rytm głosu — częściej (ok. 16 razy na sekundę); w grze (okno obok) wystarczy rzadziej
+            var want = TimeSpan.FromMilliseconds(C.VoiceChannelId != 0 && Motion.On && !Saver.Quiet ? 60 : 150);
             if (_talk.Interval != want) _talk.Interval = want;
         };
         _talk.Start();
+        Saver.Changed += OnSaver;
+        OnSaver();
 
         Accel(VirtualKey.K, VirtualKeyModifiers.Control, OpenSwitcher);
         Accel(VirtualKey.F, VirtualKeyModifiers.Control, () => OpenSearch());
@@ -157,6 +159,13 @@ public sealed class Shell : Grid
 
     void OnError(string msg) => Info(msg, error: true);
 
+    /// <summary>6.4.2: okna nie widać — obwódki mówiących nie odświeżają się (po pokazaniu okna od razu wracają).</summary>
+    void OnSaver()
+    {
+        if (Saver.Asleep) _talk.Stop();
+        else if (!_talk.IsRunning) _talk.Start();
+    }
+
     /// <summary>Odpięcie od klienta i zwolnienie widoków (wylogowanie, bramka, zmiana motywu — inaczej stary widok żyje dalej w tle).</summary>
     public void Detach()
     {
@@ -168,6 +177,7 @@ public sealed class Shell : Grid
         C.VoiceInfo -= OnVoiceInfo;
         C.CallRing -= OnCallRing;
         C.CallEnded -= OnCallEnded;
+        Saver.Changed -= OnSaver;
         _talk.Stop();
         _refresh.Stop();
         _soundTimer?.Stop();

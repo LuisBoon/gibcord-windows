@@ -74,11 +74,15 @@ public sealed class MainWindow : Window
             Client?.SetWindowActive(active);
             TitleBar.SetActive(active);
             if (active && Client is not null && Client.ActiveChannelId != 0) Toasts.ClearFor(Client.ActiveChannelId);
+            Saver.Update();
         };
-        AppWindow.Changed += (_, e) => { if (e.DidVisibilityChange) { Client?.SetVisible(AppWindow.IsVisible); _shell?.WindowVisible(AppWindow.IsVisible); } };
+        AppWindow.Changed += (_, e) =>
+        {
+            if (e.DidVisibilityChange) { Client?.SetVisible(AppWindow.IsVisible); _shell?.WindowVisible(AppWindow.IsVisible); }
+            if (e.DidVisibilityChange || e.DidSizeChange || e.DidPositionChange) Saver.Update(); // schowane / zminimalizowane / przesunięte spod gry
+        };
         AppWindow.Closing += (_, e) =>
         {
-            if (_releasing) return; // tryb gry: okno zamyka się naprawdę, aplikacja żyje dalej
             SaveBounds();
             if (!_quitting && App.Prefs.CloseToTray && !Options.Demo && Tray.Available)
             {
@@ -141,7 +145,10 @@ public sealed class MainWindow : Window
             if (Program.Args.Contains("--clip-test")) { _ = ClipTest(); return; } // 6.2: CI — nagranie ekranu i zapis klipu
             if (Options.View == "clipedit" && Options.Arg("--clip-file") is { } cf && CurrentShell is { } csh) Ui.ClipEditor.Show(csh, Path.GetFullPath(cf));
             if (Options.Screenshot is { } path) _ = Screenshot(path);
-            if (Options.Measure is "schowane" or "zwolnione") _ = MeasurePrep(Options.Measure);
+            // CI (--pomiar): koszt GibCorda w grze (okno obok) i pod grą na pełnym ekranie — poziom oszczędzania na sztywno
+            Saver.Forced = Options.Measure switch { "gra" => Saver.Level.Background, "zasloniete" => Saver.Level.Asleep, _ => null };
+            Saver.Init(this, Dq, () => false);
+            if (Options.Measure == "schowane") _ = MeasurePrep();
             return;
         }
         // aktualizacja przy starcie (jak w Discordzie): Gibek + „Sprawdzanie aktualizacji…”, przy nowej wersji pobranie i uruchomienie nowej
@@ -202,6 +209,7 @@ public sealed class MainWindow : Window
         Cam = new Camera(Client);
         Voice = new VoiceHost(Client, Dq, Screen, Cam);
         _presence = new Presence(Client);
+        _presence.Changed += () => Dq.TryEnqueue(Saver.Update); // gra wystartowała / skończyła się
         _overlay = new GameOverlay(Client, Dq, () => _presence.InGame);
         _keys = new GlobalKeys(Client);
         _clips?.Dispose();
@@ -297,6 +305,7 @@ public sealed class MainWindow : Window
         Toasts.Init(OpenFromNotification);
         DeepLink.Register();
         Tray.Init(this);
+        Saver.Init(this, Dq, () => _presence?.InGame == true);
         HandleLaunchActivation(AppInstance.GetCurrent().GetActivatedEventArgs());
         AppInstance.GetCurrent().Activated += (_, e) => Dq.TryEnqueue(() => { BringToFront(); HandleLaunchActivation(e); });
 
@@ -611,39 +620,15 @@ public sealed class MainWindow : Window
         Native.SetForegroundWindow(Hwnd);
     }
 
-    bool _releasing;
-
-    /// <summary>CI (--pomiar): po 5 s okno chowa się jak przy krzyżyku albo zamyka na dobre — potem skrypt mierzy pamięć i procesor.</summary>
-    async Task MeasurePrep(string mode)
+    /// <summary>CI (--pomiar schowane): po 5 s okno chowa się jak przy krzyżyku — potem skrypt mierzy pamięć i procesor.</summary>
+    async Task MeasurePrep()
     {
         await Task.Delay(5000);
-        if (mode == "schowane")
-        {
-            AppWindow.Hide();
-            Client?.SetWindowActive(false);
-            Client?.SetVisible(false);
-            _shell?.WindowVisible(false);
-            App.Log("Pomiar: okno schowane");
-        }
-        else ReleaseWindow();
-    }
-
-    /// <summary>Tryb gry: okno zamyka się naprawdę i cały wygląd wypada z pamięci, a aplikacja żyje dalej (zasobnik, głos, nakładka).</summary>
-    public void ReleaseWindow()
-    {
-        _releasing = true;
-        Application.Current.DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
-        _shell?.Detach();
-        _shell = null;
-        _host.Children.Clear();
-        Content = null;
-        Close();
-        _ = Task.Run(async () =>
-        {
-            await Task.Delay(1500);
-            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
-            App.Log("Pomiar: okno zwolnione");
-        });
+        AppWindow.Hide();
+        Client?.SetWindowActive(false);
+        Client?.SetVisible(false);
+        _shell?.WindowVisible(false);
+        App.Log("Pomiar: okno schowane");
     }
 
     public void Quit()

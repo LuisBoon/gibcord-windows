@@ -11,6 +11,31 @@ namespace GibCord.App;
 
 public sealed record AudioDevice(string Id, string Name);
 
+/// <summary>
+/// 6.4.2: wątki mikrofonu i głośników rozmowy dostają od Windowsa pierwszeństwo jak programy do muzyki (MMCSS „Pro Audio”) —
+/// gra, która zajmuje cały procesor, nie rwie głosu. Raz na wątek (NAudio tworzy nowe wątki przy każdym włączeniu dźwięku).
+/// </summary>
+static class Mmcss
+{
+    [ThreadStatic] static bool _done;
+    static bool _logged;
+
+    [DllImport("avrt.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern IntPtr AvSetMmThreadCharacteristicsW(string task, ref uint index);
+
+    public static void Here()
+    {
+        if (_done) return;
+        _done = true;
+        try
+        {
+            uint i = 0;
+            if (AvSetMmThreadCharacteristicsW("Pro Audio", ref i) == IntPtr.Zero && !_logged) { _logged = true; App.Log("Dźwięk: MMCSS niedostępne (" + Marshal.GetLastWin32Error() + ")"); }
+        }
+        catch { }
+    }
+}
+
 /// <summary>Lista mikrofonów i głośników z Windowsa (WASAPI).</summary>
 public static class AudioDevices
 {
@@ -106,6 +131,7 @@ public sealed class AudioIo : IDisposable
 
     void OnMic(byte[] buf, int bytes, WaveFormat fmt)
     {
+        Mmcss.Here();
         var ch = Math.Max(1, fmt.Channels);
         int frames;
         if (fmt.Encoding == WaveFormatEncoding.IeeeFloat || (fmt is WaveFormatExtensible x && x.SubFormat == IeeeFloat))
@@ -183,6 +209,7 @@ public sealed class AudioIo : IDisposable
         public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(VoiceEngine.Rate, 2);
         public int Read(float[] buffer, int offset, int count)
         {
+            Mmcss.Here();
             var frames = count / 2;
             if (_m.Length < frames) _m = new float[frames];
             try { v.ReadOutput(_m.AsSpan(0, frames)); } catch { Array.Clear(_m, 0, frames); }
@@ -339,7 +366,8 @@ public sealed class VoiceHost
 {
     readonly GibCordClient _c;
     readonly AudioIo _io;
-    readonly DispatcherQueueTimer _ptt;
+    int _pttGen;
+    bool _pttOn;
     long _room;
     HashSet<long> _members = [];
     string _devIn = "", _devOut = "";
@@ -386,13 +414,6 @@ public sealed class VoiceHost
             _devEnum.RegisterEndpointNotificationCallback(_devWatch);
         }
         catch (Exception ex) { App.Log("Obserwowanie urządzeń dźwięku: " + ex.Message); }
-        _ptt = dq.CreateTimer();
-        _ptt.Interval = TimeSpan.FromMilliseconds(15);
-        _ptt.Tick += (_, _) =>
-        {
-            var o = _c.Voice.Options;
-            _c.Voice.PttDown = o.Mode == "ptt" && o.PttKey > 0 && (GetAsyncKeyState(o.PttKey) & 0x8000) != 0;
-        };
         c.VoiceChanged += Sync;
         c.Store.Changed += ch => { if (ch.Kind is ChangeKind.Voice or ChangeKind.All) MembersChanged(); };
         c.SoundPlayed += s => Sfx.Play(c.Api.Abs(s.Url), s.Volume * c.Voice.Options.OutputVolume, c.Voice.Options.OutputDevice);
@@ -418,6 +439,40 @@ public sealed class VoiceHost
         else _io.Stop();
     }
 
+    /// <summary>
+    /// „Naciśnij, aby mówić”: klawisz sprawdzany na osobnym wątku (6.4.2) — wcześniej co 15 ms na wątku okna przez całą rozmowę,
+    /// także bez tego trybu. Teraz: co 15 ms tylko w trybie PTT, inaczej co 250 ms (czy tryb się nie zmienił); gra obciążająca
+    /// procesor nie opóźnia klawisza, bo wątek ma wyższy priorytet niż okno.
+    /// </summary>
+    void PttStart()
+    {
+        if (_pttOn) return;
+        _pttOn = true;
+        var gen = Interlocked.Increment(ref _pttGen);
+        new Thread(() => PttLoop(gen)) { IsBackground = true, Name = "GibCord PTT", Priority = ThreadPriority.AboveNormal }.Start();
+    }
+
+    void PttStop()
+    {
+        if (!_pttOn) return;
+        _pttOn = false;
+        Interlocked.Increment(ref _pttGen);
+        _c.Voice.PttDown = false;
+    }
+
+    void PttLoop(int gen)
+    {
+        while (Volatile.Read(ref _pttGen) == gen)
+        {
+            var o = _c.Voice.Options;
+            var ptt = o.Mode == "ptt" && o.PttKey > 0;
+            var down = ptt && (GetAsyncKeyState(o.PttKey) & 0x8000) != 0;
+            if (Volatile.Read(ref _pttGen) != gen) break;
+            _c.Voice.PttDown = down;
+            Thread.Sleep(ptt ? 15 : 250);
+        }
+    }
+
     void Sync()
     {
         var inCall = _c.VoiceChannelId != 0 && !_c.Offline;
@@ -428,8 +483,7 @@ public sealed class VoiceHost
             _io.Start(o.InputDevice, o.OutputDevice);
         }
         else if (!inCall && (_io.Capturing || _io.Playing) && !_testing) _io.Stop();
-        if (inCall && !_ptt.IsRunning) _ptt.Start();
-        if (!inCall && _ptt.IsRunning) { _ptt.Stop(); _c.Voice.PttDown = false; }
+        if (inCall) PttStart(); else PttStop();
         if (!inCall && _screen?.Active == true) _screen.Stop(silent: true);
         // rozmowa sama zakończyła transmisję (zmiana kanału, błąd, odebrane uprawnienie) — zgaś też przechwytywanie (żółta ramka)
         else if (_screen?.Active == true && !_c.Voice.ScreenSharing && Environment.TickCount64 - _screen.StartedAt > 5000) _screen.Stop(silent: true);

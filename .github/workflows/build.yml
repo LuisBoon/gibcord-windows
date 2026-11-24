@@ -107,9 +107,10 @@ jobs:
             Where-Object { $_.ProviderName -in 'Application Error','.NET Runtime','Windows Error Reporting' } | Select-Object -First 6 |
             ForEach-Object { Write-Host "[$($_.ProviderName)] $($_.Message)"; Write-Host '' }
 
-      # tryb gry: ile GibCord zajmuje w różnych stanach okna (runner nie ma karty graficznej — rysowanie okna idzie na procesorze,
-      # więc procent dla widocznego okna jest zawyżony; pamięć i stany bez okna są miarodajne)
-      - name: Pomiar pamięci i procesora (tryb gry)
+      # oszczędzanie (6.4.2): ile GibCord zajmuje w różnych stanach okna (runner nie ma karty graficznej — rysowanie okna idzie
+      # na procesorze, więc procent dla widocznego okna jest zawyżony; pamięć i stany bez rysowania są miarodajne).
+      # „gra” = grasz, okno widać obok; „zasłonięte” = gra na pełnym ekranie przykrywa okno; „schowane” = okno w zasobniku
+      - name: Pomiar pamięci i procesora (oszczędzanie)
         timeout-minutes: 10
         shell: pwsh
         run: |
@@ -118,9 +119,9 @@ jobs:
           $cases = @(
             @{ n = 'okno: czat'; a = @('--demo','--view','chat','--pomiar','okno') },
             @{ n = 'okno: rozmowa'; a = @('--demo','--view','voice','--motion','--pomiar','okno') },
-            @{ n = 'schowane: rozmowa'; a = @('--demo','--view','voice','--motion','--pomiar','schowane') },
-            @{ n = 'zwolnione: rozmowa'; a = @('--demo','--view','voice','--motion','--pomiar','zwolnione') },
-            @{ n = 'lekki bez WinUI'; a = @('--demo','--lekki') }
+            @{ n = 'gra: rozmowa'; a = @('--demo','--view','voice','--motion','--pomiar','gra') },
+            @{ n = 'zasłonięte: rozmowa'; a = @('--demo','--view','voice','--motion','--pomiar','zasloniete') },
+            @{ n = 'schowane: rozmowa'; a = @('--demo','--view','voice','--motion','--pomiar','schowane') }
           )
           foreach ($c in $cases) {
             $p = Start-Process -FilePath publish\GibCord.exe -ArgumentList $c.a -PassThru
@@ -130,10 +131,14 @@ jobs:
             Start-Sleep 30
             $p.Refresh(); $cpu1 = $p.TotalProcessorTime.TotalMilliseconds; $t1 = Get-Date
             $ms = ($cpu1 - $cpu0) / ($t1 - $t0).TotalSeconds
+            # „Pamięć” z Menedżera zadań = prywatny zestaw roboczy
+            $pws = $null
+            try { $pws = (Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -Filter "IDProcess=$($p.Id)").WorkingSetPrivate } catch { }
             $rows += [pscustomobject]@{
               Stan = $c.n
               PamiecPrywatnaMB = [math]::Round($p.PrivateMemorySize64 / 1MB, 1)
               ZestawRoboczyMB = [math]::Round($p.WorkingSet64 / 1MB, 1)
+              MenedzerZadanMB = if ($pws) { [math]::Round($pws / 1MB, 1) } else { $null }
               ProcesorMsNaSek = [math]::Round($ms, 1)
               ProcentJednegoRdzenia = [math]::Round($ms / 10, 2)
               Watki = $p.Threads.Count
@@ -145,7 +150,7 @@ jobs:
           $rows | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
           $rows | ConvertTo-Json | Set-Content zrzuty\pomiar.json -Encoding utf8
           $log = Join-Path $env:LOCALAPPDATA 'GibCord6-dane\dziennik.txt'
-          if (Test-Path $log) { Select-String -Path $log -Pattern 'Pomiar|Tryb lekki|Błąd' | Select-Object -Last 20 | ForEach-Object { $_.Line } }
+          if (Test-Path $log) { Select-String -Path $log -Pattern 'Pomiar|Oszczędzanie|Błąd' | Select-Object -Last 30 | ForEach-Object { $_.Line } }
 
       - uses: actions/upload-artifact@v4
         if: always()
