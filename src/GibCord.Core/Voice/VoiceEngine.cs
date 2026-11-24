@@ -112,6 +112,8 @@ public sealed class VoiceEngine : IAsyncDisposable
     // 6.4: szyfrowanie od końca do końca (wspólny klucz rozmowy, jak na stronie)
     GibCord.Core.E2ee.E2eeKey? _e2ee;
     int _e2eeSlot;
+    /// <summary>Klucze w pierścieniu (także „na zapas” po wymianie) — podane przed połączeniem trafiają do LiveKit zaraz po nim.</summary>
+    readonly ConcurrentDictionary<int, GibCord.Core.E2ee.E2eeKey> _ring = new();
     readonly ConcurrentDictionary<long, EncryptionState> _crypt = new();
     /// <summary>Połączenie jest szyfrowane (pokój z kluczem rozmowy).</summary>
     public bool Encrypted => _e2ee is not null && _room is not null;
@@ -119,6 +121,21 @@ public sealed class VoiceEngine : IAsyncDisposable
     public EncryptionState? CryptStateOf(long uid) => _crypt.TryGetValue(uid, out var st) ? st : null;
     /// <summary>Nie da się odszyfrować dźwięku / obrazu osoby (zły albo brak klucza) — wątek w tle.</summary>
     public event Action<long>? DecryptTrouble;
+    /// <summary>Kiedy LiveKit ostatnio zgłosił „Ok” (odszyfrowana ramka) dla osoby — bramka dźwięku i obrazu w szyfrowanej rozmowie.</summary>
+    readonly ConcurrentDictionary<long, long> _okAt = new();
+    /// <summary>
+    /// Ścieżka z szyfrowanej rozmowy gra / pokazuje się dopiero, gdy wiadomo, że odszyfrowanie działa: pierwsze ramki po subskrypcji
+    /// mogą przejść, zanim LiveKit podłączy odszyfrowanie — zaszyfrowane bajty w dekoderze dają głośny szum. Otwieramy, gdy:
+    /// LiveKit zgłosi „Ok” dla tej osoby po subskrypcji; albo osoba już była „Ok” i minęła 1 s (nowa ścieżka, np. dźwięk transmisji);
+    /// albo minęły 3 s bez żadnego zgłoszenia (zapas — wtedy odszyfrowanie dawno jest podłączone i złe ramki odrzuca samo).
+    /// </summary>
+    internal bool Decrypted(long uid, long subscribedAt)
+    {
+        if (_e2ee is null) return true; // pokój bez szyfrowania
+        var age = Environment.TickCount64 - subscribedAt;
+        if (_okAt.TryGetValue(uid, out var ok)) return ok >= subscribedAt || age >= 1000;
+        return age >= 3000 && !_crypt.ContainsKey(uid);
+    }
 
     public VoiceOptions Options { get; set; } = new();
     /// <summary>6.2 zmieniacz głosu: efekt na moim mikrofonie (null = bez).</summary>
@@ -151,6 +168,8 @@ public sealed class VoiceEngine : IAsyncDisposable
     public IReadOnlyCollection<long> Watching { get { lock (_gate) return [.. _watching]; } }
     public IEnumerable<VideoFeed> Feeds => _feeds.Values;
     public int RemoteAudioCount => _audio.Count;
+    /// <summary>Do testów: ile ramek dźwięku odrzuciła bramka odszyfrowania.</summary>
+    internal int GatedFrames => _audio.Values.Sum(a => a.Dropped);
 
     /// <summary>Zmiana stanu: połączenie, uprawnienia, lista obrazów (wątek w tle).</summary>
     public event Action? Changed;
@@ -178,6 +197,10 @@ public sealed class VoiceEngine : IAsyncDisposable
         Deafened = deafened;
         CanSpeak = true; CanStream = true; Quality = 3;
         _clientLeaving = false;
+        _ring.Clear();
+        if (e2ee is not null) _ring[e2ee.Slot] = e2ee;
+        _e2ee = e2ee;
+        _e2eeSlot = e2ee?.Slot ?? 0;
         State = VoiceState.Connecting;
         Raise();
         var room = new Room();
@@ -196,8 +219,6 @@ public sealed class VoiceEngine : IAsyncDisposable
                     KeyProviderOptions = new KeyProviderOptions { SharedKey = e2ee.Material, RatchetWindowSize = 0, FailureTolerance = -1, KeyRingSize = GibCord.Core.E2ee.E2eeKey.RingSize },
                 };
             }
-            _e2ee = e2ee;
-            _e2eeSlot = e2ee?.Slot ?? 0;
             await room.ConnectAsync(media.Url, media.Token, opts, ct).ConfigureAwait(false);
         }
         catch
@@ -208,7 +229,7 @@ public sealed class VoiceEngine : IAsyncDisposable
             throw;
         }
         if (!ReferenceEquals(_room, room)) return; // w międzyczasie rozłączono
-        if (e2ee is not null) SetE2eeKey(e2ee, true); // klucz na jego miejscu w pierścieniu (z opcji trafia na miejsce 0)
+        if (e2ee is not null) InstallRing(); // klucze na swoich miejscach w pierścieniu (z opcji klucz trafia na miejsce 0)
         State = VoiceState.Connected;
         foreach (var p in room.RemoteParticipants.Values) ApplySubscriptions(p);
         Raise();
@@ -248,7 +269,9 @@ public sealed class VoiceEngine : IAsyncDisposable
         _micPump = null;
         _media = null;
         _e2ee = null;
+        _ring.Clear();
         _crypt.Clear();
+        _okAt.Clear();
         if (State != VoiceState.Idle) { State = VoiceState.Idle; Raise(); }
     }
 
@@ -260,12 +283,30 @@ public sealed class VoiceEngine : IAsyncDisposable
     /// </summary>
     public void SetE2eeKey(GibCord.Core.E2ee.E2eeKey key, bool switchNow)
     {
-        if (_room?.E2EEManager?.KeyProvider is not { } kp) { _e2ee = key; if (switchNow) _e2eeSlot = key.Slot; return; }
-        try { kp.SetSharedKey(key.Material, key.Slot); }
-        catch (Exception) { return; }
-        _e2ee = key;
+        Install(key);
         if (switchNow) UseE2eeKey(key);
         Raise();
+    }
+
+    void Install(GibCord.Core.E2ee.E2eeKey key)
+    {
+        if (_ring.TryGetValue(key.Slot, out var have) && have == key && _room is not { IsConnected: true }) return;
+        _ring[key.Slot] = key;
+        if (_room is { IsConnected: true } && _room.E2EEManager?.KeyProvider is { } kp)
+        {
+            try { kp.SetSharedKey(key.Material, key.Slot); }
+            catch (Exception) { }
+        }
+    }
+
+    void InstallRing()
+    {
+        if (_room?.E2EEManager?.KeyProvider is not { } kp) return;
+        foreach (var k in _ring.Values)
+        {
+            try { kp.SetSharedKey(k.Material, k.Slot); } catch (Exception) { }
+        }
+        ApplyKeyIndex();
     }
 
     /// <summary>Do dziennika i testów: stan szyfrowania (menedżer, szyfratory ścieżek, stany osób).</summary>
@@ -283,6 +324,8 @@ public sealed class VoiceEngine : IAsyncDisposable
     /// <summary>Szyfruj moje ścieżki kluczem o tym numerze (odbiorcy biorą numer z każdej ramki).</summary>
     public void UseE2eeKey(GibCord.Core.E2ee.E2eeKey key)
     {
+        if (!_ring.TryGetValue(key.Slot, out var have) || have != key) Install(key);
+        _e2ee = key;
         _e2eeSlot = key.Slot;
         ApplyKeyIndex();
     }
@@ -307,6 +350,7 @@ public sealed class VoiceEngine : IAsyncDisposable
             if (!ReferenceEquals(_room, room) || Uid(e.Participant) is not long u || e.Participant?.Identity == _media?.Identity) return;
             var was = _crypt.TryGetValue(u, out var w) ? w : (EncryptionState?)null;
             _crypt[u] = e.State;
+            if (e.State == EncryptionState.Ok) _okAt[u] = Environment.TickCount64;
             if (e.State is EncryptionState.DecryptionFailed or EncryptionState.MissingKey) { try { DecryptTrouble?.Invoke(u); } catch { } }
             if (was != e.State) Raise();
         };
@@ -317,7 +361,7 @@ public sealed class VoiceEngine : IAsyncDisposable
         room.ParticipantDisconnected += (_, p) =>
         {
             foreach (var pub in p.TrackPublications.Values) Remove(pub.Sid);
-            if (Uid(p) is long u) { _remoteLoudAt.TryRemove(u, out long _); _crypt.TryRemove(u, out EncryptionState _); }
+            if (Uid(p) is long u) { _remoteLoudAt.TryRemove(u, out long _); _crypt.TryRemove(u, out EncryptionState _); _okAt.TryRemove(u, out long _); }
         };
         room.ConnectionQualityChanged += (_, e) =>
         {
@@ -418,14 +462,17 @@ public sealed class VoiceEngine : IAsyncDisposable
             var feed = new VideoFeed { UserId = uid, Screen = pub.Source == TrackSource.SourceScreenshare, TrackSid = pub.Sid };
             if (!_feeds.TryAdd(pub.Sid, feed)) return;
             var ct = _cts?.Token ?? CancellationToken.None;
+            var since = Environment.TickCount64;
             _ = Task.Run(async () =>
             {
                 try
                 {
                     using var vs = new VideoStream(track, VideoBufferType.Bgra, 2);
+                    var open = false;
                     await foreach (var ev in vs.WithCancellation(ct).ConfigureAwait(false))
                     {
                         if (!_feeds.ContainsKey(pub.Sid)) break;
+                        if (!open && !(open = Decrypted(uid, since))) continue; // 6.4: bez obrazu z nieodszyfrowanych ramek
                         var f = ev.Frame;
                         feed.Put(f.Data, f.Width, f.Height);
                     }
@@ -757,6 +804,9 @@ public sealed class VoiceEngine : IAsyncDisposable
         public long UserId { get; } = uid;
         public bool Screen { get; } = screen;
         public SampleRing Ring { get; } = new(Rate * (screen ? 2 : 1) / 2);
+        /// <summary>6.4: kiedy zasubskrybowano (bramka odszyfrowania) i ile ramek odrzucono, zanim się otworzyła.</summary>
+        public long SubscribedAt { get; } = Environment.TickCount64;
+        public int Dropped;
 
         public void Start(Track track)
         {
@@ -766,8 +816,11 @@ public sealed class VoiceEngine : IAsyncDisposable
                 try
                 {
                     using var stream = new AudioStream(track, (uint)Rate, 1u);
+                    var open = false;
                     await foreach (var ev in stream.WithCancellation(ct).ConfigureAwait(false))
                     {
+                        // szyfrowana rozmowa: nic do głośników, dopóki LiveKit nie potwierdzi odszyfrowania (bez szumu z zaszyfrowanych ramek)
+                        if (!open && !(open = owner.Decrypted(UserId, SubscribedAt))) { Dropped++; continue; }
                         var f = ev.Frame;
                         Ring.Write(f.Data);
                         if (!Screen) owner.Heard(UserId, Pcm.Db(f.Data));

@@ -136,14 +136,14 @@ public class E2eeProtocolTests
         public readonly Dictionary<long, List<E2eeDeviceInfo>> Devices = [];
         public int Sent;
 
-        public E2eeCall Join(long uid, bool group, long call = 500)
+        public E2eeCall Join(long uid, bool group, long call = 500, int switchMs = 150)
         {
             var key = E2eeCrypto.NewKey();
             var dev = new E2eeDevice(E2eeCrypto.NewDeviceId(), key);
             lock (Lock) { Devices[uid] = [new E2eeDeviceInfo { Dev = dev.Dev, Pub = dev.Pub, At = Environment.TickCount64 }]; Room.Add(uid); }
             var c = new E2eeCall(call, uid, group, dev, new Net(this, uid), () => { lock (Lock) return Room.ToList(); })
             {
-                ReqAfter = TimeSpan.FromMilliseconds(250), SwitchAfter = TimeSpan.FromMilliseconds(150), WaitingFor = TimeSpan.FromMilliseconds(400),
+                ReqAfter = TimeSpan.FromMilliseconds(250), SwitchAfter = TimeSpan.FromMilliseconds(switchMs), WaitingFor = TimeSpan.FromMilliseconds(400),
             };
             lock (Lock) Calls[uid] = c;
             return c;
@@ -220,6 +220,39 @@ public class E2eeProtocolTests
         Assert.NotEqual(oldKey.Key, a.Key!.Key);
         Assert.Equal(oldKey, c.Key); // C go nie zna
         Assert.True(await Until(() => Volatile.Read(ref switched) == 1, 2000), "lider przełącza szyfrowanie po chwili");
+    }
+
+    [Fact]
+    public async Task OdbiorcaPrzelaczaSzyfrowaniePoChwili()
+    {
+        // wymiana klucza: odbiorca dostaje nowy klucz „na zapas” (do odszyfrowania), szyfrować nim zaczyna dopiero po 1,5 s — jak lider i strona
+        var h = new Hub();
+        var a = h.Join(1, group: true, switchMs: 1500);
+        await a.Start([]);
+        var b = h.Join(2, group: true, switchMs: 1500);
+        var c = h.Join(3, group: true, switchMs: 1500);
+        await h.RoomChanged();
+        await b.Start([1]); await c.Start([1, 2]);
+        Assert.True(await Until(() => b.Key == a.Key && c.Key == a.Key));
+        var old = a.Key!;
+        var installed = new List<(E2eeKey K, bool Now)>();
+        var switched = new List<E2eeKey>();
+        b.KeyReady += (k, now) => { lock (installed) installed.Add((k, now)); };
+        b.SwitchTo += k => { lock (switched) switched.Add(k); };
+        h.Leave(3);
+        await h.RoomChanged(); // lider = 1 wymienia klucz
+        Assert.True(await Until(() => b.Pending is { Index: 1 }, 2000), "B ma nowy klucz na zapas");
+        Assert.Equal(old, b.Key); // ale szyfruje jeszcze starym
+        lock (installed) Assert.Contains(installed, x => x.K.Index == 1 && !x.Now);
+        lock (switched) Assert.Empty(switched);
+        // nowa osoba w trakcie wymiany dostaje oba klucze
+        var d = h.Join(4, group: true, switchMs: 1500);
+        await h.RoomChanged();
+        await d.Start([1, 2]);
+        Assert.True(await Until(() => d.Key == old && d.Pending is { Index: 1 }, 1500), "nowa osoba: obecny klucz + ten na zapas");
+        Assert.True(await Until(() => b.Key is { Index: 1 } && b.Pending is null && a.Key == b.Key, 3000), "po 1,5 s wszyscy szyfrują nowym");
+        lock (switched) Assert.Single(switched);
+        Assert.True(await Until(() => d.Key == a.Key, 3000));
     }
 
     [Fact]

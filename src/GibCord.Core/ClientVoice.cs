@@ -298,6 +298,11 @@ public sealed partial class GibCordClient
         try
         {
             await Voice.ConnectAsync(m, BitrateOf(m.ChannelId), o.Muted || o.Deafened, o.Deafened, default, key);
+            if (key is not null && _e2ee is { } call) // 6.4: wymiana klucza w trakcie łączenia — dogoń obecny i ten „na zapas”
+            {
+                if (call.Key is { } cur && cur != key) Voice.UseE2eeKey(cur);
+                if (call.Pending is { } pend) Voice.SetE2eeKey(pend, false);
+            }
             _voiceAttempts = 0;
         }
         catch (Exception ex)

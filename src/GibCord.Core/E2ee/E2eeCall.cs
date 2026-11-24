@@ -50,6 +50,9 @@ public sealed class E2eeCall : IDisposable
     public E2eeKey? Key { get; private set; }
     /// <summary>Kto dał (albo wylosował) obecny klucz — przy sporze o ten sam numer wygrywa mniejsze uid źródła (jak na stronie).</summary>
     public long KeySource { get; private set; }
+    /// <summary>Trwa wymiana: nowy klucz jest już w pierścieniu (odszyfrowanie), szyfrować nim zaczniemy po <see cref="SwitchAfter"/>.</summary>
+    public E2eeKey? Pending { get; private set; }
+    long _pendingSource;
     public E2eeStatus Status { get; private set; } = E2eeStatus.Waiting;
     public string? Error { get; private set; }
 
@@ -201,9 +204,13 @@ public sealed class E2eeCall : IDisposable
             _asks.Remove(from);
             var nk = new E2eeKey(k.Key, k.Index);
             if (Key is null) { SetKey(nk, from, switchNow: true); return; }
-            if (Key.Key == nk.Key && Key.Index == nk.Index) return;
-            // nowszy klucz (po wymianie; numery 0–15 w kółko) — albo spór o ten sam numer: wygrywa klucz od osoby z mniejszym uid (jak na stronie)
-            if (E2eeKey.Newer(nk.Index, Key.Index) || (nk.Index == Key.Index && from < KeySource)) SetKey(nk, from, switchNow: true);
+            if (nk == Key || nk == Pending) return;
+            // jak na stronie: trwa wymiana i przyszedł klucz o tym samym numerze — wygrywa ten od mniejszego uid
+            if (Pending is { } pend && nk.Index == pend.Index) { if (from < _pendingSource) StartPending(nk, from); return; }
+            // spór o obecny numer — wygrywa klucz od mniejszego uid (od razu)
+            if (nk.Index == Key.Index) { if (from < KeySource) SetKey(nk, from, switchNow: true); return; }
+            // nowszy klucz (wymiana po wyjściu kogoś z grupy): do pierścienia od razu, szyfrowanie nim po 1,5 s — jak lider i strona
+            if (E2eeKey.Newer(nk.Index, (Pending ?? Key).Index)) StartPending(nk, from);
         }
         catch (Exception ex) { Note("wiadomość: " + ex.Message); }
         finally { _gate.Release(); }
@@ -227,16 +234,11 @@ public sealed class E2eeCall : IDisposable
                 return;
             }
             if (left.Count == 0 || !IsGroup || Key is null || now.Count == 0 || !IAmLeader()) return;
-            var next = new E2eeKey(E2eeCrypto.NewCallKey(), E2eeKey.Next(Key.Index));
+            var next = new E2eeKey(E2eeCrypto.NewCallKey(), E2eeKey.Next((Pending ?? Key).Index));
             Note($"wymiana klucza po wyjściu {string.Join(",", left)} → {next.Index}");
             // nowy klucz: od razu do odszyfrowania, szyfrować nim zaczynam dopiero, gdy reszta go dostanie
-            Key = next;
-            KeySource = MyUid;
-            KeyReady?.Invoke(next, false);
-            foreach (var u in now) await SendKeyTo(u, _peerDev.GetValueOrDefault(u)).ConfigureAwait(false);
-            _switchTimer?.Dispose();
-            _switchTimer = new Timer(_ => { if (!_disposed && Key == next) SwitchTo?.Invoke(next); }, null, SwitchAfter, Timeout.InfiniteTimeSpan);
-            Raise();
+            StartPending(next, MyUid);
+            foreach (var u in now) await SendKeyTo(u, _peerDev.GetValueOrDefault(u), next).ConfigureAwait(false);
         }
         catch (Exception ex) { Note("wymiana: " + ex.Message); }
         finally { _gate.Release(); }
@@ -251,8 +253,36 @@ public sealed class E2eeCall : IDisposable
         return keyed.All(u => u > MyUid);
     }
 
+    /// <summary>Nowy klucz „na zapas”: od razu do pierścienia (odszyfrowanie), po <see cref="SwitchAfter"/> staje się obecnym i nim szyfrujemy.</summary>
+    void StartPending(E2eeKey k, long source)
+    {
+        Pending = k;
+        _pendingSource = source;
+        Note($"nowy klucz nr {k.Index} od {source} — przełączę za {SwitchAfter.TotalSeconds:0.#} s");
+        KeyReady?.Invoke(k, false);
+        _switchTimer?.Dispose();
+        _switchTimer = new Timer(_ => _ = FinishPending(k), null, SwitchAfter, Timeout.InfiniteTimeSpan);
+        Raise();
+    }
+
+    async Task FinishPending(E2eeKey k)
+    {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_disposed || Pending != k) return;
+            Key = k;
+            KeySource = _pendingSource;
+            Pending = null;
+            SwitchTo?.Invoke(k);
+            Raise();
+        }
+        finally { _gate.Release(); }
+    }
+
     void SetKey(E2eeKey k, long source, bool switchNow)
     {
+        if (Pending is not null) { Pending = null; _switchTimer?.Dispose(); _switchTimer = null; }
         Key = k;
         KeySource = source;
         Status = E2eeStatus.Active;
@@ -263,9 +293,11 @@ public sealed class E2eeCall : IDisposable
     }
 
     /// <summary>Wysyła klucz osobie: na urządzenie, którego używa w rozmowie, a gdy go nie znam — na jej 3 ostatnio używane urządzenia.</summary>
-    async Task SendKeyTo(long uid, string? dev)
+    async Task SendKeyTo(long uid, string? dev, E2eeKey? only = null)
     {
-        if (Key is not { } key) return;
+        if (Key is null) return;
+        // trwa wymiana — nowa osoba dostaje oba klucze (obecny i ten „na zapas”), jak na stronie
+        var keys = only is not null ? [only] : Pending is { } p ? new List<E2eeKey> { Key, p } : [Key];
         var targets = new List<E2eeDeviceInfo>();
         if (dev is not null && await PubOf(uid, dev).ConfigureAwait(false) is { } pub) targets.Add(new E2eeDeviceInfo { Dev = dev, Pub = pub });
         else
@@ -274,10 +306,11 @@ public sealed class E2eeCall : IDisposable
             targets.AddRange((_devices.GetValueOrDefault(uid) ?? []).OrderByDescending(x => x.At).Take(3));
         }
         foreach (var t in targets)
-        {
-            var box = E2eeCrypto.Seal(Device.Key, t.Pub, E2eeCrypto.Info(CallId, MyUid, Device.Dev, uid, t.Dev), E2eeCrypto.KeyPayload(key.Key, key.Index));
-            await SendFrame(new { t = "e2ee_send", call = CallId, to = uid, dev = t.Dev, fromDev = Device.Dev, kind = "key", box = new { iv = box.Iv, ct = box.Ct } }).ConfigureAwait(false);
-        }
+            foreach (var key in keys)
+            {
+                var box = E2eeCrypto.Seal(Device.Key, t.Pub, E2eeCrypto.Info(CallId, MyUid, Device.Dev, uid, t.Dev), E2eeCrypto.KeyPayload(key.Key, key.Index));
+                await SendFrame(new { t = "e2ee_send", call = CallId, to = uid, dev = t.Dev, fromDev = Device.Dev, kind = "key", box = new { iv = box.Iv, ct = box.Ct } }).ConfigureAwait(false);
+            }
         _waitingSince.Remove(uid);
     }
 

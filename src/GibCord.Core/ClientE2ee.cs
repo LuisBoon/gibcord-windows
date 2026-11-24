@@ -109,8 +109,8 @@ public sealed partial class GibCordClient
         if (_e2ee != call) return;
         if (Voice.State == VoiceState.Idle || Voice.ChannelId != call.CallId)
         {
-            // pierwszy klucz: dopiero teraz łączymy się z serwerem głosu
-            if (_e2eeMedia is { } m && m.ChannelId == call.CallId) { _e2eeMedia = null; _ = ConnectMedia(m, k); }
+            // pierwszy klucz: dopiero teraz łączymy się z serwerem głosu (klucz „na zapas” z wymiany doda ConnectMedia po połączeniu)
+            if (_e2eeMedia is { } m && m.ChannelId == call.CallId) { _e2eeMedia = null; _ = ConnectMedia(m, call.Key ?? k); }
             return;
         }
         Voice.SetE2eeKey(k, switchNow);

@@ -99,9 +99,9 @@ public sealed class VoiceTests
     }
 
     /// <summary>A mówi sinusem; zwraca największą głośność, jaką słyszą podani słuchacze (po kolei w tablicy).</summary>
-    /// <param name="warmupMs">Najpierw tyle mówi bez liczenia: pierwsze ramki po subskrypcji mogą przejść, zanim LiveKit podłączy odszyfrowanie
-    /// (wtedy słychać krótki szum z zaszyfrowanych danych — nie treść).</param>
-    static async Task<double[]> SpeakAndListen(VoiceEngine speaker, VoiceEngine[] listeners, Func<double[], bool> done, int ms, int warmupMs = 0)
+    /// <param name="warmupMs">Najpierw tyle mówi bez liczenia (0 = liczymy od pierwszej próbki — także ewentualny szum przed odszyfrowaniem).</param>
+    /// <param name="lingerMs">Po spełnieniu warunku jeszcze tyle słuchamy (żeby złapać przeciek do osoby z innym kluczem).</param>
+    static async Task<double[]> SpeakAndListen(VoiceEngine speaker, VoiceEngine[] listeners, Func<double[], bool> done, int ms, int warmupMs = 0, int lingerMs = 1500)
     {
         using var cts = new CancellationTokenSource();
         var peaks = new double[listeners.Length];
@@ -127,7 +127,7 @@ public sealed class VoiceTests
         });
         if (warmupMs > 0) { await Task.Delay(warmupMs); for (var l = 0; l < peaks.Length; l++) peaks[l] = 0; }
         await Until(() => done(peaks), ms);
-        if (warmupMs > 0) await Task.Delay(1500); // jeszcze chwila słuchania, żeby złapać przeciek do osoby z innym kluczem
+        if (lingerMs > 0) await Task.Delay(lingerMs);
         cts.Cancel();
         await Task.WhenAll(speak, listen);
         return peaks;
@@ -147,10 +147,11 @@ public sealed class VoiceTests
         await b.ConnectAsync(Media(cid, "22"), 64, false, false, default, k3);
         await c.ConnectAsync(Media(cid, "23"), 64, false, false, default, new GibCord.Core.E2ee.E2eeKey(GibCord.Core.E2ee.E2eeCrypto.NewCallKey(), 3));
         Assert.True(a.Encrypted && b.Encrypted && c.Encrypted);
-        var p = await SpeakAndListen(a, [b, c], x => x[0] > 0.05 && b.IsSpeaking(21), 15000, warmupMs: 2500);
+        // bez rozgrzewki: do głośników C (zły klucz) nie może dojść nic — także szum z zaszyfrowanych ramek sprzed podłączenia odszyfrowania
+        var p = await SpeakAndListen(a, [b, c], x => x[0] > 0.05 && b.IsSpeaking(21), 15000, warmupMs: 0, lingerMs: 2500);
         var dbg = $"\nA: {a.E2eeDebug()}\nB: {b.E2eeDebug()}\nC: {c.E2eeDebug()}";
         Assert.True(p[0] > 0.05, $"B (ten sam klucz) nie słyszy A: szczyt {p[0]:0.000}, stan {b.CryptStateOf(21)}{dbg}");
-        Assert.True(p[1] < 0.01, $"C (inny klucz) słyszy A: szczyt {p[1]:0.000}{dbg}");
+        Assert.True(p[1] < 0.001, $"C (inny klucz) słyszy A — szum albo treść: szczyt {p[1]:0.0000}, odrzucone ramki {c.GatedFrames}{dbg}");
         Assert.NotEqual(LiveKit.Proto.EncryptionState.Ok, c.CryptStateOf(21));
         Assert.Equal(LiveKit.Proto.EncryptionState.Ok, b.CryptStateOf(21) ?? LiveKit.Proto.EncryptionState.Ok);
 
@@ -160,7 +161,7 @@ public sealed class VoiceTests
         b.SetE2eeKey(k4, true);
         await Task.Delay(300);
         a.UseE2eeKey(k4);
-        var p2 = await SpeakAndListen(a, [b, c], x => x[0] > 0.05, 10000, warmupMs: 500);
+        var p2 = await SpeakAndListen(a, [b, c], x => x[0] > 0.05, 10000);
         Assert.True(p2[1] < 0.01, $"Po wymianie klucza C słyszy A (szczyt {p2[1]:0.000})");
         Assert.True(p2[0] > 0.05, $"Po wymianie klucza B nie słyszy A (szczyt {p2[0]:0.000}, stan {b.CryptStateOf(21)})");
     }
