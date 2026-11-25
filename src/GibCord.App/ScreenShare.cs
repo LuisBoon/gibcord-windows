@@ -69,6 +69,21 @@ public sealed class ScreenShare : IDisposable
     byte[] _scaled = [];
 
     public ScreenShare(GibCordClient c) { _c = c; }
+
+    /// <summary>Klatki na sekundę i wysokość obrazu, który teraz wysyłamy (czujnik cięcia).</summary>
+    public int Fps => 1000 / Math.Max(1, _frameMs);
+    public int TargetHeight => _session is null ? 0 : Fit(_size.Width, _size.Height, _quality).H;
+    /// <summary>25.11.2026 czujnik cięcia: co można obniżyć bez ponownego wybierania okna — najpierw 720p, potem 30 kl/s.</summary>
+    public string? LowerOption => _session is null ? null : _quality != "720p" ? "720p" : _frameMs < 30 ? "30fps" : null;
+    public bool Lower()
+    {
+        switch (LowerOption)
+        {
+            case "720p": _quality = "720p"; _c.Voice.ScreenHeight = TargetHeight; App.Log("Transmisja: 720p (podpowiedź czujnika)"); return true;
+            case "30fps": _frameMs = 33; App.Log("Transmisja: 30 kl/s (podpowiedź czujnika)"); return true;
+            default: return false;
+        }
+    }
     public bool AudioActive => _audio?.Active == true;
     public long StartedAt { get; private set; }
 

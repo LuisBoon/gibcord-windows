@@ -949,6 +949,37 @@ public sealed class Shell : Grid
         _annBar.Visibility = Visibility.Visible;
     }
 
+    /// <summary>25.11.2026 czujnik cięcia: podpowiedź dla osoby, która transmituje (obraz zwalnia przez procesor albo łącze).</summary>
+    public void StreamHint(string title, string sub, string? action, Action? a)
+    {
+        var text = U.V(2, U.T(title, 13.5, U.Bold), U.T(sub, 12.5, null, Theme.Mu, wrap: true));
+        text.MaxWidth = 380;
+        var ico = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(12), Background = U.B("#2EFFD36E"), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = "!", FontWeight = U.Bold, FontSize = 13, Foreground = U.B("#FFD36E"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+        var row = U.H(12, ico, text);
+        var b = new Border
+        {
+            Background = Theme.Toast, CornerRadius = new CornerRadius(12), Padding = U.Th(14, 10), BorderBrush = U.B("#80FFD36E"), BorderThickness = U.Th(1), MaxWidth = 560,
+            Child = row,
+        };
+        if (action is not null && a is not null)
+        {
+            var btn = new HyperlinkButton { Content = U.T(action, 13, U.Bold, Theme.Accent), Padding = U.Th(6, 0), VerticalAlignment = VerticalAlignment.Center };
+            btn.Click += (_, _) => { _toasts.Children.Remove(b); a(); };
+            row.Children.Add(btn);
+        }
+        var x = new HyperlinkButton { Content = U.T("✕", 12, null, Theme.Mu), Padding = U.Th(6, 0), VerticalAlignment = VerticalAlignment.Center };
+        ToolTipService.SetToolTip(x, "Zamknij");
+        x.Click += (_, _) => _toasts.Children.Remove(b);
+        row.Children.Add(x);
+        _toasts.Children.Add(b);
+        while (_toasts.Children.Count > 3) _toasts.Children.RemoveAt(0);
+        var t = DispatcherQueue.CreateTimer();
+        t.Interval = TimeSpan.FromSeconds(20);
+        t.IsRepeating = false;
+        t.Tick += (_, _) => _toasts.Children.Remove(b);
+        t.Start();
+    }
+
     /// <summary>Komunikat z przyciskiem (np. „Cofnij”) — dłużej na ekranie.</summary>
     public void InfoUndo(string msg, string action, Action a)
     {

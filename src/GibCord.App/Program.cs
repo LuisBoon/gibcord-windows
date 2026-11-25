@@ -30,6 +30,7 @@ public static class Program
             App.Log($"Start {string.Join(' ', args.Select(a => a.StartsWith("gibcord:", StringComparison.OrdinalIgnoreCase) ? "gibcord:…" : a))}");
             // Velopack: obsługa instalacji / aktualizacji (musi być na samym początku)
             VelopackApp.Build().SetArgs(args).Run();
+            Migration.EarlyStart(); // 25.11.2026: dezinstalator starej aplikacji zamyka też nas — budzik
 
             WinRT.ComWrappersSupport.InitializeComWrappers();
             if (!Options.Demo && RedirectToRunningInstance()) return 0;
@@ -57,6 +58,7 @@ public static class Program
         try { key = AppInstance.FindOrRegisterForKey(Options.OtherServer ? InstanceKey + "-" + Options.ServerSlug : InstanceKey); }
         catch { return false; }
         if (key.IsCurrent) return false;
+        if (Migration.IsRelaunch) return true; // budzik po przesiadce, a GibCord działa — nic nie pokazujemy
         var args = AppInstance.GetCurrent().GetActivatedEventArgs();
         var evt = Native.CreateEvent(IntPtr.Zero, true, false, null);
         _ = Task.Run(() =>

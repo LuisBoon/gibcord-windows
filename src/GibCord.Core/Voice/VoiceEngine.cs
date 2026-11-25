@@ -434,7 +434,7 @@ public sealed class VoiceEngine : IAsyncDisposable
         }
         else if (track.Kind == TrackKind.KindVideo)
         {
-            var feed = new VideoFeed { UserId = uid, Screen = pub.Source == TrackSource.SourceScreenshare, TrackSid = pub.Sid };
+            var feed = new VideoFeed { UserId = uid, Screen = pub.Source == TrackSource.SourceScreenshare, TrackSid = pub.Sid, Source = track };
             if (!_feeds.TryAdd(pub.Sid, feed)) return;
             var ct = _cts?.Token ?? CancellationToken.None;
             var since = Environment.TickCount64;
@@ -663,6 +663,18 @@ public sealed class VoiceEngine : IAsyncDisposable
 
     // ───────────────────────── udostępnianie ekranu ─────────────────────────
 
+    /// <summary>Docelowe klatki na sekundę i wysokość nadawanego ekranu (czujnik cięcia).</summary>
+    public int ScreenFps { get; private set; }
+    public int ScreenHeight { get; set; }
+
+    /// <summary>25.11.2026 czujnik cięcia: statystyki WebRTC mojego ekranu (null) albo oglądanego ekranu osoby <paramref name="fromUid"/>.</summary>
+    public async Task<IReadOnlyList<LiveKit.Proto.RtcStats>?> ScreenStats(long? fromUid = null)
+    {
+        Track? t = fromUid is { } u ? _feeds.Values.FirstOrDefault(f => f.Screen && f.UserId == u)?.Source : _screenTrack;
+        if (t is null) return null;
+        try { return [.. await t.GetStatsAsync().ConfigureAwait(false)]; } catch { return null; }
+    }
+
     /// <summary>Zaczyna transmisję: zwraca funkcję, do której okno podaje klatki BGRA (szer., wys.).</summary>
     public async Task<Action<byte[], int, int>?> StartScreenShare(int width, int height, int fps, bool withAudio)
     {
@@ -678,6 +690,7 @@ public sealed class VoiceEngine : IAsyncDisposable
             VideoEncoding = new VideoEncodingOptions { MaxBitrate = br, MaxFramerate = (uint)fps },
         }).ConfigureAwait(false);
         _screenSrc = src; _screenTrack = track; _screenSid = pub.Sid;
+        ScreenFps = fps; ScreenHeight = height;
         if (withAudio)
         {
             try

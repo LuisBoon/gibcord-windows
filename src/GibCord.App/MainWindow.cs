@@ -314,6 +314,8 @@ public sealed class MainWindow : Window
         else ShowLogin(null);
         if (Options.Hidden && Client.HasToken) Client.SetVisible(false); else Activate();
         _ = Updater.Run(v => _shell?.ShowUpdate(v));
+        Migration.AfterStart(() => Client?.HasToken == true && Client.VoiceChannelId == 0); // 25.11.2026: skróty po przesiadce; starą aplikację usuwamy dopiero po zalogowaniu, poza rozmową
+        StreamWatch.Init(Client!, Screen, Dq);                     // 25.11.2026: czujnik cięcia transmisji
     }
 
     /// <summary>Przesiadka ze starej aplikacji: logowanie kodem zostawionym przez nią na dysku.</summary>

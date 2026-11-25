@@ -23,6 +23,8 @@ public sealed class VideoFeed
     public long UserId { get; init; }
     public bool Screen { get; init; }
     public string TrackSid { get; init; } = "";
+    /// <summary>Ścieżka z biblioteki (statystyki dla czujnika cięcia).</summary>
+    internal LiveKit.Rtc.Track? Source { get; init; }
     public int Width { get { lock (_lock) return _frame?.Width ?? 0; } }
     public int Height { get { lock (_lock) return _frame?.Height ?? 0; } }
     public long Sequence => Interlocked.Read(ref _seq);
