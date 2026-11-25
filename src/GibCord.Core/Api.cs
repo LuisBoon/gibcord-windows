@@ -221,8 +221,9 @@ public sealed class GibCordApi : IDisposable
     {
         var content = new StreamContent(data);
         content.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrEmpty(contentType) ? "application/octet-stream" : contentType);
-        // duży plik na wolnym łączu: do 30 minut (anulowanie i tak działa)
-        var e = await SendRaw(HttpMethod.Post, "uploads?name=" + Uri.EscapeDataString(name), content, ct, TimeSpan.FromMinutes(30)).ConfigureAwait(false);
+        // duży plik na wolnym łączu: do 30 minut, powyżej 100 MB (właściciele GibCorda, bez limitu) do 6 godzin — anulowanie i tak działa
+        var wait = data.CanSeek && data.Length > 100L * 1024 * 1024 ? TimeSpan.FromHours(6) : TimeSpan.FromMinutes(30);
+        var e = await SendRaw(HttpMethod.Post, "uploads?name=" + Uri.EscapeDataString(name), content, ct, wait).ConfigureAwait(false);
         return e.To<Attachment>()!;
     }
 

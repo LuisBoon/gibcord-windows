@@ -813,7 +813,8 @@ public sealed partial class GibCordClient : IAsyncDisposable
 
     public async Task<(Attachment? Att, string? Error)> Upload(Stream data, string name, string? mime, long size)
     {
-        var max = Info?.Limits.UploadBytes ?? 25L * 1024 * 1024;
+        // 25.11.2026: właściciele GibCorda bez limitu wielkości pliku (serwer pilnuje tylko wolnego miejsca na dysku)
+        var max = Store.Me.IsAdmin ? long.MaxValue : Info?.Limits.UploadBytes ?? 25L * 1024 * 1024;
         if (size > max) return (null, $"Plik jest za duży (najwyżej {Format.Size(max)})");
         try { return (await Api.Upload(data, name, mime), null); }
         catch (Exception ex) { return (null, Friendly(ex)); }
