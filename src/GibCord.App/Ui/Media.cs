@@ -17,7 +17,7 @@ static class MediaViews
 
     public static bool IsVoiceMessage(Attachment a) => a.Mime.StartsWith("audio/") && a.Name.StartsWith("wiadomosc-glosowa");
 
-    public static FrameworkElement Video(Uri url, Attachment a)
+    public static FrameworkElement Video(Uri url, Attachment a, Uri? poster = null, Uri? original = null)
     {
         double w = a.Width ?? 480, h = a.Height ?? 270;
         var k = Math.Min(1, Math.Min(440 / w, 320 / h));
@@ -29,7 +29,14 @@ static class MediaViews
         player.TransportControls.IsCompact = true;
         player.Unloaded += (_, _) => { try { player.MediaPlayer?.Pause(); } catch { } }; // przewinięcie / inny kanał — film nie gra dalej w tle
         player.TransportControls.IsZoomButtonVisible = false;
-        return new Border { CornerRadius = new CornerRadius(10), Child = player, HorizontalAlignment = HorizontalAlignment.Left, Margin = U.Th(0, 3, 0, 2), Background = U.B("#cc08040f") };
+        if (poster is not null) try { player.PosterSource = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(poster); } catch { } // 6.6: klatka podglądu z serwera
+        var box = new Grid();
+        box.Children.Add(player);
+        if (a.Processing) box.Children.Add(new Border { Background = U.B("#b3000000"), CornerRadius = new CornerRadius(8), Padding = U.Th(9, 4), Margin = U.Th(8), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, Child = U.T("Przygotowuję film do odtwarzania…", 12, U.Semi, U.B("#ffffff")) });
+        var frame = new Border { CornerRadius = new CornerRadius(10), Child = box, HorizontalAlignment = HorizontalAlignment.Left, Margin = U.Th(0, 3, 0, 2), Background = U.B("#cc08040f") };
+        if (original is null || a.Original is null) return frame;
+        var link = new HyperlinkButton { Content = U.T($"Pobierz oryginał ({a.Original.Name}, {Format.Size(a.Original.Size ?? 0)})", 12, U.Semi, Theme.Mu), Padding = U.Th(0), NavigateUri = original };
+        return U.V(2, frame, link);
     }
 
     /// <summary>Pasek dźwięku: ▶ / ❚❚, postęp (klik przewija), czas. Dla wiadomości głosowej bez nazwy pliku.</summary>

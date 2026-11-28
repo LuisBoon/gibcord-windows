@@ -439,7 +439,21 @@ public sealed class Attachment
     /// <summary>BlurHash: rozmyta wersja zdjęcia do pokazania, zanim się wczyta (liczy serwer 6.0).</summary>
     public string? Preview { get; set; }
 
+    /// <summary>6.6: film — klatka podglądu z serwera, „w trakcie przerabiania”, długość, oryginał do pobrania.</summary>
+    public string? Poster { get; set; }
+    public bool Processing { get; set; }
+    public double? Duration { get; set; }
+    public AttachmentOriginal? Original { get; set; }
+
     [JsonIgnore] public bool IsImage => Mime is "image/png" or "image/jpeg" or "image/jpg" or "image/gif" or "image/webp" or "image/bmp" or "image/avif";
+}
+
+/// <summary>6.6: oryginał przerobionego filmu (np. .mov z iPhone'a), do pobrania.</summary>
+public sealed class AttachmentOriginal
+{
+    public string Url { get; set; } = "";
+    public string? Name { get; set; }
+    public long? Size { get; set; }
 }
 
 public sealed class Reaction

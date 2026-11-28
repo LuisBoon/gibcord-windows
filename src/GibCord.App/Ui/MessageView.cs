@@ -363,7 +363,7 @@ public sealed partial class MessageView : Grid
         }
         if (url is not null && a.Mime.StartsWith("video/") && a.Mime is "video/mp4" or "video/webm" or "video/quicktime" or "video/x-matroska")
         {
-            var player = MediaViews.Video(url, a);
+            var player = MediaViews.Video(url, a, a.Poster is { Length: > 0 } ps ? Api.Abs(ps) : null, a.Original is { Url.Length: > 0 } og ? Api.Abs(og.Url) : null);
             if (_v.Sh.C.VoiceChannelId == 0 || _v.Sh.C.Offline || a.Mime is not ("video/mp4" or "video/webm")) return player;
             var together = new HyperlinkButton { Content = U.T("📺 Oglądajcie razem w rozmowie", 12, U.Bold, Theme.Accent), Padding = U.Th(0) };
             together.Click += (_, _) => WatchUi.StartFile(_v.Sh, a.Id, _v.S.Watches.ContainsKey(_v.Sh.C.VoiceChannelId));

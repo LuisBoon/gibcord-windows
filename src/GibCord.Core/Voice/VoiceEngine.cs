@@ -683,10 +683,11 @@ public sealed class VoiceEngine : IAsyncDisposable
         await StopScreenShare().ConfigureAwait(false);
         var src = new VideoSource(width, height, isScreencast: true);
         var track = LocalVideoTrack.Create("screen", src);
-        var br = (uint)(width * height >= 2560 * 1440 ? 8_000_000 : width * height >= 1920 * 1080 ? (fps > 30 ? 6_000_000 : 4_000_000) : (fps > 30 ? 3_500_000 : 2_500_000));
+        // 6.6 (nowy serwer): przepływność jak w płatnych komunikatorach; słabsi widzowie dostają niższą warstwę (simulcast) zamiast cięcia u wszystkich
+        var br = (uint)(width * height >= 2560 * 1440 ? (fps > 30 ? 12_000_000 : 9_000_000) : width * height >= 1920 * 1080 ? (fps > 30 ? 8_000_000 : 6_000_000) : (fps > 30 ? 4_500_000 : 3_000_000));
         var pub = await lp.PublishTrackAsync(track, new TrackPublishOptions
         {
-            Source = TrackSource.SourceScreenshare, Simulcast = false, VideoCodec = VideoCodec.H264,
+            Source = TrackSource.SourceScreenshare, Simulcast = true, VideoCodec = VideoCodec.H264,
             VideoEncoding = new VideoEncodingOptions { MaxBitrate = br, MaxFramerate = (uint)fps },
         }).ConfigureAwait(false);
         _screenSrc = src; _screenTrack = track; _screenSid = pub.Sid;

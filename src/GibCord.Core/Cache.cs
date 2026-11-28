@@ -173,7 +173,7 @@ public sealed class Prefs
     public Voice.VoiceOptions Voice { get; set; } = new();
     /// <summary>Transmisja ekranu: jakość (720p / 1080p / 1440p), płynność (30 / 60) i dźwięk z komputera.</summary>
     public string StreamQuality { get; set; } = "1080p";
-    public int StreamFps { get; set; } = 30;
+    public int StreamFps { get; set; } = 60; // 6.6: domyślnie płynnie (nowy serwer ma zapas)
     public bool StreamAudio { get; set; } = true;
     /// <summary>Ostatnio użyte emoji (najnowsze pierwsze; zwykłe albo &lt;:nazwa:id&gt;).</summary>
     public List<string> RecentEmoji { get; set; } = [];
