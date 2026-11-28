@@ -18,7 +18,7 @@ public static class Demo
 
     public static GibCordClient CreateClient(Action<Action> ui)
     {
-        var c = new GibCordClient(new Uri("https://gibcord.luisboon.pl"), new MemoryTokenStore("demo"), null, ui) { Offline = true };
+        var c = new GibCordClient(new Uri("https://gibcord.pl"), new MemoryTokenStore("demo"), null, ui) { Offline = true };
         // 6.1: zima i podsumowanie roku w trybie pokazowym
         Winter.DemoOn = Options.View is "winter" or "wrapped" or "wrapped2" or "wrapped3" or "wrapcard" or "winterlogin";
         if (Options.View is "wrapped" or "wrapped2" or "wrapped3")
@@ -254,14 +254,14 @@ public static class Demo
             Msg(1002, Ogolne, OlaId, "mam, zaraz wrzucę na #nauka. <@5> pamiętaj o *fotosyntezie*", yday - 3500000),
             Msg(1003, Ogolne, BartekId, "a ktoś wie, czy jutro jest wf? ||nie mam stroju||", yday - 3400000),
             Msg(1004, Ogolne, MeId, "kod do serwera MC:\n```\nmc.ekipa-gibka.pl:25565\n```", yday - 3300000),
-            Msg(1005, Ogolne, MeId, "a tu mapa: https://gibcord.luisboon.pl", yday - 3290000),
+            Msg(1005, Ogolne, MeId, "a tu mapa: https://gibcord.pl", yday - 3290000),
             Msg(1006, Ogolne, KubaId, "😂😂😂", yday - 3200000),
             Msg(1008, Ogolne, KubaId, "ktoś wbija dziś wieczorem na granie?", now - 13 * 60000),
             Msg(1009, Ogolne, OlaId, "ja po 20, muszę skończyć projekt na infę", now - 11 * 60000),
             Msg(1010, Ogolne, BonkusId, "zrzut z wczoraj, patrzcie jaka baza", now - 5 * 60000),
             Msg(1020, Ogolne, MeId, "nowy GibCord już się buduje 👀 <@2> <@3> sprawdźcie w sobotę", now - 60000),
         };
-        list[8].Attachments = [new Attachment { Id = 1, Url = "https://gibcord.luisboon.pl/icon-512.png", Name = "baza.png", Mime = "image/png", Width = 512, Height = 512, Size = 120000, Preview = "LZD8eGtR0}R-o}buayjZ0}Wp=xoJ" }];
+        list[8].Attachments = [new Attachment { Id = 1, Url = "https://gibcord.pl/icon-512.png", Name = "baza.png", Mime = "image/png", Width = 512, Height = 512, Size = 120000, Preview = "LZD8eGtR0}R-o}buayjZ0}Wp=xoJ" }];
         list[8].Reactions = [new Reaction { Emoji = "🔥", UserIds = [MeId, OlaId, KubaId, MajaId] }, new Reaction { Emoji = "😂", UserIds = [KubaId, BartekId] }];
         list[8].Thread = J(new { id = 1, name = "Sobotni turniej", count = 4, lastAt = now - 2 * 60000 });
         list[7].ReplyTo = new ReplyRef { Id = 1008, AuthorId = KubaId, Content = "ktoś wbija dziś wieczorem na granie?" };
@@ -279,7 +279,7 @@ public static class Demo
                     new { label = "Wiadomości", value = "1 284", note = "w 41 dni" }, new { label = "W głosie", value = "62 h" }, new { label = "Ulubiony kanał", value = "#ogólne", note = "Ekipa Gibka" },
                     new { label = "Emoji roku", value = "😂", note = "212 razy" }, new { label = "Gra roku", value = "Minecraft", note = "38 h" }, new { label = "Najlepsza godzina", value = "22:00" },
                 },
-                buttons = new[] { new { label = "Zobacz swoje", url = "https://gibcord.luisboon.pl/podsumowanie" } },
+                buttons = new[] { new { label = "Zobacz swoje", url = "https://gibcord.pl/podsumowanie" } },
             });
             list.Add(w);
         }
@@ -330,7 +330,7 @@ public static class Demo
         for (var i = 0; i < 160; i++)
         {
             var m = Msg(5000 + i, Ogolne, who[(i * 7 + i / 3) % who.Length], texts[(i * 3 + i / 5) % texts.Length], start + i * 400000L);
-            if (i % 23 == 11) m.Attachments = [new Attachment { Id = 100 + i, Url = "https://gibcord.luisboon.pl/icon-512.png", Name = "zrzut.png", Mime = "image/png", Width = 640, Height = 360, Size = 90000, Preview = "LZD8eGtR0}R-o}buayjZ0}Wp=xoJ" }];
+            if (i % 23 == 11) m.Attachments = [new Attachment { Id = 100 + i, Url = "https://gibcord.pl/icon-512.png", Name = "zrzut.png", Mime = "image/png", Width = 640, Height = 360, Size = 90000, Preview = "LZD8eGtR0}R-o}buayjZ0}Wp=xoJ" }];
             if (i % 17 == 5) m.Reactions = [new Reaction { Emoji = "🔥", UserIds = [OlaId, KubaId] }];
             yield return m;
         }

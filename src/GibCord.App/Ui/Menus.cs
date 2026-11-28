@@ -251,7 +251,7 @@ static class AddServerDialog
 
     public static async void Show(Shell sh)
     {
-        var code = new TextBox { PlaceholderText = "https://gibcord.luisboon.pl/i/abc123 albo abc123" };
+        var code = new TextBox { PlaceholderText = "https://gibcord.pl/i/abc123 albo abc123" };
         var name = new TextBox { PlaceholderText = "np. Ekipa z klasy", MaxLength = 100 };
         var list = new StackPanel { Spacing = 4 };
         var preview = new StackPanel { Spacing = 4 };

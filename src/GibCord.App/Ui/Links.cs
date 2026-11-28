@@ -13,7 +13,8 @@ namespace GibCord.App.Ui;
 /// </summary>
 static partial class Links
 {
-    static readonly HashSet<string> Hosts = ["gibcord.luisboon.pl", "dc.luisboon.pl"];
+    // gibcord.pl + stare adresy (tylko rozpoznawanie linków w starych wiadomościach — otwierają się w aplikacji, nic nie łączy się ze starym adresem)
+    static readonly HashSet<string> Hosts = ["gibcord.pl", "www.gibcord.pl", "gibcord.luisboon.pl", "dc.luisboon.pl"];
     static readonly Dictionary<string, (long At, InviteInfo? Info)> Cache = [];
 
     public static bool IsOwn(Uri u) => (u.Scheme is "https" or "http") && (Hosts.Contains(u.Host) || App.Window?.Client?.Api.BaseUri.Host == u.Host);

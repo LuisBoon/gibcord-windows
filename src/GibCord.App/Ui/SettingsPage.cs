@@ -122,7 +122,7 @@ public sealed partial class SettingsPage : Grid
     // ── Moje boty (szkic, wybór użytkownika: wersja A „panel twórcy”) — jeszcze nie działa, przyciski nieaktywne ──
 
     // ───────────────────────── 6.4: Moje boty ─────────────────────────
-    const string DevDocs = "https://gibcord.luisboon.pl/dla-tworcow/";
+    const string DevDocs = "https://gibcord.pl/dla-tworcow/";
 
     async void Bots()
     {

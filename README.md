@@ -1,7 +1,7 @@
 # GibCord 6.0 na Windows
 
 Nowa, natywna aplikacja GibCorda na komputer: **C# + WinUI 3** (Windows App SDK), bez Electrona.
-Łączy się z tym samym serwerem co strona i telefon (`https://gibcord.luisboon.pl`, API `/api/v1` + WebSocket),
+Łączy się z tym samym serwerem co strona i telefon (`https://gibcord.pl`, API `/api/v1` + WebSocket),
 więc konta, wiadomości, serwery i znajomi są wspólne.
 
 ## Co jest w środku

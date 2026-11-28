@@ -361,13 +361,13 @@ public static class Updater
                 case System.Net.Http.HttpIOException: // zerwane połączenie w trakcie pobierania (to też IOException — nie „zajęte pliki”)
                     return "połączenie z GitHubem zerwało się w trakcie pobierania. Spróbuj jeszcze raz.";
                 case HttpRequestException h when h.StatusCode is System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.TooManyRequests:
-                    return "GitHub chwilowo ogranicza sprawdzanie aktualizacji. Spróbuj za godzinę albo pobierz instalator ze strony gibcord.luisboon.pl.";
+                    return "GitHub chwilowo ogranicza sprawdzanie aktualizacji. Spróbuj za godzinę albo pobierz instalator ze strony gibcord.pl.";
                 case HttpRequestException:
                     return "brak połączenia z GitHubem. Sprawdź internet i spróbuj jeszcze raz.";
                 case TaskCanceledException or TimeoutException:
                     return "GitHub nie odpowiada. Spróbuj za chwilę.";
                 case UnauthorizedAccessException:
-                    return "brak dostępu do folderu aplikacji. Zainstaluj GibCorda instalatorem ze strony gibcord.luisboon.pl.";
+                    return "brak dostępu do folderu aplikacji. Zainstaluj GibCorda instalatorem ze strony gibcord.pl.";
                 case IOException when (e.HResult & 0xFFFF) is 0x70 or 0x27: // ERROR_DISK_FULL / ERROR_HANDLE_DISK_FULL — niezależnie od języka Windowsa
                     return "za mało miejsca na dysku.";
                 case IOException:

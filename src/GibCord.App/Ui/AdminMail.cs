@@ -264,7 +264,7 @@ public sealed partial class AdminMail : Grid
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         object Msg(long id, string from, string name, string subj, string snip, long ago, bool seen, bool star = false, bool att = false, string dir = "in") => new
         {
-            id, boxId = 1, folder = dir == "in" ? "inbox" : "sent", threadId = 7, direction = dir, from = new { address = from, name }, to = new[] { new { address = "kontakt@gibcord.luisboon.pl", name = "GibCord" } },
+            id, boxId = 1, folder = dir == "in" ? "inbox" : "sent", threadId = 7, direction = dir, from = new { address = from, name }, to = new[] { new { address = "kontakt@gibcord.pl", name = "GibCord" } },
             cc = Array.Empty<object>(), subject = subj, snippet = snip, date = now - ago, receivedAt = now - ago, seen, starred = star, hasAttachments = att,
             text = snip + "\n\nPozdrawiam,\n" + name, html = (string?)null, hasRemoteImages = false,
             attachments = att ? new[] { new { id = 3, filename = "zrzut.png", contentType = "image/png", size = 182000, url = "/api/admin/mail/attachments/3" } } : [],
@@ -274,11 +274,11 @@ public sealed partial class AdminMail : Grid
         {
             "meta" => new
             {
-                domain = "gibcord.luisboon.pl",
+                domain = "gibcord.pl",
                 boxes = new object[]
                 {
-                    new { id = 1, localPart = "kontakt", address = "kontakt@gibcord.luisboon.pl", displayName = "GibCord", aliases = new[] { "postmaster", "abuse" }, system = false, unread = new { inbox = 2, spam = 1 }, total = 17 },
-                    new { id = 2, localPart = "noreply", address = "noreply@gibcord.luisboon.pl", displayName = "GibCord", aliases = Array.Empty<string>(), system = true, unread = new { inbox = 0, spam = 0 }, total = 3 },
+                    new { id = 1, localPart = "kontakt", address = "kontakt@gibcord.pl", displayName = "GibCord", aliases = new[] { "postmaster", "abuse" }, system = false, unread = new { inbox = 2, spam = 1 }, total = 17 },
+                    new { id = 2, localPart = "noreply", address = "noreply@gibcord.pl", displayName = "GibCord", aliases = Array.Empty<string>(), system = true, unread = new { inbox = 0, spam = 0 }, total = 3 },
                 },
             },
             "list" => new
@@ -291,7 +291,7 @@ public sealed partial class AdminMail : Grid
                 },
                 next = (long?)null,
             },
-            "thread" => new { messages = new[] { Msg(9, "kontakt@gibcord.luisboon.pl", "GibCord", "Turniej w sobotę", "Kto wpada?", 95_000_000, true, dir: "out"), Msg(12, "ola@example.com", "Ola Nowak", "Pomysł na nowy kanał", "Hej! Może zrobimy kanał z muzyką na serwerze?", 600_000, false) } },
+            "thread" => new { messages = new[] { Msg(9, "kontakt@gibcord.pl", "GibCord", "Turniej w sobotę", "Kto wpada?", 95_000_000, true, dir: "out"), Msg(12, "ola@example.com", "Ola Nowak", "Pomysł na nowy kanał", "Hej! Może zrobimy kanał z muzyką na serwerze?", 600_000, false) } },
             _ => Msg(12, "ola@example.com", "Ola Nowak", "Pomysł na nowy kanał", "Hej! Może zrobimy kanał z muzyką na serwerze? Mam już listę piosenek i bota do kolejki.", 600_000, true, att: true),
         };
         return JsonSerializer.SerializeToElement(data);

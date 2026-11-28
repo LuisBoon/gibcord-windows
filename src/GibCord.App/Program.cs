@@ -94,10 +94,10 @@ public static class Options
     public static string Server => Safe(Arg("--server")) ?? Safe(Environment.GetEnvironmentVariable("GIBCORD_SERVER")) ?? DefaultServer;
     /// <summary>Inny serwer tylko przez https (http wyłącznie na tym komputerze — testy); inaczej zostaje prawdziwy GibCord.</summary>
     static string? Safe(string? s) => s is not null && Uri.TryCreate(s, UriKind.Absolute, out var u) && (u.Scheme == "https" || (u.Scheme == "http" && u.IsLoopback)) ? s : null;
-    public const string DefaultServer = "https://gibcord.luisboon.pl";
+    public const string DefaultServer = "https://gibcord.pl";
     /// <summary>Inny serwer niż prawdziwy GibCord (kopia do próby) — osobne dane, osobne okno, znacznik w pasku.</summary>
     public static bool OtherServer => !Demo && Server.TrimEnd('/') != DefaultServer;
-    /// <summary>„gibcord.luisboon.pl:8443” → „gibcord.luisboon.pl-8443” (do nazw katalogu i instancji).</summary>
+    /// <summary>„gibcord.pl:8443” → „gibcord.pl-8443” (do nazw katalogu i instancji).</summary>
     public static string ServerSlug => System.Text.RegularExpressions.Regex.Replace(new Uri(Server).Authority, "[^A-Za-z0-9.-]", "-");
     public static bool Hidden => Program.Args.Contains("--ukryty");
     /// <summary>--pomiar okno|gra|zasloniete|schowane: CI mierzy pamięć i procesor w danym stanie okna (tryb pokazowy).</summary>
